@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portería Virtual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0c0f;
+      --surface:   #111318;
+      --border:    #1e2229;
+      --accent:    #00e5a0;
+      --accent2:   #0077ff;
+      --danger:    #ff3b5c;
+      --text:      #e8eaed;
+      --muted:     #5a6172;
+      --font-disp: 'Bebas Neue', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ── Background grid ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    /* ── Noise grain ── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    #app {
+      position: relative; z-index: 1;
+      width: 100vw; height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+
+    /* ── Header bar ── */
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10,12,15,0.8);
+      backdrop-filter: blur(12px);
+    }
+    .topbar-brand {
+      font-family: var(--font-disp);
+      font-size: 22px;
+      letter-spacing: 3px;
+      color: var(--accent);
+    }
+    .topbar-info {
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .status-dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; background: var(--muted);
+      margin-right: 8px;
+      transition: background 0.3s;
+    }
+    .status-dot.connected { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .status-dot.calling   { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse-dot 1s infinite; }
+    .status-dot.in-call   { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    /* ── Screen views ── */
+    .screen { display: none; flex-direction: column; align-items: center; justify-content: center; gap: 32px; text-align: center; }
+    .screen.active { display: flex; }
+
+    /* ── IDLE screen ── */
+    .building-name {
+      font-family: var(--font-disp);
+      font-size: clamp(48px, 8vw, 96px);
+      letter-spacing: 6px;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .building-address {
+      font-size: 15px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
+    }
+
+    .call-btn {
+      margin-top: 16px;
+      width: 200px; height: 200px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      background: transparent;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: visible;
+    }
+    .call-btn::before {
+      content: '';
+      position: absolute; inset: -12px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,229,160,0.2);
+      animation: ring-expand 2.5s ease-out infinite;
+    }
+    .call-btn::after {
+      content: '';
+      position: absolute; inset: -24px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,229,160,0.1);
+      animation: ring-expand 2.5s ease-out infinite 0.5s;
+    }
+    @keyframes ring-expand {
+      0%   { transform: scale(0.95); opacity: 0.8; }
+      100% { transform: scale(1.2);  opacity: 0; }
+    }
+    .call-btn:hover {
+      background: rgba(0,229,160,0.08);
+      box-shadow: 0 0 40px rgba(0,229,160,0.15);
+      transform: scale(1.03);
+    }
+    .call-btn:active { transform: scale(0.97); }
+    .call-btn svg { width: 56px; height: 56px; fill: var(--accent); }
+    .call-btn-label {
+      font-family: var(--font-disp);
+      font-size: 18px; letter-spacing: 3px; color: var(--accent);
+    }
+
+    .time-display {
+      font-family: var(--font-disp);
+      font-size: clamp(24px, 4vw, 48px);
+      color: var(--muted);
+      letter-spacing: 4px;
+    }
+
+    /* ── CALLING screen ── */
+    .calling-animation {
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: rgba(0,119,255,0.1);
+      border: 2px solid var(--accent2);
+      display: flex; align-items: center; justify-content: center;
+      animation: calling-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes calling-pulse {
+      0%,100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0,119,255,0.4); }
+      50%      { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(0,119,255,0); }
+    }
+    .calling-animation svg { width: 48px; height: 48px; fill: var(--accent2); }
+    .calling-title {
+      font-family: var(--font-disp); font-size: 36px; letter-spacing: 4px; color: var(--accent2);
+    }
+    .calling-sub { font-size: 14px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; }
+
+    .btn-cancel {
+      margin-top: 8px;
+      padding: 14px 40px;
+      border: 1px solid var(--danger);
+      background: transparent;
+      color: var(--danger);
+      font-family: var(--font-disp); font-size: 18px; letter-spacing: 3px;
+      cursor: pointer; border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .btn-cancel:hover { background: rgba(255,59,92,0.1); }
+
+    /* ── IN-CALL screen ── */
+    #video-container {
+      width: min(85vw, 900px);
+      aspect-ratio: 16/9;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 0 60px rgba(0,0,0,0.8);
+    }
+    #remote-video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    #local-video {
+      position: absolute;
+      bottom: 16px; right: 16px;
+      width: 160px; aspect-ratio: 4/3;
+      object-fit: cover;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      background: #111;
+    }
+
+    .operator-badge {
+      position: absolute;
+      top: 16px; left: 16px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 14px;
+      font-size: 13px; color: var(--muted);
+      letter-spacing: 1px;
+    }
+    .operator-badge span { color: var(--accent); }
+
+    .call-controls {
+      display: flex; gap: 24px;
+    }
+    .ctrl-btn {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .ctrl-btn:hover { border-color: var(--accent); background: rgba(0,229,160,0.05); }
+    .ctrl-btn.danger { border-color: var(--danger); }
+    .ctrl-btn.danger:hover { background: rgba(255,59,92,0.15); }
+    .ctrl-btn svg { width: 24px; height: 24px; }
+
+    /* ── Door flash ── */
+    #door-flash {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,229,160,0.15);
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none; opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #door-flash.show { opacity: 1; }
+    .door-flash-text {
+      font-family: var(--font-disp);
+      font-size: 80px; letter-spacing: 10px; color: var(--accent);
+      text-shadow: 0 0 40px var(--accent);
+    }
+
+    /* ── Call timer ── */
+    .call-timer {
+      font-family: var(--font-disp);
+      font-size: 22px; letter-spacing: 4px; color: var(--muted);
+    }
+
+    /* ── Connection overlay ── */
+    #conn-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: var(--bg);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+      transition: opacity 0.5s;
+    }
+    #conn-overlay.hidden { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .conn-text { font-size: 13px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+
+<div id="conn-overlay">
+  <div class="spinner"></div>
+  <div class="conn-text">Conectando al servidor…</div>
+</div>
+
+<div id="app">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-brand">PORTERÍA VIRTUAL</div>
+    <div class="topbar-info">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">DESCONECTADO</span>
+    </div>
+  </div>
+
+  <!-- IDLE SCREEN -->
+  <div class="screen active" id="screen-idle">
+    <div class="time-display" id="clock">00:00</div>
+    <div class="building-name" id="building-title">EDIFICIO</div>
+    <div class="building-address" id="building-address">Cargando dirección…</div>
+    <button class="call-btn" id="btn-call" onclick="requestCall()">
+      <svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+      <span class="call-btn-label">LLAMAR</span>
+    </button>
+    <div style="font-size:13px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;">
+      Presione para comunicarse con portería
+    </div>
+  </div>
+
+  <!-- CALLING SCREEN -->
+  <div class="screen" id="screen-calling">
+    <div class="calling-animation">
+      <svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+    </div>
+    <div class="calling-title">CONECTANDO…</div>
+    <div class="calling-sub">Aguarde, comunicando con portería</div>
+    <button class="btn-cancel" onclick="cancelCall()">CANCELAR</button>
+  </div>
+
+  <!-- IN-CALL SCREEN -->
+  <div class="screen" id="screen-incall">
+    <div id="video-container">
+      <video id="remote-video" autoplay playsinline></video>
+      <video id="local-video" autoplay playsinline muted></video>
+      <div class="operator-badge">Operador: <span id="operator-name-badge">—</span></div>
+    </div>
+    <div class="call-timer" id="call-timer">00:00</div>
+    <div class="call-controls">
+      <button class="ctrl-btn" id="btn-mute" title="Silenciar" onclick="toggleMute()">
+        <svg viewBox="0 0 24 24" fill="var(--text)"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+      </button>
+      <button class="ctrl-btn danger" title="Colgar" onclick="endCall()">
+        <svg viewBox="0 0 24 24" fill="var(--danger)"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08C.11 12.9 0 12.65 0 12.37c0-.28.11-.53.29-.71C3.34 8.77 7.46 7 12 7s8.66 1.77 11.71 4.66c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Door open flash -->
+<div id="door-flash">
+  <div class="door-flash-text">PUERTA ABIERTA</div>
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const CONFIG = {
+  SERVER_URL:   (window.location.protocol === 'file:' || window.location.hostname === 'localhost')
+                  ? 'http://localhost:3001'          // dev: directo al signaling server
+                  : window.location.origin,          // prod: mismo origen (nginx proxea /socket.io/)
+  BUILDING_ID:   'edificio-01',                     // ← Configurar por kiosk
+  BUILDING_NAME: 'EDIFICIO PRINCIPAL',
+  ADDRESS:       'Calle 123 #45-67, Bogotá',
+  ICE_SERVERS: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    // TURN propio (cuando tengas coturn corriendo):
+    // { urls: 'turn:TU_DOMINIO:3478', username: 'usuario', credential: 'clave' }
+  ],
+};
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let socket, peerConnection, localStream;
+let currentCallId = null;
+let callTimerInterval = null;
+let callStartTime = null;
+let isMuted = false;
+
+// ─── UI helpers ───────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function setStatus(state) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  dot.className = 'status-dot ' + state;
+  const labels = { connected:'CONECTADO', calling:'LLAMANDO', 'in-call':'EN LLAMADA', '':'DESCONECTADO' };
+  txt.textContent = labels[state] || 'DESCONECTADO';
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' });
+}
+
+function startCallTimer() {
+  callStartTime = Date.now();
+  callTimerInterval = setInterval(() => {
+    const s = Math.floor((Date.now() - callStartTime) / 1000);
+    const mm = String(Math.floor(s / 60)).padStart(2,'0');
+    const ss = String(s % 60).padStart(2,'0');
+    document.getElementById('call-timer').textContent = `${mm}:${ss}`;
+  }, 1000);
+}
+
+function stopCallTimer() {
+  clearInterval(callTimerInterval);
+  document.getElementById('call-timer').textContent = '00:00';
+}
+
+function flashDoor() {
+  const el = document.getElementById('door-flash');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ─── Media ────────────────────────────────────────────────────────────────────
+async function getLocalStream() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    document.getElementById('local-video').srcObject = localStream;
+  } catch(e) {
+    console.error('Error al acceder a cámara/micrófono:', e);
+  }
+}
+
+function toggleMute() {
+  if (!localStream) return;
+  isMuted = !isMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+  document.getElementById('btn-mute').style.opacity = isMuted ? '0.4' : '1';
+}
+
+// ─── WebRTC ───────────────────────────────────────────────────────────────────
+async function createPeerConnection() {
+  peerConnection = new RTCPeerConnection({ iceServers: CONFIG.ICE_SERVERS });
+
+  localStream?.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+  peerConnection.ontrack = ({ streams }) => {
+    document.getElementById('remote-video').srcObject = streams[0];
+  };
+
+  peerConnection.onicecandidate = ({ candidate }) => {
+    if (candidate) {
+      socket.emit('webrtc:ice-candidate', { callId: currentCallId, candidate });
+    }
+  };
+
+  peerConnection.onconnectionstatechange = () => {
+    console.log('[WebRTC] Estado:', peerConnection.connectionState);
+  };
+}
+
+async function createAndSendOffer() {
+  await createPeerConnection();
+  const offer = await peerConnection.createOffer();
+  await peerConnection.setLocalDescription(offer);
+  socket.emit('webrtc:offer', { callId: currentCallId, offer });
+}
+
+function cleanupPeer() {
+  peerConnection?.close();
+  peerConnection = null;
+  document.getElementById('remote-video').srcObject = null;
+}
+
+// ─── Call flow ────────────────────────────────────────────────────────────────
+async function requestCall() {
+  if (!localStream) await getLocalStream();
+  socket.emit('call:request');
+}
+
+function cancelCall() {
+  socket.emit('call:end', { callId: currentCallId });
+  currentCallId = null;
+  cleanupPeer();
+  showScreen('screen-idle');
+  setStatus('connected');
+}
+
+function endCall() {
+  socket.emit('call:end', { callId: currentCallId });
+  currentCallId = null;
+  cleanupPeer();
+  stopCallTimer();
+  showScreen('screen-idle');
+  setStatus('connected');
+}
+
+// ─── Socket.io ────────────────────────────────────────────────────────────────
+function initSocket() {
+  socket = io(CONFIG.SERVER_URL, { transports: ['websocket'] });
+
+  socket.on('connect', () => {
+    document.getElementById('conn-overlay').classList.add('hidden');
+    socket.emit('kiosk:register', {
+      buildingId: CONFIG.BUILDING_ID,
+      buildingName: CONFIG.BUILDING_NAME,
+    });
+  });
+
+  socket.on('kiosk:registered', () => {
+    setStatus('connected');
+    document.getElementById('building-title').textContent = CONFIG.BUILDING_NAME;
+    document.getElementById('building-address').textContent = CONFIG.ADDRESS;
+  });
+
+  socket.on('call:waiting', ({ callId }) => {
+    currentCallId = callId;
+    showScreen('screen-calling');
+    setStatus('calling');
+  });
+
+  socket.on('call:accepted', async ({ callId, operatorName }) => {
+    document.getElementById('operator-name-badge').textContent = operatorName;
+    showScreen('screen-incall');
+    setStatus('in-call');
+    startCallTimer();
+    // Kiosk inicia el offer
+    await createAndSendOffer();
+  });
+
+  socket.on('webrtc:answer', async ({ answer }) => {
+    await peerConnection?.setRemoteDescription(new RTCSessionDescription(answer));
+  });
+
+  socket.on('webrtc:ice-candidate', async ({ candidate }) => {
+    try { await peerConnection?.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e){}
+  });
+
+  socket.on('door:open', () => {
+    flashDoor();
+  });
+
+  socket.on('call:ended', ({ reason }) => {
+    cleanupPeer();
+    stopCallTimer();
+    currentCallId = null;
+    showScreen('screen-idle');
+    setStatus('connected');
+  });
+
+  socket.on('disconnect', () => {
+    document.getElementById('conn-overlay').classList.remove('hidden');
+    setStatus('');
+  });
+
+  socket.on('error', (msg) => console.error('[Server error]', msg));
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+document.getElementById('building-title').textContent = CONFIG.BUILDING_NAME;
+document.getElementById('building-address').textContent = CONFIG.ADDRESS;
+setInterval(updateClock, 1000);
+updateClock();
+initSocket();
+</script>
+</body>
+</html>

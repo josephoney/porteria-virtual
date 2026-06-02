@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel Operador — Portería Virtual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #f5f4ef;
+      --surface:  #ffffff;
+      --border:   #dddbd2;
+      --ink:      #1a1916;
+      --muted:    #8a8880;
+      --accent:   #1a1916;
+      --green:    #1d7a4f;
+      --green-bg: #e8f5ee;
+      --amber:    #c47a00;
+      --amber-bg: #fff8e6;
+      --red:      #c0392b;
+      --red-bg:   #fdecea;
+      --blue:     #1a5fa8;
+      --blue-bg:  #e8f0fb;
+      --font-disp: 'Syne', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+    }
+
+    html, body { width:100%; height:100%; background: var(--bg); color: var(--ink); font-family: var(--font-disp); overflow: hidden; }
+
+    /* ─── Layout ─── */
+    #app { display: grid; grid-template-rows: 56px 1fr; height: 100vh; }
+
+    /* ─── Topbar ─── */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px;
+      background: var(--ink);
+      color: var(--bg);
+      border-bottom: 2px solid var(--ink);
+    }
+    .topbar-brand { font-size: 14px; font-weight: 800; letter-spacing: 4px; text-transform: uppercase; }
+    .topbar-right { display: flex; align-items: center; gap: 24px; }
+    .topbar-stat { font-family: var(--font-mono); font-size: 12px; opacity: 0.6; }
+    .topbar-stat strong { opacity: 1; color: #fff; }
+    .op-badge {
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 3px; padding: 4px 12px;
+      font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
+    }
+
+    /* ─── Main grid ─── */
+    .main {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      overflow: hidden;
+    }
+
+    /* ─── Sidebar ─── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 20px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .sidebar-title { font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); }
+    .badge {
+      font-family: var(--font-mono); font-size: 11px;
+      background: var(--ink); color: #fff;
+      border-radius: 2px; padding: 2px 8px;
+    }
+    .badge.green { background: var(--green); }
+    .badge.amber { background: var(--amber); }
+
+    /* Incoming calls list */
+    #calls-list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+    .call-card {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.15s;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+    }
+    .call-card::before {
+      content: '';
+      position: absolute; left: 0; top: 0; bottom: 0;
+      width: 3px; background: var(--amber);
+    }
+    .call-card.incoming::before { background: var(--amber); animation: blink-bar 1s infinite; }
+    .call-card.active-call::before { background: var(--green); }
+    @keyframes blink-bar { 0%,100%{opacity:1} 50%{opacity:0.2} }
+    .call-card:hover { border-color: var(--ink); background: var(--surface); }
+
+    .call-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .call-building { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; }
+    .call-time { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+    .call-status {
+      font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 2px;
+    }
+    .call-status.waiting  { background: var(--amber-bg); color: var(--amber); }
+    .call-status.in-call  { background: var(--green-bg); color: var(--green); }
+
+    .call-card-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .visitor-preview { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 8px; background: var(--bg); border-radius: 6px; }
+    .visitor-thumb { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); }
+    .visitor-prev-name { font-size: 13px; font-weight: 600; color: var(--ink); }
+    .visitor-prev-sim { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+    .visitor-prev-sim.known   { color: var(--green); }
+    .visitor-prev-sim.unknown { color: var(--muted); }
+    .btn-answer {
+      flex: 1; padding: 8px;
+      background: var(--ink); color: #fff;
+      border: none; border-radius: 3px;
+      font-family: var(--font-disp); font-size: 12px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .btn-answer:hover { opacity: 0.8; }
+    .btn-answer.green { background: var(--green); }
+
+    /* Kiosks status */
+    .kiosks-section { border-top: 1px solid var(--border); padding: 12px; }
+    .kiosk-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .kiosk-item:last-child { border-bottom: none; }
+    .kiosk-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .kiosk-dot.idle    { background: var(--green); }
+    .kiosk-dot.calling { background: var(--amber); animation: pulse-dot 1s infinite; }
+    .kiosk-dot.in-call { background: var(--blue); }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .kiosk-name { font-size: 12px; flex:1; }
+    .kiosk-status-tag { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+
+    /* ─── Content ─── */
+    .content {
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex; gap: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0 24px;
+    }
+    .tab {
+      font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      padding: 16px 20px;
+      cursor: pointer; border: none; background: none;
+      color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: all 0.15s;
+    }
+    .tab.active { color: var(--ink); border-bottom-color: var(--ink); }
+    .tab:hover { color: var(--ink); }
+
+    .tab-panel { display: none; flex: 1; overflow: hidden; }
+    .tab-panel.active { display: flex; flex-direction: column; }
+
+    /* ─── Video panel ─── */
+    .video-panel {
+      flex: 1;
+      display: flex; flex-direction: column;
+      background: #111;
+      position: relative;
+      overflow: hidden;
+    }
+    .video-panel-empty {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+      background: var(--bg); color: var(--muted);
+    }
+    .video-panel-empty-icon { font-size: 64px; opacity: 0.15; }
+    .video-panel-empty-text { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; }
+
+    #operator-remote-video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+    #operator-local-video {
+      position: absolute;
+      bottom: 100px; right: 20px;
+      width: 200px; aspect-ratio: 16/9;
+      object-fit: cover;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 4px;
+      background: #000;
+      display: none;
+    }
+    .video-info-bar {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+      display: none;
+    }
+    .video-info-bar.show { display: flex; }
+    .call-building-name { color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 1px; }
+    .call-duration { font-family: var(--font-mono); color: rgba(255,255,255,0.6); font-size: 14px; }
+
+    .video-controls {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 20px 24px;
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+      display: none;
+    }
+    .video-controls.show { display: flex; }
+
+    .vctrl {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .vctrl-btn {
+      width: 52px; height: 52px; border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(8px);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .vctrl-btn:hover { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.3); }
+    .vctrl-btn.action-green { background: rgba(29,122,79,0.7); border-color: rgba(29,122,79,0.8); }
+    .vctrl-btn.action-green:hover { background: rgba(29,122,79,0.9); }
+    .vctrl-btn.action-red { background: rgba(192,57,43,0.7); border-color: rgba(192,57,43,0.8); }
+    .vctrl-btn.action-red:hover { background: rgba(192,57,43,0.9); }
+    .vctrl-label { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.5); }
+
+    /* ─── Log panel ─── */
+    .log-panel { flex:1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 6px; }
+    .log-entry {
+      display: flex; align-items: baseline; gap: 12px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-family: var(--font-mono); font-size: 12px;
+      background: var(--surface);
+    }
+    .log-ts { color: var(--muted); font-size: 11px; flex-shrink: 0; }
+    .log-type { font-weight: 500; padding: 1px 6px; border-radius: 2px; font-size: 10px; flex-shrink: 0; }
+    .log-type.CALL   { background: var(--amber-bg); color: var(--amber); }
+    .log-type.DOOR   { background: var(--green-bg); color: var(--green); }
+    .log-type.SYS    { background: var(--blue-bg); color: var(--blue); }
+    .log-type.END    { background: #f0f0f0; color: var(--muted); }
+    .log-msg { color: var(--ink); }
+
+    /* ─── Overlays ─── */
+    #conn-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+      transition: opacity 0.5s;
+    }
+    #conn-overlay.hidden { opacity: 0; pointer-events: none; }
+    .spinner { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--ink); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .conn-text { font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+
+    /* Incoming call toast */
+    #incoming-toast {
+      position: fixed; top: 70px; right: 20px; z-index: 50;
+      background: var(--ink); color: #fff;
+      border-radius: 6px; padding: 20px 24px;
+      width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      transform: translateX(360px); transition: transform 0.3s cubic-bezier(.2,.8,.3,1);
+    }
+    #incoming-toast.show { transform: translateX(0); }
+    .toast-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 8px; }
+    .toast-building { font-size: 20px; font-weight: 800; margin-bottom: 16px; }
+    .toast-actions { display: flex; gap: 10px; }
+    .toast-btn {
+      flex:1; padding: 10px; border: none; border-radius: 3px;
+      font-family: var(--font-disp); font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .toast-btn:hover { opacity: 0.8; }
+    .toast-btn.answer { background: var(--green); color: #fff; }
+    .toast-btn.reject { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6); }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div id="conn-overlay">
+  <div class="spinner"></div>
+  <div class="conn-text">Conectando al servidor…</div>
+</div>
+
+<div id="incoming-toast">
+  <div class="toast-title">Llamada entrante</div>
+  <div class="toast-building" id="toast-building-name">—</div>
+  <div class="toast-actions">
+    <button class="toast-btn answer" onclick="answerFromToast()">Contestar</button>
+    <button class="toast-btn reject" onclick="dismissToast()">Ignorar</button>
+  </div>
+</div>
+
+<div id="app">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-brand">Portería Virtual — Panel Operador</div>
+    <div class="topbar-right">
+      <div class="topbar-stat">Kiosks: <strong id="stat-kiosks">0</strong></div>
+      <div class="topbar-stat">Llamadas activas: <strong id="stat-calls">0</strong></div>
+      <div class="op-badge" id="op-name-badge">OPR-01</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">Cola de llamadas</div>
+        <div class="badge amber" id="calls-count">0</div>
+      </div>
+      <div id="calls-list">
+        <div style="padding:20px;text-align:center;color:var(--muted);font-size:12px;letter-spacing:1px;">
+          Sin llamadas pendientes
+        </div>
+      </div>
+
+      <!-- Kiosks status -->
+      <div class="kiosks-section">
+        <div class="sidebar-title" style="margin-bottom:10px;">Kiosks registrados</div>
+        <div id="kiosks-list">
+          <div style="color:var(--muted);font-size:11px;padding:4px 0;">Ningún kiosk conectado</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('video')">Video</button>
+        <button class="tab" onclick="switchTab('log')">Registro</button>
+      </div>
+
+      <!-- VIDEO TAB -->
+      <div class="tab-panel active" id="tab-video">
+        <div class="video-panel" id="video-panel">
+          <div id="video-empty" class="video-panel-empty">
+            <div class="video-panel-empty-icon">📹</div>
+            <div class="video-panel-empty-text">Sin llamada activa</div>
+            <div style="font-size:11px;color:var(--muted);letter-spacing:1px;">Espere una llamada entrante o seleccione una de la cola</div>
+          </div>
+          <video id="operator-remote-video" autoplay playsinline></video>
+          <video id="operator-local-video" autoplay playsinline muted></video>
+          <div class="video-info-bar" id="video-info-bar">
+            <div class="call-building-name" id="call-building-display">—</div>
+            <div class="call-duration" id="call-duration-display">00:00</div>
+          </div>
+          <div class="video-controls" id="video-controls">
+            <div class="vctrl">
+              <button class="vctrl-btn action-green" onclick="openDoor()" title="Abrir puerta">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M19 19V5c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v14H4v2h16v-2h-1zm-7-6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+              </button>
+              <span class="vctrl-label">Abrir</span>
+            </div>
+            <div class="vctrl">
+              <button class="vctrl-btn" onclick="toggleOpMute()" id="op-mute-btn" title="Silenciar">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+              </button>
+              <span class="vctrl-label">Micrófono</span>
+            </div>
+            <div class="vctrl">
+              <button class="vctrl-btn action-red" onclick="operatorEndCall()" title="Finalizar">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08C.11 12.9 0 12.65 0 12.37c0-.28.11-.53.29-.71C3.34 8.77 7.46 7 12 7s8.66 1.77 11.71 4.66c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
+              </button>
+              <span class="vctrl-label">Colgar</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOG TAB -->
+      <div class="tab-panel" id="tab-log">
+        <div class="log-panel" id="log-panel"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const CONFIG = {
+  SERVER_URL:  (window.location.protocol === 'file:' || window.location.hostname === 'localhost')
+                 ? 'http://localhost:3001'          // dev: directo al signaling server
+                 : window.location.origin,          // prod: mismo origen (nginx proxea /socket.io/)
+  OPERATOR_ID: 'op-001',
+  OPERATOR_NAME: 'Operador Principal',
+  ICE_SERVERS: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ],
+};
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let socket, peerConnection, localStream;
+let activeCall = null;   // { callId, buildingId, buildingName }
+let pendingCalls = new Map(); // callId → { buildingId, buildingName, timestamp }
+let toastCallId = null;
+let callTimerInterval = null;
+let isOpMuted = false;
+
+// ─── Tab ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['video','log'][i] === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+// ─── Log ──────────────────────────────────────────────────────────────────────
+function addLog(type, msg) {
+  const panel = document.getElementById('log-panel');
+  const now = new Date().toLocaleTimeString('es-CO');
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  el.innerHTML = `<span class="log-ts">${now}</span><span class="log-type ${type}">${type}</span><span class="log-msg">${msg}</span>`;
+  panel.prepend(el);
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function showToast(callId, buildingName) {
+  toastCallId = callId;
+  document.getElementById('toast-building-name').textContent = buildingName;
+  document.getElementById('incoming-toast').classList.add('show');
+  // Auto-dismiss after 30s
+  setTimeout(() => dismissToast(), 30000);
+}
+function dismissToast() {
+  document.getElementById('incoming-toast').classList.remove('show');
+  toastCallId = null;
+}
+function answerFromToast() {
+  if (toastCallId) acceptCall(toastCallId);
+  dismissToast();
+}
+
+// ─── Calls list ───────────────────────────────────────────────────────────────
+function renderCallsList() {
+  const list = document.getElementById('calls-list');
+  const count = pendingCalls.size + (activeCall ? 1 : 0);
+  document.getElementById('calls-count').textContent = count;
+  document.getElementById('stat-calls').textContent = activeCall ? 1 : 0;
+
+  if (pendingCalls.size === 0 && !activeCall) {
+    list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px;letter-spacing:1px;">Sin llamadas pendientes</div>`;
+    return;
+  }
+
+  list.innerHTML = '';
+
+  if (activeCall) {
+    const card = document.createElement('div');
+    card.className = 'call-card active-call';
+    card.innerHTML = `
+      <div class="call-card-top">
+        <div class="call-building">${activeCall.buildingName}</div>
+        <span class="call-status in-call">En llamada</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">${activeCall.callId}</div>
+    `;
+    list.appendChild(card);
+  }
+
+  for (const [callId, call] of pendingCalls.entries()) {
+    const ago = Math.round((Date.now() - call.timestamp) / 1000);
+    const card = document.createElement('div');
+    card.className = 'call-card incoming';
+    const visitorHtml = call.visitor
+      ? `<div class="visitor-preview">
+           <img src="${call.visitor.photo}" alt="" class="visitor-thumb">
+           <div>
+             <div class="visitor-prev-name">${call.visitor.known ? call.visitor.name : 'Desconocido'}</div>
+             <div class="visitor-prev-sim ${call.visitor.known ? 'known' : 'unknown'}">
+               ${call.visitor.known ? `Reconocido ${(call.visitor.similarity*100).toFixed(0)}%` : 'Visitante nuevo'}
+             </div>
+           </div>
+         </div>`
+      : '';
+    card.innerHTML = `
+      <div class="call-card-top">
+        <div class="call-building">${call.buildingName}</div>
+        <div class="call-time">hace ${ago}s</div>
+      </div>
+      ${visitorHtml}
+      <span class="call-status waiting">Esperando</span>
+      <div class="call-card-actions">
+        <button class="btn-answer green" onclick="acceptCall('${callId}')">Contestar</button>
+      </div>
+    `;
+    list.appendChild(card);
+  }
+}
+
+function renderKiosks(kiosks) {
+  const el = document.getElementById('kiosks-list');
+  document.getElementById('stat-kiosks').textContent = kiosks.length;
+  if (!kiosks.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:11px;padding:4px 0;">Ningún kiosk conectado</div>`;
+    return;
+  }
+  el.innerHTML = kiosks.map(k => `
+    <div class="kiosk-item">
+      <div class="kiosk-dot ${k.status}"></div>
+      <div class="kiosk-name">${k.buildingName || k.buildingId}</div>
+      <div class="kiosk-status-tag">${k.status}</div>
+    </div>
+  `).join('');
+}
+
+// ─── Video UI ─────────────────────────────────────────────────────────────────
+function showVideoActive(buildingName) {
+  document.getElementById('video-empty').style.display = 'none';
+  document.getElementById('operator-remote-video').style.display = 'block';
+  document.getElementById('operator-local-video').style.display = 'block';
+  document.getElementById('video-info-bar').classList.add('show');
+  document.getElementById('video-controls').classList.add('show');
+  document.getElementById('call-building-display').textContent = buildingName;
+}
+
+function hideVideoActive() {
+  document.getElementById('video-empty').style.display = 'flex';
+  document.getElementById('operator-remote-video').style.display = 'none';
+  document.getElementById('operator-local-video').style.display = 'none';
+  document.getElementById('video-info-bar').classList.remove('show');
+  document.getElementById('video-controls').classList.remove('show');
+  document.getElementById('operator-remote-video').srcObject = null;
+  document.getElementById('operator-local-video').srcObject = null;
+}
+
+function startCallTimer() {
+  const start = Date.now();
+  callTimerInterval = setInterval(() => {
+    const s = Math.floor((Date.now() - start) / 1000);
+    const mm = String(Math.floor(s/60)).padStart(2,'0');
+    const ss = String(s%60).padStart(2,'0');
+    document.getElementById('call-duration-display').textContent = `${mm}:${ss}`;
+  }, 1000);
+}
+
+function stopCallTimer() {
+  clearInterval(callTimerInterval);
+  document.getElementById('call-duration-display').textContent = '00:00';
+}
+
+// ─── Media ────────────────────────────────────────────────────────────────────
+async function getLocalStream() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    document.getElementById('operator-local-video').srcObject = localStream;
+  } catch(e) {
+    console.error('Error media:', e);
+    addLog('SYS', 'Error al acceder a cámara/micrófono');
+  }
+}
+
+function toggleOpMute() {
+  if (!localStream) return;
+  isOpMuted = !isOpMuted;
+  localStream.getAudioTracks().forEach(t => t.enabled = !isOpMuted);
+  document.getElementById('op-mute-btn').style.opacity = isOpMuted ? '0.4' : '1';
+}
+
+// ─── WebRTC ───────────────────────────────────────────────────────────────────
+async function createPeerConnection() {
+  peerConnection = new RTCPeerConnection({ iceServers: CONFIG.ICE_SERVERS });
+
+  localStream?.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+  peerConnection.ontrack = ({ streams }) => {
+    document.getElementById('operator-remote-video').srcObject = streams[0];
+  };
+
+  peerConnection.onicecandidate = ({ candidate }) => {
+    if (candidate) socket.emit('webrtc:ice-candidate', { callId: activeCall.callId, candidate });
+  };
+}
+
+function cleanupPeer() {
+  peerConnection?.close();
+  peerConnection = null;
+}
+
+// ─── Call actions ─────────────────────────────────────────────────────────────
+async function acceptCall(callId) {
+  const call = pendingCalls.get(callId);
+  if (!call) return;
+
+  if (!localStream) await getLocalStream();
+
+  socket.emit('call:accept', { callId, buildingId: call.buildingId });
+  activeCall = { callId, ...call };
+  pendingCalls.delete(callId);
+
+  showVideoActive(call.buildingName);
+  startCallTimer();
+  renderCallsList();
+  addLog('CALL', `Llamada aceptada: ${call.buildingName}`);
+  switchTab('video');
+}
+
+function openDoor() {
+  if (!activeCall) return;
+  socket.emit('door:open', { callId: activeCall.callId, buildingId: activeCall.buildingId });
+  addLog('DOOR', `Puerta abierta: ${activeCall.buildingName}`);
+}
+
+function operatorEndCall() {
+  if (!activeCall) return;
+  socket.emit('call:end', { callId: activeCall.callId });
+  addLog('END', `Llamada finalizada: ${activeCall.buildingName}`);
+  cleanupPeer();
+  stopCallTimer();
+  hideVideoActive();
+  activeCall = null;
+  renderCallsList();
+}
+
+// ─── Socket.io ────────────────────────────────────────────────────────────────
+function initSocket() {
+  socket = io(CONFIG.SERVER_URL, { transports: ['websocket'] });
+
+  socket.on('connect', () => {
+    document.getElementById('conn-overlay').classList.add('hidden');
+    socket.emit('operator:register', {
+      operatorId: CONFIG.OPERATOR_ID,
+      name: CONFIG.OPERATOR_NAME,
+    });
+    document.getElementById('op-name-badge').textContent = CONFIG.OPERATOR_NAME;
+    addLog('SYS', 'Conectado al servidor de señalización');
+  });
+
+  socket.on('operator:registered', ({ kiosks }) => {
+    renderKiosks(kiosks);
+    addLog('SYS', `Operador registrado. Kiosks activos: ${kiosks.length}`);
+  });
+
+  socket.on('kiosks:update', (kiosks) => {
+    renderKiosks(kiosks);
+  });
+
+  socket.on('call:incoming', ({ callId, buildingId, buildingName, visitor, timestamp }) => {
+    pendingCalls.set(callId, { buildingId, buildingName, visitor: visitor || null, timestamp });
+    renderCallsList();
+    showToast(callId, buildingName);
+    addLog('CALL', `Llamada entrante: ${buildingName}${visitor?.known ? ' — ' + visitor.name : ''}`);
+    if (Notification.permission === 'granted') {
+      new Notification('Llamada entrante', { body: buildingName, icon: '' });
+    }
+  });
+
+  socket.on('visitor:identified', ({ buildingId, visitor }) => {
+    // Actualizar foto del visitante si hay una llamada pendiente de ese edificio
+    for (const [callId, call] of pendingCalls.entries()) {
+      if (call.buildingId === buildingId) {
+        call.visitor = visitor;
+        renderCallsList();
+        break;
+      }
+    }
+    addLog('BIO', `${buildingId}: ${visitor.known ? visitor.name + ' ('+Math.round(visitor.similarity*100)+'%)' : 'desconocido'}`);
+  });
+
+  socket.on('call:taken', ({ callId }) => {
+    pendingCalls.delete(callId);
+    renderCallsList();
+  });
+
+  socket.on('call:ready', ({ callId, buildingId, buildingName }) => {
+    // El servidor confirmó que somos el operador de esta llamada
+    activeCall = { callId, buildingId, buildingName };
+  });
+
+  socket.on('webrtc:offer', async ({ callId, offer }) => {
+    if (!activeCall || activeCall.callId !== callId) return;
+    await createPeerConnection();
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+    socket.emit('webrtc:answer', { callId, answer });
+  });
+
+  socket.on('webrtc:ice-candidate', async ({ candidate }) => {
+    try { await peerConnection?.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e){}
+  });
+
+  socket.on('call:ended', ({ callId }) => {
+    if (activeCall?.callId === callId) {
+      addLog('END', `Llamada finalizada por el kiosk: ${activeCall.buildingName}`);
+      cleanupPeer();
+      stopCallTimer();
+      hideVideoActive();
+      activeCall = null;
+      renderCallsList();
+    }
+    pendingCalls.delete(callId);
+    renderCallsList();
+  });
+
+  socket.on('disconnect', () => {
+    document.getElementById('conn-overlay').classList.remove('hidden');
+    addLog('SYS', 'Conexión perdida. Reconectando…');
+  });
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+if (Notification.permission !== 'granted') Notification.requestPermission();
+renderCallsList();
+initSocket();
+</script>
+</body>
+</html>

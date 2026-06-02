@@ -1,0 +1,19 @@
+{
+  "name": "legacy",
+  "version": "1.0.0",
+  "description": "This directory contains the original Phase 1 implementation kept as functional reference. These files will be removed once the React apps (`apps/kiosk/`, `apps/dashboard/`) reach feature parity.",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  }
+}
