@@ -5,11 +5,13 @@ import { CONFIG } from '../config';
 export interface SocketContextValue {
   socket: Socket | null;
   isConnected: boolean;
+  socketRef: React.RefObject<Socket | null>;
 }
 
 export const SocketContext = createContext<SocketContextValue>({
   socket: null,
   isConnected: false,
+  socketRef: { current: null },
 });
 
 export function SocketProvider({ children }: { children: ReactNode }) {
@@ -18,11 +20,13 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
+    console.log('[Kiosk] Connecting to:', CONFIG.SERVER_URL);
     const s = io(CONFIG.SERVER_URL, { transports: ['websocket'] });
     socketRef.current = s;
     setSocket(s);
 
     s.on('connect', () => {
+      console.log('[Kiosk] Socket connected, registering...');
       setIsConnected(true);
       s.emit('kiosk:register', {
         buildingId: CONFIG.BUILDING_ID,
@@ -30,9 +34,20 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    s.on('disconnect', () => {
+    s.on('kiosk:registered', (data: any) => {
+      console.log('[Kiosk] Registered:', data);
+    });
+
+    s.on('disconnect', (reason: string) => {
+      console.log('[Kiosk] Disconnected:', reason);
       setIsConnected(false);
     });
+
+    s.on('connect_error', (err: Error) => {
+      console.error('[Kiosk] Connection error:', err.message);
+    });
+
+    s.on('error', (msg: string) => console.error('[Kiosk] Server error:', msg));
 
     return () => {
       s.disconnect();
@@ -40,7 +55,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected }}>
+    <SocketContext.Provider value={{ socket, isConnected, socketRef }}>
       {children}
     </SocketContext.Provider>
   );

@@ -43,6 +43,28 @@ services:
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
 
+  nginx:
+    image: nginx:alpine
+    container_name: porteria-nginx
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/certs:/etc/nginx/certs:ro
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    container_name: porteria-coturn
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./docker/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: turnserver -c /etc/coturn/turnserver.conf
+
 volumes:
   pgdata:
   redis_data:

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { SocketProvider } from './contexts/SocketContext';
 import { useSocket } from './hooks/useSocket';
 import { useWebRTC } from './hooks/useWebRTC';
@@ -11,101 +11,120 @@ import { DoorFlash } from './components/DoorFlash';
 import './App.css';
 
 function KioskContent() {
-  const { socket, isConnected } = useSocket();
+  const { isConnected, socketRef: ctxSocketRef, socket } = useSocket();
   const webRTC = useWebRTC();
   const kiosk = useKioskState();
   const [doorFlashTrigger, setDoorFlashTrigger] = useState(0);
 
+  const [debugMsg, setDebugMsg] = useState('');
+
+  const webRTCRef = useRef(webRTC);
+  webRTCRef.current = webRTC;
+  const kioskRef = useRef(kiosk);
+  kioskRef.current = kiosk;
+  const callIdRef = useRef<string | null>(null);
+
+  function emit(event: string, data: any) {
+    const s = ctxSocketRef.current;
+    s?.emit(event, data);
+    setDebugMsg(`${new Date().toLocaleTimeString()} → ${event}`);
+  }
+
+  function doCall() {
+    emit('call:request', {});
+    webRTCRef.current.getLocalStream().catch((e) => console.error('Camera error:', e));
+  }
+
+  function doCancel() {
+    const cid = callIdRef.current;
+    console.log('[Kiosk] doCancel, callId:', cid);
+    if (cid) {
+      emit('call:end', { callId: cid });
+    }
+    callIdRef.current = null;
+    webRTCRef.current.cleanupPeer();
+    kioskRef.current.resetCall();
+  }
+
+  function doHangUp() {
+    const cid = callIdRef.current;
+    console.log('[Kiosk] doHangUp, callId:', cid);
+    if (cid) {
+      emit('call:end', { callId: cid });
+    }
+    callIdRef.current = null;
+    webRTCRef.current.cleanupPeer();
+    kioskRef.current.resetCall();
+  }
+
   // Wire socket events
   useEffect(() => {
-    if (!socket) return;
+    const s = ctxSocketRef.current;
+    if (!s) return;
 
-    socket.on('kiosk:registered', () => {
-      kiosk.setStatusDot('connected');
-    });
+    function onRegistered() { kioskRef.current.setStatusDot('connected'); }
+    function onCallWaiting({ callId }: { callId: string }) {
+      callIdRef.current = callId;
+      kioskRef.current.startCall(callId);
+      setDebugMsg(`${new Date().toLocaleTimeString()} ← call:waiting ${callId}`);
+    }
+    async function onCallAccepted({ callId, operatorName }: { callId: string; operatorName: string }) {
+      kioskRef.current.acceptCall(operatorName);
+      await webRTCRef.current.createAndSendOffer(s, callId);
+    }
+    async function onAnswer({ answer }: { answer: RTCSessionDescriptionInit }) {
+      await webRTCRef.current.handleAnswer(answer);
+    }
+    async function onIceCandidate({ candidate }: { candidate: RTCIceCandidateInit }) {
+      await webRTCRef.current.handleIceCandidate(candidate);
+    }
+    function onDoorOpen() { setDoorFlashTrigger((n) => n + 1); }
+    function onCallEnded({ callId, reason }: { callId?: string; reason?: string }) {
+      setDebugMsg(`${new Date().toLocaleTimeString()} ← call:ended ${callId} (${reason || 'no reason'}) currentId:${callIdRef.current}`);
+      if (callId && callIdRef.current !== null && callIdRef.current !== callId) {
+        setDebugMsg((d) => d + ' IGNORED (stale)');
+        return;
+      }
+      callIdRef.current = null;
+      webRTCRef.current.cleanupPeer();
+      kioskRef.current.resetCall();
+    }
 
-    socket.on('call:waiting', ({ callId }: { callId: string }) => {
-      kiosk.startCall(callId);
-    });
-
-    socket.on(
-      'call:accepted',
-      async ({ callId, operatorName }: { callId: string; operatorName: string }) => {
-        kiosk.acceptCall(operatorName);
-        await webRTC.createAndSendOffer(socket, callId);
-      },
-    );
-
-    socket.on('webrtc:answer', async ({ answer }: { answer: RTCSessionDescriptionInit }) => {
-      await webRTC.handleAnswer(answer);
-    });
-
-    socket.on(
-      'webrtc:ice-candidate',
-      async ({ candidate }: { candidate: RTCIceCandidateInit }) => {
-        await webRTC.handleIceCandidate(candidate);
-      },
-    );
-
-    socket.on('door:open', () => {
-      setDoorFlashTrigger((n) => n + 1);
-    });
-
-    socket.on('call:ended', () => {
-      webRTC.cleanupPeer();
-      kiosk.resetCall();
-    });
-
-    socket.on('error', (msg: string) => console.error('[Server error]', msg));
+    s.on('kiosk:registered', onRegistered);
+    s.on('call:waiting', onCallWaiting);
+    s.on('call:accepted', onCallAccepted);
+    s.on('webrtc:answer', onAnswer);
+    s.on('webrtc:ice-candidate', onIceCandidate);
+    s.on('door:open', onDoorOpen);
+    s.on('call:ended', onCallEnded);
 
     return () => {
-      socket.off('kiosk:registered');
-      socket.off('call:waiting');
-      socket.off('call:accepted');
-      socket.off('webrtc:answer');
-      socket.off('webrtc:ice-candidate');
-      socket.off('door:open');
-      socket.off('call:ended');
-      socket.off('error');
+      s.off('kiosk:registered', onRegistered);
+      s.off('call:waiting', onCallWaiting);
+      s.off('call:accepted', onCallAccepted);
+      s.off('webrtc:answer', onAnswer);
+      s.off('webrtc:ice-candidate', onIceCandidate);
+      s.off('door:open', onDoorOpen);
+      s.off('call:ended', onCallEnded);
     };
-  }, [socket, kiosk, webRTC]);
-
-  const handleCall = useCallback(async () => {
-    await webRTC.getLocalStream();
-    socket?.emit('call:request');
-  }, [socket, webRTC]);
-
-  const handleCancel = useCallback(() => {
-    if (kiosk.currentCallId) {
-      socket?.emit('call:end', { callId: kiosk.currentCallId });
-    }
-    webRTC.cleanupPeer();
-    kiosk.resetCall();
-  }, [socket, kiosk, webRTC]);
-
-  const handleHangUp = useCallback(() => {
-    if (kiosk.currentCallId) {
-      socket?.emit('call:end', { callId: kiosk.currentCallId });
-    }
-    webRTC.cleanupPeer();
-    kiosk.resetCall();
-  }, [socket, kiosk, webRTC]);
+  }, [isConnected, socket]);
 
   return (
     <div id="app">
-      <TopBar
-        statusDot={kiosk.statusDot}
-        visible={isConnected || kiosk.statusDot !== ''}
-      />
+      <TopBar statusDot={kiosk.statusDot} visible={isConnected || kiosk.statusDot !== ''} />
 
       {kiosk.screen === 'idle' && (
-        <IdleScreen onCall={handleCall} />
+        <>
+          <IdleScreen onCall={doCall} />
+          <div style={{ fontSize: 11, color: isConnected ? '#00e5a0' : '#ff3b5c', marginTop: 8, letterSpacing: 1 }}>
+            {isConnected ? '✓ Conectado' : '✗ Desconectado'}
+          </div>
+        </>
       )}
-
-      {kiosk.screen === 'calling' && (
-        <CallingScreen onCancel={handleCancel} />
-      )}
-
+      <div style={{ position: 'fixed', bottom: 8, left: 8, fontSize: 10, color: '#5a6172', fontFamily: 'monospace', maxWidth: '90vw', wordBreak: 'break-all' }}>
+        {debugMsg}
+      </div>
+      {kiosk.screen === 'calling' && <CallingScreen onCancel={doCancel} />}
       {kiosk.screen === 'in-call' && (
         <InCallScreen
           remoteStream={webRTC.remoteStream}
@@ -114,7 +133,7 @@ function KioskContent() {
           callTimer={kiosk.callTimer}
           isMuted={webRTC.isMuted}
           onMute={webRTC.toggleMute}
-          onHangUp={handleHangUp}
+          onHangUp={doHangUp}
         />
       )}
 

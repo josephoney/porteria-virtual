@@ -33,6 +33,7 @@ const state = {
   kiosks: new Map(),     // buildingId → { socketId, buildingName, status }
   operators: new Map(),  // socketId → { operatorId, name }
   calls: new Map(),      // callId → { kiosk, operator, startedAt }
+  callTimeouts: new Map(), // callId → setTimeout handle
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -128,18 +129,39 @@ io.on('connection', (socket) => {
   // ── Kiosk inicia llamada ───────────────────────────────────────────────────
   socket.on('call:request', () => {
     const buildingId = socket.data.buildingId;
+    console.log(`[CALL] call:request recibido. buildingId=${buildingId}, role=${socket.data.role}`);
+
     if (!buildingId) return socket.emit('error', 'No estás registrado como kiosk');
 
     const kiosk = state.kiosks.get(buildingId);
+    console.log(`[CALL] kiosk encontrado: ${!!kiosk}, status: ${kiosk?.status}`);
+
     if (!kiosk) return socket.emit('error', 'Kiosk no encontrado');
-    if (kiosk.status !== 'idle') return socket.emit('error', 'Kiosk ocupado');
+
+    // Siempre aceptar — si estaba en calling, forzar idle
+    if (kiosk.status !== 'idle') {
+      console.log(`[CALL] Forzando kiosk ${buildingId} de "${kiosk.status}" a idle`);
+      kiosk.status = 'idle';
+    }
 
     const callId = generateCallId();
     kiosk.status = 'calling';
 
-    console.log(`[CALL] Solicitud desde ${buildingId} → callId: ${callId}`);
+    // Auto-cancel after 30 seconds if not answered
+    const timeout = setTimeout(() => {
+      const k = state.kiosks.get(buildingId);
+      if (k && k.status === 'calling') {
+        k.status = 'idle';
+        socket.emit('call:ended', { callId, reason: 'timeout' });
+        broadcastOperatorState();
+        console.log(`[CALL] Timeout: ${callId} (${buildingId})`);
+      }
+      state.callTimeouts.delete(callId);
+    }, 30000);
+    state.callTimeouts.set(callId, timeout);
 
-    // Notificar a todos los operadores disponibles (incluye último visitante identificado)
+    console.log(`[CALL] Nueva llamada: ${buildingId} → callId: ${callId}`);
+
     io.to('operators').emit('call:incoming', {
       callId,
       buildingId,
@@ -167,6 +189,13 @@ io.on('connection', (socket) => {
       buildingId,
       startedAt: Date.now(),
     });
+
+    // Clear auto-cancel timeout
+    const pendingTimeout = state.callTimeouts.get(callId);
+    if (pendingTimeout) {
+      clearTimeout(pendingTimeout);
+      state.callTimeouts.delete(callId);
+    }
 
     console.log(`[CALL] Aceptada: ${callId} | Operador: ${operatorData.name}`);
 
@@ -243,8 +272,29 @@ io.on('connection', (socket) => {
 
   // ── Finalizar llamada ──────────────────────────────────────────────────────
   socket.on('call:end', ({ callId }) => {
+    // Clear any pending timeout
+    const pendingTimeout = state.callTimeouts.get(callId);
+    if (pendingTimeout) {
+      clearTimeout(pendingTimeout);
+      state.callTimeouts.delete(callId);
+    }
+
     const call = state.calls.get(callId);
-    if (!call) return;
+
+    // Si la llamada no está en calls (nunca fue aceptada), resetear el kiosk y notificarle
+    if (!call) {
+      if (socket.data.role === 'kiosk' && socket.data.buildingId) {
+        const kiosk = state.kiosks.get(socket.data.buildingId);
+        if (kiosk) {
+          kiosk.status = 'idle';
+          console.log(`[CALL] Cancelada antes de aceptar: ${callId}. Enviando call:ended al kiosk.`);
+        }
+      }
+      // Notificar al kiosk que la llamada terminó
+      socket.emit('call:ended', { callId, reason: 'cancelled' });
+      broadcastOperatorState();
+      return;
+    }
 
     const kiosk = state.kiosks.get(call.buildingId);
     if (kiosk) kiosk.status = 'idle';
@@ -266,6 +316,11 @@ io.on('connection', (socket) => {
     console.log(`[-] Desconexión: ${socket.id} (${socket.data.role || 'unknown'})`);
 
     if (socket.data.role === 'kiosk' && socket.data.buildingId) {
+      // Clear any pending timeouts for this kiosk
+      for (const [callId, timeout] of state.callTimeouts.entries()) {
+        clearTimeout(timeout);
+        state.callTimeouts.delete(callId);
+      }
       state.kiosks.delete(socket.data.buildingId);
       broadcastOperatorState();
     }

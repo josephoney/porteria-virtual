@@ -2,7 +2,7 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import Fastify from 'fastify';
 
-const PORT = parseInt(process.env.SIGNALING_PORT || '3001', 10);
+const PORT = parseInt(process.env.SIGNALING_PORT || '3003', 10);
 const HOST = process.env.SIGNALING_HOST || '0.0.0.0';
 
 const app = Fastify({ logger: true });

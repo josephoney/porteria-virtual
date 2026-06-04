@@ -85,6 +85,18 @@ body::after {
 .status-dot.in-call   { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
 @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
+/* Screen layout */
+.screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  text-align: center;
+  width: 100%;
+  flex: 1;
+}
+
 /* IdleScreen */
 .building-name {
   font-family: var(--font-disp);

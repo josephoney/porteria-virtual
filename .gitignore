@@ -7,3 +7,4 @@ redis_data/
 mosquitto_data/
 .turbo
 *.tsbuildinfo
+docker/nginx/certs/

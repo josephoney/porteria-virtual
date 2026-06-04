@@ -4,6 +4,8 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "pnpm --recursive --parallel dev",
+    "dev:full": "concurrently -n signaling,apps -c yellow,cyan \"node legacy/server.js\" \"pnpm --recursive --parallel dev\"",
+    "dev:clean": "npx kill-port 3001 3000 && concurrently -n signaling,apps -c yellow,cyan \"node legacy/server.js\" \"pnpm --recursive --parallel dev\"",
     "build": "pnpm --recursive build",
     "lint": "pnpm --recursive lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
