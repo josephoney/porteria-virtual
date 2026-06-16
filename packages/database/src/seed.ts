@@ -3,6 +3,7 @@ import { createDb } from './connection.js';
 import { organizations } from './schema/organizations.js';
 import { locations } from './schema/locations.js';
 import { accessPoints } from './schema/access-points.js';
+import { relayOutputs } from './schema/relay-outputs.js';
 import { kiosks } from './schema/kiosks.js';
 import { users } from './schema/users.js';
 import { visitors } from './schema/visitors.js';
@@ -60,7 +61,7 @@ async function seed() {
     .insert(kiosks)
     .values({
       name: 'Kiosk-01',
-      rpiId: 'rpi-demo-001',
+      rpiId: 'edificio-01',
       ipAddress: '192.168.1.100',
       status: 'offline',
       accessPointId: accessPoint.id,
@@ -68,6 +69,30 @@ async function seed() {
     .returning();
 
   console.log(`  ✓ Kiosk: ${kiosk.name}`);
+
+  // ─── Relay Outputs ───────────────────────────────────────────────────
+  const relayData = [
+    { relayIndex: 1, gpioPin: 17, label: 'Puerta', mode: 'momentary' as const, durationMs: 5000, accessPointId: accessPoint.id },
+    { relayIndex: 2, gpioPin: 18, label: 'Portón', mode: 'momentary' as const, durationMs: 3000, accessPointId: null },
+    { relayIndex: 3, gpioPin: 27, label: 'Luz Hall', mode: 'latch' as const, durationMs: null, accessPointId: null },
+    { relayIndex: 4, gpioPin: 22, label: 'Alarma', mode: 'momentary' as const, durationMs: 10000, accessPointId: null },
+  ];
+
+  for (const r of relayData) {
+    await db
+      .insert(relayOutputs)
+      .values({
+        kioskId: kiosk.id,
+        relayIndex: r.relayIndex,
+        gpioPin: r.gpioPin,
+        label: r.label,
+        mode: r.mode,
+        durationMs: r.durationMs,
+        accessPointId: r.accessPointId ?? null,
+      })
+      .onConflictDoNothing();
+    console.log(`  ✓ Relay ${r.relayIndex}: ${r.label} (GPIO ${r.gpioPin}, ${r.mode})`);
+  }
 
   // ─── Users ─────────────────────────────────────────────────────────
   const roles = [

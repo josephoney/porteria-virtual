@@ -24,6 +24,11 @@ function KioskContent() {
   kioskRef.current = kiosk;
   const callIdRef = useRef<string | null>(null);
 
+  // Scan devices on mount for diagnostics
+  useEffect(() => {
+    webRTC.scanDevices();
+  }, []);
+
   function emit(event: string, data: any) {
     const s = ctxSocketRef.current;
     s?.emit(event, data);
@@ -115,7 +120,7 @@ function KioskContent() {
 
       {kiosk.screen === 'idle' && (
         <>
-          <IdleScreen onCall={doCall} />
+          <IdleScreen onCall={doCall} deviceSummary={webRTC.deviceSummary} />
           <div style={{ fontSize: 11, color: isConnected ? '#00e5a0' : '#ff3b5c', marginTop: 8, letterSpacing: 1 }}>
             {isConnected ? '✓ Conectado' : '✗ Desconectado'}
           </div>

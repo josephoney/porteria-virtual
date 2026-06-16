@@ -1,7 +1,13 @@
-import { createContext, useState, useEffect, useRef, useContext, type ReactNode } from 'react';
+import { createContext, useState, useEffect, useRef, useContext, useCallback, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { CONFIG } from '../config';
+import {
+  getRingtoneDefinition,
+  createRingPlayer,
+  previewRingtone as playPreview,
+  DEFAULT_RINGTONE_ID,
+} from '../lib/ringtones';
 
 interface KioskInfo {
   buildingId: string;
@@ -28,6 +34,10 @@ interface SocketContextValue {
   setActiveCall: (call: CallInfo | null) => void;
   removePendingCall: (callId: string) => void;
   setKiosks: (k: KioskInfo[]) => void;
+  stopRing: () => void;
+  selectedRingtoneId: string;
+  setRingtone: (id: string) => void;
+  previewRingtone: (id: string) => void;
 }
 
 const SocketContext = createContext<SocketContextValue>({
@@ -41,6 +51,10 @@ const SocketContext = createContext<SocketContextValue>({
   setActiveCall: () => {},
   removePendingCall: () => {},
   setKiosks: () => {},
+  stopRing: () => {},
+  selectedRingtoneId: DEFAULT_RINGTONE_ID,
+  setRingtone: () => {},
+  previewRingtone: () => {},
 });
 
 export function SocketProvider({ children }: { children: ReactNode }) {
@@ -64,6 +78,51 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       return next;
     });
   };
+
+  // Ringtone selection
+  const [selectedRingtoneId, setSelectedRingtoneId] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('ringtone');
+      if (saved && getRingtoneDefinition(saved)) return saved;
+    } catch { /* localStorage unavailable */ }
+    return DEFAULT_RINGTONE_ID;
+  });
+
+  const setRingtone = useCallback((id: string) => {
+    if (!getRingtoneDefinition(id)) return;
+    setSelectedRingtoneId(id);
+    try {
+      localStorage.setItem('ringtone', id);
+    } catch { /* localStorage unavailable */ }
+  }, []);
+
+  const previewRingtone = useCallback((id: string) => {
+    const def = getRingtoneDefinition(id);
+    if (def) playPreview(def);
+  }, []);
+
+  // Ring sound using ringtone player
+  const ringPlayerRef = useRef<{ start: () => boolean; stop: () => void } | null>(
+    null,
+  );
+  const selectedRingtoneIdRef = useRef(selectedRingtoneId);
+  selectedRingtoneIdRef.current = selectedRingtoneId;
+
+  const startRing = () => {
+    if (ringPlayerRef.current) return;
+    const def = getRingtoneDefinition(selectedRingtoneIdRef.current);
+    if (!def) return;
+    const player = createRingPlayer(def);
+    if (!player.start()) return;
+    ringPlayerRef.current = player;
+  };
+
+  const stopRing = useCallback(() => {
+    if (ringPlayerRef.current) {
+      ringPlayerRef.current.stop();
+      ringPlayerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!user || !token) return;
@@ -97,10 +156,22 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         return next;
       });
       addLog('CALL', `Llamada entrante: ${call.buildingName}${call.visitor?.known ? ' — ' + call.visitor.name : ''}`);
+      startRing();
     });
 
     s.on('call:taken', ({ callId }: { callId: string }) => {
       removePendingCall(callId);
+      stopRing();
+    });
+
+    s.on('call:ended', ({ callId, reason }: { callId: string; reason?: string }) => {
+      removePendingCall(callId);
+      stopRing();
+      if (reason === 'cancelled') {
+        addLog('END', 'Llamada cancelada desde el kiosk');
+      } else if (reason === 'timeout') {
+        addLog('END', 'Llamada expirada (sin respuesta)');
+      }
     });
 
     s.on('disconnect', () => {
@@ -111,6 +182,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     s.on('error', (msg: string) => console.error('[Server error]', msg));
 
     return () => {
+      stopRing();
       s.disconnect();
     };
   }, [user, token]);
@@ -128,6 +200,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         setActiveCall,
         removePendingCall,
         setKiosks,
+        stopRing,
+        selectedRingtoneId,
+        setRingtone,
+        previewRingtone,
       }}
     >
       {children}

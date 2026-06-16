@@ -3,9 +3,10 @@ import { CONFIG } from '../config';
 
 interface IdleScreenProps {
   onCall: () => void;
+  deviceSummary?: string;
 }
 
-export function IdleScreen({ onCall }: IdleScreenProps) {
+export function IdleScreen({ onCall, deviceSummary }: IdleScreenProps) {
   const time = useClock();
 
   return (
@@ -20,6 +21,11 @@ export function IdleScreen({ onCall }: IdleScreenProps) {
         <span className="call-btn-label">LLAMAR</span>
       </button>
       <div className="call-hint">Presione para comunicarse con portería</div>
+      {deviceSummary && (
+        <div className="device-diag">
+          <pre>{deviceSummary}</pre>
+        </div>
+      )}
     </div>
   );
 }

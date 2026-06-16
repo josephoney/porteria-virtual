@@ -11,6 +11,7 @@ import { events } from './events';
 import { guardRounds } from './guard-rounds';
 import { guardCheckpoints } from './guard-checkpoints';
 import { accessCodes } from './access-codes';
+import { relayOutputs } from './relay-outputs';
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   locations: many(locations),
@@ -43,6 +44,7 @@ export const accessPointsRelations = relations(accessPoints, ({ one, many }) => 
   calls: many(calls),
   events: many(events),
   accessCodes: many(accessCodes),
+  relayOutputs: many(relayOutputs),
 }));
 
 export const kiosksRelations = relations(kiosks, ({ one, many }) => ({
@@ -51,6 +53,7 @@ export const kiosksRelations = relations(kiosks, ({ one, many }) => ({
     references: [accessPoints.id],
   }),
   calls: many(calls),
+  relayOutputs: many(relayOutputs),
 }));
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -156,5 +159,16 @@ export const accessCodesRelations = relations(accessCodes, ({ one }) => ({
     fields: [accessCodes.createdBy],
     references: [users.id],
     relationName: 'createdCodes',
+  }),
+}));
+
+export const relayOutputsRelations = relations(relayOutputs, ({ one }) => ({
+  kiosk: one(kiosks, {
+    fields: [relayOutputs.kioskId],
+    references: [kiosks.id],
+  }),
+  accessPoint: one(accessPoints, {
+    fields: [relayOutputs.accessPointId],
+    references: [accessPoints.id],
   }),
 }));

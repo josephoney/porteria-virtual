@@ -8,6 +8,13 @@
       "when": 1780437613968,
       "tag": "0000_slow_vanisher",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781289112051,
+      "tag": "0001_open_vermin",
+      "breakpoints": true
     }
   ]
 }

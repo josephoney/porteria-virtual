@@ -14,7 +14,8 @@
     "@porteria/shared": "workspace:*",
     "fastify": "^5.0.0",
     "@fastify/cors": "^10.0.0",
-    "mqtt": "^5.10.0"
+    "mqtt": "^5.10.0",
+    "socket.io": "^4.8.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

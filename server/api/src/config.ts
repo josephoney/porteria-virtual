@@ -16,6 +16,9 @@ const config = {
     user: process.env.POSTGRES_USER || 'porteria',
     password: process.env.POSTGRES_PASSWORD || 'porteria_dev',
   },
+
+  internalApiKey: process.env.INTERNAL_API_KEY || 'dev-internal-key-change-me',
+  mqttBridgeUrl: process.env.MQTT_BRIDGE_URL || 'http://localhost:3002',
 } as const;
 
 export function validateConfig() {

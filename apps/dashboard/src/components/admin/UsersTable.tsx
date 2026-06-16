@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { CONFIG } from '../../config';
+import { get, post, patch, ApiError } from '../../lib/apiClient';
 
 interface UserData {
   id: string;
@@ -20,7 +19,6 @@ const roleBadges: Record<string, string> = {
 };
 
 export function UsersTable() {
-  const { token } = useAuth();
   const [users, setUsers] = useState<UserData[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -29,14 +27,17 @@ export function UsersTable() {
   const [error, setError] = useState('');
 
   const fetchUsers = useCallback(async () => {
-    if (!token) return;
-    const res = await fetch(`${CONFIG.API_URL}/api/users?page=${page}&pageSize=10`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    setUsers(data.data);
-    setTotal(data.total);
-  }, [token, page]);
+    try {
+      const { data } = await get<{ data: UserData[]; total: number }>(
+        `/api/users?page=${page}&pageSize=10`,
+      );
+      setUsers(data.data);
+      setTotal(data.total);
+    } catch {
+      setUsers([]);
+      setTotal(0);
+    }
+  }, [page]);
 
   useEffect(() => {
     fetchUsers();
@@ -45,46 +46,34 @@ export function UsersTable() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    const res = await fetch(`${CONFIG.API_URL}/api/users`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(form),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      setError(err.message || 'Error al crear usuario');
-      return;
+    try {
+      await post('/api/users', form);
+      setShowForm(false);
+      setForm({ email: '', name: '', password: '', role: 'operator' });
+      fetchUsers();
+    } catch (err: unknown) {
+      const message =
+        err instanceof ApiError ? err.message : 'Error al crear usuario';
+      setError(message);
     }
-    setShowForm(false);
-    setForm({ email: '', name: '', password: '', role: 'operator' });
-    fetchUsers();
   }
 
   async function handleToggleActive(user: UserData) {
-    await fetch(`${CONFIG.API_URL}/api/users/${user.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ active: !user.active }),
-    });
-    fetchUsers();
+    try {
+      await patch(`/api/users/${user.id}`, { active: !user.active });
+      fetchUsers();
+    } catch {
+      // silently ignore
+    }
   }
 
   async function handleRoleChange(user: UserData, newRole: string) {
-    await fetch(`${CONFIG.API_URL}/api/users/${user.id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ role: newRole }),
-    });
-    fetchUsers();
+    try {
+      await patch(`/api/users/${user.id}`, { role: newRole });
+      fetchUsers();
+    } catch {
+      // silently ignore
+    }
   }
 
   const totalPages = Math.ceil(total / 10);

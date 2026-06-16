@@ -6,6 +6,7 @@ export function useWebRTC() {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const remoteStreamRef = useRef<MediaStream>(new MediaStream());
 
   const getLocalStream = useCallback(async () => {
     try {
@@ -16,6 +17,8 @@ export function useWebRTC() {
       console.log('[WebRTC-D] Requesting camera/microphone...');
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       console.log('[WebRTC-D] Local stream obtained, tracks:', stream.getTracks().length);
+      console.log('[WebRTC-D] Audio tracks:', stream.getAudioTracks().length, '| Video:', stream.getVideoTracks().length);
+      stream.getAudioTracks().forEach((t) => console.log('[WebRTC-D]   Audio:', t.label, 'enabled:', t.enabled));
       setLocalStream(stream);
       return stream;
     } catch (e) {
@@ -42,10 +45,16 @@ export function useWebRTC() {
       console.log('[WebRTC-D] Signaling state:', pc.signalingState);
     };
 
-    pc.ontrack = ({ streams }) => {
-      console.log('[WebRTC-D] Remote track received, streams:', streams.length);
-      setRemoteStream(streams[0]);
-    };
+    pc.addEventListener('track', (event) => {
+      const { track, streams } = event;
+      console.log('[WebRTC-D] Remote track:', track.kind, track.label, 'streams:', streams.length);
+      if (track.kind === 'audio') {
+        console.log('[WebRTC-D]   Audio — enabled:', track.enabled, 'muted:', track.muted, 'readyState:', track.readyState);
+      }
+      remoteStreamRef.current.addTrack(track);
+      setRemoteStream(new MediaStream(remoteStreamRef.current.getTracks()));
+      console.log('[WebRTC-D] Remote stream now has', remoteStreamRef.current.getTracks().length, 'tracks');
+    });
 
     pcRef.current = pc;
     return pc;
@@ -65,11 +74,6 @@ export function useWebRTC() {
       } else {
         console.warn('[WebRTC-D] No local stream — answering without tracks');
       }
-
-      pc.ontrack = ({ streams }) => {
-        console.log('[WebRTC-D] Remote track received, streams:', streams.length);
-        setRemoteStream(streams[0]);
-      };
 
       pc.onicecandidate = ({ candidate }) => {
         if (candidate) {
@@ -105,6 +109,8 @@ export function useWebRTC() {
     console.log('[WebRTC-D] Cleaning up peer connection');
     pcRef.current?.close();
     pcRef.current = null;
+    remoteStreamRef.current.getTracks().forEach((t) => t.stop());
+    remoteStreamRef.current = new MediaStream();
     setRemoteStream(null);
   }, []);
 

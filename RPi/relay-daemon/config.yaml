@@ -1,0 +1,20 @@
+mqtt:
+  host: localhost
+  port: 1883
+  client_id: edificio-01
+
+building_id: edificio-01
+
+relays:
+  1:
+    gpio_pin: 17
+    label: "Puerta Principal"
+  2:
+    gpio_pin: 18
+    label: "Portón"
+  3:
+    gpio_pin: 27
+    label: "Luz Hall"
+  4:
+    gpio_pin: 22
+    label: "Alarma"

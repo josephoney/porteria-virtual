@@ -63,6 +63,23 @@ export async function buildApp() {
   const { userRoutes } = await import('./routes/users.routes.js');
   await app.register(userRoutes, { prefix: '/api' });
 
+  const { callsRoutes } = await import('./routes/calls.routes.js');
+  await app.register(callsRoutes, { prefix: '/api/calls' });
+
+  const { internalCallsRoutes } = await import('./routes/calls.routes.js');
+  await app.register(internalCallsRoutes, { prefix: '/api/internal/calls' });
+
+  const { eventsRoutes } = await import('./routes/events.routes.js');
+  await app.register(eventsRoutes, { prefix: '/api/events' });
+
+  const { kiosksRoutes, dashboardRoutes } = await import('./routes/kiosks.routes.js');
+  await app.register(kiosksRoutes, { prefix: '/api/kiosks' });
+  await app.register(dashboardRoutes, { prefix: '/api/dashboard' });
+
+  const { relaysRoutes, internalRelayRoutes } = await import('./routes/relays.routes.js');
+  await app.register(relaysRoutes, { prefix: '/api/kiosks' });
+  await app.register(internalRelayRoutes, { prefix: '/api/internal/relays' });
+
   return { app, authenticate };
 }
 

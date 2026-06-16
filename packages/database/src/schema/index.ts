@@ -10,6 +10,7 @@ export { events, EVENTS_HYPERTABLE_SQL } from './events';
 export { guardRounds, roundStatusEnum } from './guard-rounds';
 export { guardCheckpoints } from './guard-checkpoints';
 export { accessCodes } from './access-codes';
+export { relayOutputs, relayModeEnum } from './relay-outputs';
 
 export {
   organizationsRelations,
@@ -24,4 +25,5 @@ export {
   guardRoundsRelations,
   guardCheckpointsRelations,
   accessCodesRelations,
+  relayOutputsRelations,
 } from './relations';

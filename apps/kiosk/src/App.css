@@ -154,6 +154,25 @@ body::after {
   font-size: 13px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase;
   margin-top: 24px;
 }
+.device-diag {
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: rgba(17,19,24,0.8);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-width: 400px;
+  width: 100%;
+}
+.device-diag pre {
+  font-size: 10px;
+  font-family: 'Courier New', monospace;
+  color: var(--muted);
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
 .time-display {
   font-family: var(--font-disp);
   font-size: clamp(24px, 4vw, 48px);

@@ -4,8 +4,8 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "pnpm --recursive --parallel dev",
-    "dev:full": "concurrently -n signaling,apps -c yellow,cyan \"node legacy/server.js\" \"pnpm --recursive --parallel dev\"",
-    "dev:clean": "npx kill-port 3001 3000 && concurrently -n signaling,apps -c yellow,cyan \"node legacy/server.js\" \"pnpm --recursive --parallel dev\"",
+    "dev:full": "concurrently -n signaling,api,mqtt,apps -c yellow,blue,green,cyan \"pnpm --filter @porteria/signaling dev\" \"pnpm --filter @porteria/api dev\" \"pnpm --filter @porteria/mqtt-bridge dev\" \"pnpm --filter \"@porteria/kiosk\" --filter \"@porteria/dashboard\" --filter \"@porteria/resident\" --parallel dev\"",
+    "dev:clean": "npx kill-port 3001 3000 3002 && concurrently -n signaling,api,mqtt,apps -c yellow,blue,green,cyan \"pnpm --filter @porteria/signaling dev\" \"pnpm --filter @porteria/api dev\" \"pnpm --filter @porteria/mqtt-bridge dev\" \"pnpm --filter \"@porteria/kiosk\" --filter \"@porteria/dashboard\" --filter \"@porteria/resident\" --parallel dev\"",
     "build": "pnpm --recursive build",
     "lint": "pnpm --recursive lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",

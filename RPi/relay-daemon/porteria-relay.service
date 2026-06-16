@@ -1,0 +1,17 @@
+[Unit]
+Description=Porteria Virtual Relay Daemon
+After=network.target mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/porteria/relay-daemon
+ExecStart=/usr/bin/python3 /opt/porteria/relay-daemon/relay-daemon.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

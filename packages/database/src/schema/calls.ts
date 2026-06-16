@@ -1,4 +1,4 @@
-import { pgTable, uuid, integer, timestamp, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 import { kiosks } from './kiosks';
 import { users } from './users';
 import { organizations } from './organizations';
@@ -7,7 +7,7 @@ import { accessPoints } from './access-points';
 export const callStatusEnum = pgEnum('call_status', ['pending', 'active', 'ended', 'missed']);
 
 export const calls = pgTable('calls', {
-  id: uuid('id').defaultRandom().primaryKey(),
+  id: text('id').primaryKey(),
   kioskId: uuid('kiosk_id')
     .notNull()
     .references(() => kiosks.id, { onDelete: 'cascade' }),

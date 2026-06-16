@@ -21,16 +21,29 @@ export function InCallScreen({
 }: InCallScreenProps) {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
-    if (remoteVideoRef.current) {
+    if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch((e) =>
+        console.log('[Kiosk] Remote video play blocked:', e.name),
+      );
+    }
+    if (audioRef.current && remoteStream) {
+      audioRef.current.srcObject = remoteStream;
+      audioRef.current.play().catch((e) =>
+        console.log('[Kiosk] Audio play blocked:', e.name),
+      );
     }
   }, [remoteStream]);
 
   useEffect(() => {
-    if (localVideoRef.current) {
+    if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch((e) =>
+        console.log('[Kiosk] Local video play blocked:', e.name),
+      );
     }
   }, [localStream]);
 
@@ -39,6 +52,7 @@ export function InCallScreen({
       <div id="video-container">
         <video ref={remoteVideoRef} id="remote-video" autoPlay playsInline />
         <video ref={localVideoRef} id="local-video" autoPlay playsInline muted />
+        <audio ref={audioRef} autoPlay />
         <div className="operator-badge">
           Operador: <span id="operator-name-badge">{operatorName}</span>
         </div>

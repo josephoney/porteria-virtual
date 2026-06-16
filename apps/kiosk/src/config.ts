@@ -4,7 +4,8 @@ const isPrivateIP =
   hostname.match(/^192\.168\./) ||
   hostname.match(/^10\./) ||
   hostname.match(/^172\.(1[6-9]|2\d|3[01])\./) ||
-  hostname.match(/^169\.254\./);
+  hostname.match(/^169\.254\./) ||
+  hostname.match(/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./);
 const isDev = window.location.protocol === 'file:' || isLocalhost || isPrivateIP;
 
 const TURN_SERVER = {
@@ -13,18 +14,24 @@ const TURN_SERVER = {
   credential: 'cambiar_esta_clave',
 };
 
-const isHttps = window.location.protocol === 'https:';
+function resolveServerUrl(): string {
+  const envUrl = import.meta.env.VITE_SIGNALING_URL as string | undefined;
+  if (envUrl) return envUrl;
+
+  // Dev: connect directly to signaling server (bypass nginx)
+  // Prod: use same origin — nginx proxies /socket.io/
+  if (isDev) {
+    return isLocalhost
+      ? 'http://localhost:3001'
+      : `http://${hostname}:3001`;
+  }
+  return window.location.origin;
+}
 
 export const CONFIG = {
-  // When HTTPS (served by Vite basic-ssl), use nginx for signaling (port 443)
-  // When HTTP, connect directly to signaling server
-  SERVER_URL: isHttps
-    ? `https://${hostname}`
-    : isLocalhost
-      ? 'http://localhost:3001'
-      : `http://${hostname}:3001`,
-  BUILDING_ID: 'edificio-01',
-  BUILDING_NAME: 'EDIFICIO PRINCIPAL',
+  SERVER_URL: resolveServerUrl(),
+  BUILDING_ID: import.meta.env.VITE_BUILDING_ID || 'edificio-01',
+  BUILDING_NAME: import.meta.env.VITE_BUILDING_NAME || 'EDIFICIO PRINCIPAL',
   ADDRESS: 'Calle 123 #45-67, Bogotá',
   ICE_SERVERS: [
     { urls: 'stun:stun.l.google.com:19302' },
