@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as authService from '../services/auth.service.js';
+import * as eventsService from '../services/events.service.js';
 import { loginSchema, refreshSchema } from '../schemas/index.js';
 
 export async function authRoutes(app: FastifyInstance) {
@@ -14,6 +15,13 @@ export async function authRoutes(app: FastifyInstance) {
         message: 'Invalid email or password',
       });
     }
+
+    eventsService.insertEvent({
+      eventType: 'user.login',
+      actorId: result.user.id,
+      actorRole: result.user.role,
+      organizationId: result.user.organizationId,
+    }).catch(() => {});
 
     return reply.status(200).send(result);
   });
@@ -35,7 +43,17 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.post('/logout', async (request: FastifyRequest, reply: FastifyReply) => {
     const body = refreshSchema.parse(request.body);
+    const userInfo = await authService.getUserByRefreshToken(body.refreshToken);
     await authService.logout(body.refreshToken);
+
+    if (userInfo) {
+      eventsService.insertEvent({
+        eventType: 'user.logout',
+        actorId: userInfo.userId,
+        actorRole: userInfo.role,
+        organizationId: userInfo.organizationId,
+      }).catch(() => {});
+    }
 
     return reply.status(200).send({ message: 'Logged out' });
   });

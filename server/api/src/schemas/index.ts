@@ -44,6 +44,8 @@ export const eventsQuerySchema = z.object({
   eventType: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
+  actorId: z.string().uuid().optional(),
+  accessPointId: z.string().uuid().optional(),
 });
 
 export const kiosksQuerySchema = z.object({

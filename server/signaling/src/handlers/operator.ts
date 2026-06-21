@@ -2,7 +2,7 @@ import type { Server as SocketIOServer } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents, TypedSocket } from '../types.js';
 import type { SignalingState } from '../state.js';
 import { broadcastOperatorState } from '../utils.js';
-import { persistCallAccept, persistDoorRelay, persistRelayTrigger } from '../persist.js';
+import { persistCallAccept, persistDoorRelay, persistRelayTrigger, persistEvent } from '../persist.js';
 
 export function registerOperatorHandlers(
   socket: TypedSocket,
@@ -89,6 +89,10 @@ export function registerOperatorHandlers(
     }
 
     persistDoorRelay(buildingId);
+    persistEvent('door.open', buildingId, {
+      actorId: operatorData.operatorId,
+      actorRole: 'operator',
+    });
   });
 
   socket.on('relay:trigger', ({ buildingId, relayIndex }) => {

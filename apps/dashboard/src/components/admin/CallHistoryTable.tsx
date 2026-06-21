@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { get } from '../../lib/apiClient';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
+import { Badge } from '../ui/badge';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
+import { Input } from '../ui/input';
+import { Button } from '../ui/button';
 
 interface CallData {
   id: string;
@@ -12,18 +17,18 @@ interface CallData {
   accessPointName: string | null;
 }
 
-const statusLabels: Record<string, string> = {
+const statusBadgeVariant: Record<string, 'default' | 'secondary' | 'outline' | 'warning'> = {
+  pending: 'outline',
+  active: 'default',
+  ended: 'secondary',
+  missed: 'warning',
+};
+
+const statusLabel: Record<string, string> = {
   pending: 'Pendiente',
   active: 'Activa',
   ended: 'Finalizada',
   missed: 'Perdida',
-};
-
-const statusBadges: Record<string, string> = {
-  pending: 'badge-dark',
-  active: 'badge-green',
-  ended: 'badge-blue',
-  missed: 'badge-amber',
 };
 
 function formatTime(iso: string): string {
@@ -55,9 +60,7 @@ export function CallHistoryTable() {
       if (fromDate) params.set('from', fromDate);
       if (toDate) params.set('to', toDate);
 
-      const { data } = await get<{ data: CallData[]; total: number }>(
-        `/api/calls?${params.toString()}`,
-      );
+      const { data } = await get<{ data: CallData[]; total: number }>(`/api/calls?${params.toString()}`);
       setCalls(data.data);
       setTotal(data.total);
     } catch {
@@ -66,101 +69,75 @@ export function CallHistoryTable() {
     }
   }, [page, statusFilter, fromDate, toDate]);
 
-  useEffect(() => {
-    fetchCalls();
-  }, [fetchCalls]);
+  useEffect(() => { fetchCalls(); }, [fetchCalls]);
 
   const totalPages = Math.ceil(total / 10);
 
   return (
-    <div className="users-section">
-      <div className="users-header">
-        <h2 className="admin-title">Historial de Llamadas</h2>
-        <div className="call-filters">
-          <select
-            className="form-input"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">Todas</option>
-            <option value="pending">Pendiente</option>
-            <option value="active">Activa</option>
-            <option value="ended">Finalizada</option>
-            <option value="missed">Perdida</option>
-          </select>
-          <input
-            className="form-input"
-            type="date"
-            value={fromDate}
-            onChange={(e) => {
-              setFromDate(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Desde"
-          />
-          <input
-            className="form-input"
-            type="date"
-            value={toDate}
-            onChange={(e) => {
-              setToDate(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Hasta"
-          />
-        </div>
+    <div className="space-y-4">
+      <h3 className="font-sans text-lg font-extrabold tracking-wide">Historial de Llamadas</h3>
+
+      <div className="flex gap-3 flex-wrap">
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+          <SelectTrigger className="w-36"><SelectValue placeholder="Todas" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">Pendiente</SelectItem>
+            <SelectItem value="active">Activa</SelectItem>
+            <SelectItem value="ended">Finalizada</SelectItem>
+            <SelectItem value="missed">Perdida</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          type="date"
+          value={fromDate}
+          onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
+          className="w-40"
+        />
+        <Input
+          type="date"
+          value={toDate}
+          onChange={(e) => { setToDate(e.target.value); setPage(1); }}
+          className="w-40"
+        />
       </div>
 
-      <table className="users-table">
-        <thead>
-          <tr>
-            <th>Estado</th>
-            <th>Kiosk</th>
-            <th>Operador</th>
-            <th>Acceso</th>
-            <th>Inicio</th>
-            <th>Duración</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Estado</TableHead>
+            <TableHead>Kiosk</TableHead>
+            <TableHead>Operador</TableHead>
+            <TableHead>Acceso</TableHead>
+            <TableHead>Inicio</TableHead>
+            <TableHead>Duración</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {calls.length === 0 && (
-            <tr>
-              <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#888' }}>
+            <TableRow>
+              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                 No hay llamadas registradas
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           )}
           {calls.map((c) => (
-            <tr key={c.id}>
-              <td>
-                <span className={`role-badge ${statusBadges[c.status] || ''}`}>
-                  {statusLabels[c.status] || c.status}
-                </span>
-              </td>
-              <td>{c.kioskName || '--'}</td>
-              <td>{c.operatorName || '--'}</td>
-              <td>{c.accessPointName || '--'}</td>
-              <td>{formatTime(c.startedAt)}</td>
-              <td>{formatDuration(c.duration)}</td>
-            </tr>
+            <TableRow key={c.id}>
+              <TableCell><Badge variant={statusBadgeVariant[c.status] || 'outline'}>{statusLabel[c.status] || c.status}</Badge></TableCell>
+              <TableCell>{c.kioskName || '--'}</TableCell>
+              <TableCell>{c.operatorName || '--'}</TableCell>
+              <TableCell>{c.accessPointName || '--'}</TableCell>
+              <TableCell>{formatTime(c.startedAt)}</TableCell>
+              <TableCell>{formatDuration(c.duration)}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
 
       {totalPages > 1 && (
-        <div className="pagination">
-          <button disabled={page === 1} onClick={() => setPage(page - 1)}>
-            ←
-          </button>
-          <span>
-            {page} / {totalPages}
-          </span>
-          <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-            →
-          </button>
+        <div className="flex items-center justify-center gap-2 text-sm font-mono">
+          <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>←</Button>
+          <span className="text-muted-foreground">{page} / {totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>→</Button>
         </div>
       )}
     </div>

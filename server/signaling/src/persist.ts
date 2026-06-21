@@ -128,3 +128,27 @@ export async function persistDoorRelay(
     log?.warn({ kioskId, err: (err as Error).message }, 'Failed to trigger door relay (network)');
   }
 }
+
+export async function persistEvent(
+  eventType: string,
+  buildingId: string,
+  extra?: { actorId?: string; actorRole?: string; accessPointId?: string; locationId?: string; metadata?: Record<string, unknown> },
+) {
+  try {
+    const body: Record<string, unknown> = { eventType, buildingId, ...extra };
+    const res = await fetch(`${config.API_BASE_URL}/api/internal/events`, {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      log?.warn(
+        { eventType, buildingId, status: res.status, body: errBody },
+        'Failed to persist event',
+      );
+    }
+  } catch (err) {
+    log?.warn({ eventType, buildingId, err: (err as Error).message }, 'Failed to persist event (network)');
+  }
+}

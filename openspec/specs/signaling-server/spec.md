@@ -135,12 +135,18 @@ The server SHALL relay WebRTC offer, answer, and ICE candidates between peers in
 - **THEN** the event is silently dropped (no crash, no error broadcast)
 
 ### Requirement: Door control
-The server SHALL relay door open commands from operators to kiosks.
+The operator SHALL be able to open doors remotely during an active call.
 
-#### Scenario: Operator opens door
-- **WHEN** a registered operator emits `door:open` with `{ callId, buildingId }`
-- **THEN** the server emits `door:open { authorizedBy, timestamp }` to the kiosk for that buildingId
-- **THEN** the server logs the door open event
+#### Scenario: Door opened
+- **WHEN** the operator clicks "Abrir" during an active call
+- **THEN** a `door:open` event is emitted with `{ callId, buildingId }`
+- **THEN** an event is added to the log: "DOOR: Puerta abierta — {buildingName}"
+
+#### Scenario: Door open triggers physical relay
+- **WHEN** a `door:open` event is processed
+- **THEN** the signaling server looks up the relay output linked to the kiosk's access point
+- **THEN** a fire-and-forget HTTP call is made to `POST /api/internal/relays/trigger` with the relay configuration
+- **THEN** failure to trigger the relay does not block the `door:open` event flow (logged as warning)
 
 #### Scenario: Non-operator opens door
 - **WHEN** a socket not registered as operator emits `door:open`
@@ -149,6 +155,18 @@ The server SHALL relay door open commands from operators to kiosks.
 #### Scenario: Door open for unknown building
 - **WHEN** an operator emits `door:open` with a `buildingId` that has no registered kiosk
 - **THEN** no event is emitted (the kiosk is offline)
+
+### Requirement: Relay trigger from dashboard
+The signaling server SHALL handle `relay:trigger` events from dashboard operators to activate arbitrary relays.
+
+#### Scenario: Operator triggers a relay
+- **WHEN** a dashboard emits `relay:trigger` with `{ buildingId, relayIndex }`
+- **THEN** the signaling server validates the operator is registered
+- **THEN** a fire-and-forget HTTP call is made to `POST /api/internal/relays/trigger` with the kiosk and relay details
+
+#### Scenario: Unauthorized relay trigger
+- **WHEN** a non-operator socket emits `relay:trigger`
+- **THEN** the event is ignored and an error is emitted back
 
 ### Requirement: Visitor identification relay
 The server SHALL relay visitor identification events from kiosks to operators.
@@ -176,6 +194,51 @@ The server SHALL clean up state when a kiosk or operator disconnects, including 
 - **THEN** the kiosk in each ended call receives `call:ended { callId, reason: 'peer_disconnected' }`
 - **THEN** the kiosk status resets to `idle`
 - **THEN** the server broadcasts updated kiosk state
+
+### Requirement: Call persistence on call:request
+The signaling server SHALL create a call record in the database when a kiosk initiates a call.
+
+#### Scenario: Call request triggers persistence
+- **WHEN** the signaling server receives `call:request` from a kiosk
+- **THEN** after emitting `call:incoming` and `call:waiting`, a fire-and-forget POST is made to `{API_BASE_URL}/api/internal/calls`
+- **THEN** the POST body includes `{ callId, buildingId, visitor? }`
+- **THEN** the POST includes `X-Internal-Key` header
+- **THEN** if the POST fails, the error is logged but the call proceeds normally
+
+#### Scenario: Persistence does not block call flow
+- **WHEN** the internal API is slow or unavailable
+- **THEN** the `call:incoming` event is still emitted to operators immediately
+- **THEN** the call lifecycle proceeds without waiting for the HTTP response
+
+### Requirement: Call persistence on call:accept
+The signaling server SHALL update the call record when an operator accepts a call.
+
+#### Scenario: Accept triggers status update
+- **WHEN** the signaling server receives `call:accept` from an operator
+- **THEN** after processing the accept (setting status, clearing timeout, emitting events), a fire-and-forget PATCH is made to `{API_BASE_URL}/api/internal/calls/{callId}`
+- **THEN** the PATCH body includes `{ status: "active", operatorId }`
+- **THEN** if the PATCH fails, the error is logged
+
+### Requirement: Call persistence on call:end and timeout
+The signaling server SHALL update the call record when a call ends (normal end, cancel, timeout, or peer disconnect).
+
+#### Scenario: Normal end (call was accepted)
+- **WHEN** a `call:end` event is received for an active call (has entry in `state.calls`)
+- **THEN** after processing the end, a fire-and-forget PATCH is made with `{ status: "ended", endedAt, duration, eventType: "call.ended" }`
+- **THEN** `duration` is calculated as `Math.round((endedAt - call.startedAt) / 1000)` in seconds
+
+#### Scenario: Cancel before accept
+- **WHEN** a `call:end` event is received for a call that was never accepted (no entry in `state.calls`)
+- **THEN** a fire-and-forget PATCH is made with `{ status: "missed", endedAt, eventType: "call.missed" }`
+- **THEN** the `call:ended` event with `reason: 'cancelled'` is still emitted to operators
+
+#### Scenario: Timeout
+- **WHEN** the 30-second timeout fires for an unanswered call
+- **THEN** a fire-and-forget PATCH is made with `{ status: "missed", endedAt, eventType: "call.missed" }`
+
+#### Scenario: Peer disconnect
+- **WHEN** a socket disconnects during an active call
+- **THEN** a fire-and-forget PATCH is made with `{ status: "ended", endedAt, duration, eventType: "call.ended" }`
 
 ### Requirement: Structured logging
 The server SHALL log all significant events with structured context for traceability.

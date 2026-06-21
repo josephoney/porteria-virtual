@@ -9,7 +9,7 @@ import { registerOperatorHandlers } from './handlers/operator.js';
 import { registerCallHandlers } from './handlers/call.js';
 import { registerWebRTCHandlers } from './handlers/webrtc.js';
 import { broadcastOperatorState } from './utils.js';
-import { setPersistLogger, persistCallEnd } from './persist.js';
+import { setPersistLogger, persistCallEnd, persistEvent } from './persist.js';
 
 const app = Fastify({ logger: true });
 const httpServer = createServer(app.server);
@@ -40,6 +40,7 @@ io.on('connection', (rawSocket) => {
         clearTimeout(timeout);
         state.callTimeouts.delete(callId);
       }
+      persistEvent('kiosk.offline', socket.data.buildingId);
       state.kiosks.delete(socket.data.buildingId);
       broadcastOperatorState(io, state);
     }

@@ -1,6 +1,6 @@
 import { eq, and, gte, lte, count, desc } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { events, users } from '@porteria/database/schema';
+import { events, users, kiosks, accessPoints, locations } from '@porteria/database/schema';
 
 const db = createDb();
 
@@ -28,7 +28,7 @@ function toEventResult(row: Record<string, unknown>): EventResult {
 
 export async function listEvents(
   orgId: string,
-  filters: { page: number; pageSize: number; eventType?: string; from?: string; to?: string },
+  filters: { page: number; pageSize: number; eventType?: string; from?: string; to?: string; actorId?: string; accessPointId?: string },
 ): Promise<{ data: EventResult[]; total: number; page: number; pageSize: number }> {
   const offset = (filters.page - 1) * filters.pageSize;
   const conditions = [eq(events.organizationId, orgId)];
@@ -41,6 +41,12 @@ export async function listEvents(
   }
   if (filters.to) {
     conditions.push(lte(events.createdAt, new Date(filters.to)));
+  }
+  if (filters.actorId) {
+    conditions.push(eq(events.actorId, filters.actorId));
+  }
+  if (filters.accessPointId) {
+    conditions.push(eq(events.accessPointId, filters.accessPointId));
   }
 
   const data = await db
@@ -78,9 +84,12 @@ export interface EventStats {
   total: number;
 }
 
-export async function getEventStats(orgId: string): Promise<EventStats> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+export async function getEventStats(orgId: string, from?: string, to?: string): Promise<EventStats> {
+  const startDate = from ? new Date(from) : new Date(new Date().setHours(0, 0, 0, 0));
+  const conditions = [eq(events.organizationId, orgId), gte(events.createdAt, startDate)];
+  if (to) {
+    conditions.push(lte(events.createdAt, new Date(to)));
+  }
 
   const rows = await db
     .select({
@@ -88,7 +97,7 @@ export async function getEventStats(orgId: string): Promise<EventStats> {
       count: count(),
     })
     .from(events)
-    .where(and(eq(events.organizationId, orgId), gte(events.createdAt, today)))
+    .where(and(...conditions))
     .groupBy(events.eventType);
 
   const byType: Record<string, number> = {};
@@ -102,16 +111,35 @@ export async function getEventStats(orgId: string): Promise<EventStats> {
   return { byType, total };
 }
 
-export async function getEventsTodayCount(orgId: string): Promise<number> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+export async function getEventsTodayCount(orgId: string, from?: string, to?: string): Promise<number> {
+  const startDate = from ? new Date(from) : new Date(new Date().setHours(0, 0, 0, 0));
+  const conditions = [eq(events.organizationId, orgId), gte(events.createdAt, startDate)];
+  if (to) {
+    conditions.push(lte(events.createdAt, new Date(to)));
+  }
 
   const [result] = await db
     .select({ count: count() })
     .from(events)
-    .where(and(eq(events.organizationId, orgId), gte(events.createdAt, today)));
+    .where(and(...conditions));
 
   return result?.count ?? 0;
+}
+
+export async function resolveOrgIdFromBuildingId(buildingId: string): Promise<string> {
+  const rows = await db
+    .select({ orgId: locations.organizationId })
+    .from(kiosks)
+    .innerJoin(accessPoints, eq(kiosks.accessPointId, accessPoints.id))
+    .innerJoin(locations, eq(accessPoints.locationId, locations.id))
+    .where(eq(kiosks.rpiId, buildingId))
+    .limit(1);
+
+  if (rows.length === 0) {
+    throw new Error(`No organization found for building ${buildingId}`);
+  }
+
+  return rows[0].orgId;
 }
 
 export async function insertEvent(event: {

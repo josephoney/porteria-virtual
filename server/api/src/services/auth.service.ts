@@ -102,3 +102,19 @@ export async function logout(token: string): Promise<boolean> {
     .where(eq(refreshTokens.tokenHash, tokenHash));
   return true;
 }
+
+export async function getUserByRefreshToken(token: string): Promise<{ userId: string; role: string; organizationId: string } | null> {
+  const tokenHash = hashToken(token);
+  const [stored] = await db
+    .select()
+    .from(refreshTokens)
+    .where(eq(refreshTokens.tokenHash, tokenHash))
+    .limit(1);
+
+  if (!stored) return null;
+
+  const [user] = await db.select().from(users).where(eq(users.id, stored.userId)).limit(1);
+  if (!user) return null;
+
+  return { userId: user.id, role: user.role, organizationId: user.organizationId };
+}

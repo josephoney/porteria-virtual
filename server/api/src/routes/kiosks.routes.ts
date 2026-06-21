@@ -52,10 +52,11 @@ export async function dashboardRoutes(app: FastifyInstance) {
     { preHandler: [requireRole('admin', 'operator')] },
     async (request: FastifyRequest) => {
       const u = getUser(request);
+      const query = request.query as { from?: string; to?: string };
       const [totalKiosks, callsToday, eventsToday, activeCalls] = await Promise.all([
         kiosksService.getKiosksCount(u.orgId),
-        callsService.getCallsTodayCount(u.orgId),
-        eventsService.getEventsTodayCount(u.orgId),
+        callsService.getCallsTodayCount(u.orgId, query.from, query.to),
+        eventsService.getEventsTodayCount(u.orgId, query.from, query.to),
         callsService.getActiveCallsCount(u.orgId),
       ]);
 

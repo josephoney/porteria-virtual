@@ -16,6 +16,13 @@ const statusLabels: Record<string, string> = {
   pending: 'Pendiente',
 };
 
+const statusColors: Record<string, string> = {
+  ended: 'text-primary',
+  missed: 'text-destructive',
+  active: 'text-secondary',
+  pending: 'text-warning',
+};
+
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
 }
@@ -46,23 +53,31 @@ export function OperatorCallHistory() {
   if (!user) return null;
 
   return (
-    <div className="operator-call-history">
-      <div
-        className="call-history-toggle"
+    <div className="border-t border-border">
+      <button
+        className="w-full px-4 py-2.5 text-xs font-bold tracking-wider uppercase text-muted-foreground hover:text-foreground text-left flex items-center justify-between transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
-        Mis llamadas {expanded ? '▲' : '▼'}
-      </div>
+        Mis llamadas
+        <span className="text-[10px]">{expanded ? '▲' : '▼'}</span>
+      </button>
       {expanded && (
-        <div className="call-history-list">
+        <div className="px-3 pb-3 flex flex-col gap-1">
           {calls.length === 0 && (
-            <div className="call-history-empty">Aún no has atendido llamadas</div>
+            <div className="text-center text-xs text-muted-foreground py-3">
+              Aún no has atendido llamadas
+            </div>
           )}
           {calls.map((c) => (
-            <div key={c.id} className="call-history-item">
-              <span className="call-history-kiosk">{c.kioskName || '--'}</span>
-              <span className="call-history-time">{formatTime(c.startedAt)}</span>
-              <span className="call-history-status">
+            <div
+              key={c.id}
+              className="flex items-center gap-2 py-1.5 px-2 text-xs border-b border-border last:border-0"
+            >
+              <span className="flex-1 font-semibold text-foreground">
+                {c.kioskName || '--'}
+              </span>
+              <span className="font-mono text-muted-foreground">{formatTime(c.startedAt)}</span>
+              <span className={`font-semibold text-[10px] uppercase tracking-wider ${statusColors[c.status] || 'text-muted-foreground'}`}>
                 {statusLabels[c.status] || c.status}
               </span>
             </div>

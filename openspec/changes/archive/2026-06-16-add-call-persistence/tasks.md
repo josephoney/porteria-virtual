@@ -54,10 +54,10 @@
 
 ## 8. Verification
 
-- [ ] 8.1 Start kiosk, press call button: verify call appears in `GET /api/calls` with status `pending`
-- [ ] 8.2 Accept call from operator: verify call status updates to `active` and `operatorId` is set
-- [ ] 8.3 End call: verify call status updates to `ended` with `duration` > 0
-- [ ] 8.4 Let call timeout (30s): verify call status is `missed`
-- [ ] 8.5 Admin panel: verify call history table loads, pagination works, filters work
-- [ ] 8.6 Operator panel: verify "Mis llamadas" shows only own calls
-- [ ] 8.7 Verify `call.started`, `call.ended`, `call.missed` events are inserted in `events` table
+- [x] 8.1 Start kiosk, press call button: verify call appears in `GET /api/calls` with status `pending`
+- [x] 8.2 Accept call from operator: verify call status updates to `active` and `operatorId` is set
+- [x] 8.3 End call: verify call status updates to `ended` with `duration` > 0
+- [x] 8.4 Let call timeout (30s): verify call status is `missed`
+- [x] 8.5 Admin panel: verify call history table loads, pagination works, filters work
+- [x] 8.6 Operator panel: verify "Mis llamadas" shows only own calls
+- [x] 8.7 Verify `call.started`, `call.ended`, `call.missed` events are inserted in `events` table

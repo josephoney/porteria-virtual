@@ -3,7 +3,7 @@ import type { ClientToServerEvents, ServerToClientEvents, TypedSocket } from '..
 import type { SignalingState } from '../state.js';
 import { generateCallId, broadcastOperatorState } from '../utils.js';
 import { config } from '../config.js';
-import { persistCallRequest, persistCallEnd } from '../persist.js';
+import { persistCallRequest, persistCallEnd, persistEvent } from '../persist.js';
 
 export function registerKioskHandlers(
   socket: TypedSocket,
@@ -29,6 +29,7 @@ export function registerKioskHandlers(
 
     socket.emit('kiosk:registered', { buildingId, serverTime: Date.now() });
     broadcastOperatorState(io, state);
+    persistEvent('kiosk.online', buildingId);
   });
 
   socket.on('call:request', () => {

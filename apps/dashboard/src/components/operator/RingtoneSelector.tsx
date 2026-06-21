@@ -16,7 +16,7 @@ export function RingtoneSelector() {
 
   return (
     <select
-      className="ringtone-select"
+      className="px-2 py-1 rounded border border-border bg-card text-foreground font-mono text-[11px] cursor-pointer outline-none focus:border-ring"
       value={selectedRingtoneId}
       onChange={handleChange}
     >

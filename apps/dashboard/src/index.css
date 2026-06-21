@@ -1,21 +1,90 @@
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@import "tailwindcss";
+@import "@fontsource-variable/manrope";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: 'Manrope Variable', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.147 0.004 49.3);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.147 0.004 49.3);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.147 0.004 49.3);
+  --color-primary: oklch(0.852 0.199 91.936);
+  --color-primary-foreground: oklch(0.421 0.095 57.708);
+  --color-secondary: oklch(0.967 0.001 286.375);
+  --color-secondary-foreground: oklch(0.21 0.006 285.885);
+  --color-muted: oklch(0.96 0.002 17.2);
+  --color-muted-foreground: oklch(0.547 0.021 43.1);
+  --color-accent: oklch(0.852 0.199 91.936);
+  --color-accent-foreground: oklch(0.421 0.095 57.708);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(1 0 0);
+  --color-warning: oklch(0.795 0.17 85);
+  --color-warning-foreground: oklch(1 0 0);
+  --color-border: oklch(0.922 0.005 34.3);
+  --color-input: oklch(0.922 0.005 34.3);
+  --color-ring: oklch(0.714 0.014 41.2);
+  --color-sidebar: oklch(0.986 0.002 67.8);
+  --color-sidebar-foreground: oklch(0.147 0.004 49.3);
+  --color-sidebar-primary: oklch(0.681 0.162 75.834);
+  --color-sidebar-primary-foreground: oklch(0.987 0.026 102.212);
+  --color-sidebar-accent: oklch(0.96 0.002 17.2);
+  --color-sidebar-accent-foreground: oklch(0.214 0.009 43.1);
+  --color-sidebar-border: oklch(0.922 0.005 34.3);
+  --color-sidebar-ring: oklch(0.714 0.014 41.2);
+
+  --radius-lg: 0.625rem;
+  --radius-md: calc(0.625rem - 2px);
+  --radius-sm: calc(0.625rem - 4px);
 }
 
-html,
-body {
-  width: 100%;
-  height: 100%;
-  background: #f5f4ef;
-  color: #1a1916;
-  font-family: 'Syne', system-ui, sans-serif;
+:root {
+  --success-bg: #e8f5ee;
+  --warning-bg: #fff8e6;
+  --destructive-bg: #fdecea;
+  --secondary-bg: #e8f0fb;
+  --font-disp: 'Manrope Variable', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
 }
 
-#root {
-  width: 100%;
-  height: 100%;
+.dark {
+  --success-bg: rgba(45, 158, 106, 0.15);
+  --warning-bg: rgba(245, 158, 11, 0.15);
+  --destructive-bg: rgba(239, 68, 68, 0.15);
+  --secondary-bg: rgba(59, 130, 196, 0.15);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply font-sans;
+    width: 100%;
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    width: 100%;
+    height: 100%;
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
+  }
 }

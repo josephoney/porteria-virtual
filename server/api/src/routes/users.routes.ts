@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { requireRole, requireSelfOrRole } from '../middlewares/rbac.js';
 import * as usersService from '../services/users.service.js';
+import * as eventsService from '../services/events.service.js';
 import { createUserSchema, updateUserSchema, changePasswordSchema } from '../schemas/index.js';
 
 function getUser(request: FastifyRequest) {
@@ -80,6 +81,15 @@ export async function userRoutes(app: FastifyInstance) {
       if (!result) {
         return reply.status(409).send({ statusCode: 409, error: 'Conflict', message: 'Email already in use' });
       }
+
+      eventsService.insertEvent({
+        eventType: 'user.created',
+        actorId: u.sub,
+        actorRole: u.role,
+        organizationId: u.orgId,
+        metadata: { createdUserId: result.id, createdUserRole: result.role },
+      }).catch(() => {});
+
       return reply.status(201).send(result);
     },
   );
@@ -95,6 +105,23 @@ export async function userRoutes(app: FastifyInstance) {
       if (!result) {
         return reply.status(404).send({ statusCode: 404, error: 'Not Found', message: 'User not found' });
       }
+
+      const changedFields: string[] = [];
+      if (body.name !== undefined) changedFields.push('name');
+      if (body.role !== undefined) changedFields.push('role');
+      if (body.active !== undefined) changedFields.push('active');
+      if (body.locationId !== undefined) changedFields.push('locationId');
+
+      if (changedFields.length > 0) {
+        eventsService.insertEvent({
+          eventType: 'user.updated',
+          actorId: u.sub,
+          actorRole: u.role,
+          organizationId: u.orgId,
+          metadata: { updatedUserId: id, changedFields },
+        }).catch(() => {});
+      }
+
       return result;
     },
   );

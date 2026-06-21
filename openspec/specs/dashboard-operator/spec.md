@@ -89,6 +89,34 @@ The operator SHALL have video call controls: mute microphone, end call.
 - **THEN** the local audio track is toggled
 - **THEN** the button opacity changes to indicate mute state
 
+### Requirement: Operator call history
+The operator panel SHALL include a section showing the operator's recent call history.
+
+#### Scenario: Recent calls displayed
+- **WHEN** the operator panel loads
+- **THEN** a collapsible "Mis llamadas" section is displayed
+- **THEN** it shows up to 50 most recent calls where `operatorId` matches the operator's user ID
+- **THEN** calls are fetched via `GET /api/calls?operatorId=<id>&pageSize=50`
+
+#### Scenario: Call list shows relevant info
+- **WHEN** the operator's call history is displayed
+- **THEN** each row shows: kiosk name, start time (HH:MM format), and status (Atendida/Perdida)
+- **THEN** calls are ordered by most recent first
+
+#### Scenario: Empty history
+- **WHEN** the operator has no call history
+- **THEN** a message "Aún no has atendido llamadas" is displayed
+
+#### Scenario: Section is collapsible
+- **WHEN** the operator clicks the "Mis llamadas" header
+- **THEN** the call list toggles between visible and hidden
+- **THEN** the toggle state is preserved during the session (React state, not localStorage)
+
+#### Scenario: History refreshes periodically
+- **WHEN** the operator completes a call
+- **THEN** the history refreshes to include the new call
+- **THEN** a polling interval of 60 seconds keeps the list updated
+
 ### Requirement: Ringtone selector UI
 The operator panel header SHALL include a ringtone selector dropdown that allows choosing and previewing ringtones.
 
@@ -105,4 +133,38 @@ The operator panel header SHALL include a ringtone selector dropdown that allows
 #### Scenario: Selector hidden for guard role
 - **WHEN** a user with role 'guard' views the dashboard
 - **THEN** the ringtone selector is not rendered
+
+### Requirement: Relay control buttons in VideoPanel
+The dashboard operator SHALL see relay control buttons during an active call, with visual feedback for different relay modes.
+
+#### Scenario: Relay buttons render on active call
+- **WHEN** an active call is in progress
+- **THEN** the VideoPanel renders control buttons for each relay output of the kiosk, excluding the one linked to the access point (already handled by "Abrir Puerta")
+- **THEN** each button shows the relay label from the database
+
+#### Scenario: Momentary relay button feedback
+- **WHEN** the operator clicks a relay button configured as momentary
+- **THEN** the button shows a "pulse" visual state for the duration of the relay activation
+- **THEN** a `relay:trigger` event is emitted via Socket.io
+
+#### Scenario: Latch relay button shows current state
+- **WHEN** the VideoPanel renders a relay button configured as latch
+- **THEN** the button displays the current ON/OFF state (green for ON, default for OFF)
+- **THEN** clicking the button emits `relay:trigger` and the state updates when `relay:status` is received
+
+#### Scenario: Relay buttons hidden when no active call
+- **WHEN** there is no active call
+- **THEN** no relay control buttons are rendered
+
+### Requirement: Relay status subscription
+The dashboard SHALL connect to the MQTT bridge Socket.io to receive real-time relay status updates.
+
+#### Scenario: Subscribe to relay status
+- **WHEN** the operator panel loads
+- **THEN** a Socket.io connection is established to the MQTT bridge
+- **THEN** the client listens for `relay:status` events
+
+#### Scenario: Update button state on status event
+- **WHEN** a `relay:status` event is received with `{ buildingId, relayIndex, state }`
+- **THEN** the corresponding relay button in the UI updates its visual state to reflect ON or OFF
 

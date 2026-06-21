@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checkup Report — Portería Virtual</title>
+<style>
+:root {
+  --bg: #f5f4ef;
+  --surface: #fff;
+  --ink: #1a1916;
+  --muted: #8a8880;
+  --border: #dddbd2;
+  --green: #1d7a4f;
+  --red: #c0392b;
+  --amber: #c47a00;
+  --font: 'Syne', -apple-system, sans-serif;
+  --mono: 'IBM Plex Mono', 'SF Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); padding: 40px 24px; display: flex; flex-direction: column; align-items: center; }
+.report { max-width: 800px; width: 100%; }
+h1 { font-size: 28px; font-weight: 800; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 4px; }
+.score-row { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-bottom: 32px; }
+.score-number { font-size: 48px; font-weight: 800; color: var(--ink); display: block; margin: 8px 0 4px; }
+.score-bar { height: 6px; background: var(--border); border-radius: 3px; width: 100%; margin-bottom: 32px; position: relative; }
+.score-fill { height: 100%; border-radius: 3px; background: var(--amber); width: 66.7%; }
+.vital { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 20px 24px; margin-bottom: 16px; }
+.vital-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.vital-name { font-size: 14px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+.vital-status { font-family: var(--mono); font-size: 12px; padding: 2px 10px; border-radius: 3px; }
+.status-ok { background: #e8f5ee; color: var(--green); }
+.status-warn { background: #fff8e6; color: var(--amber); }
+.status-crit { background: #fdecea; color: var(--red); }
+.vital-score { font-family: var(--mono); font-size: 20px; font-weight: 700; }
+.vital-body { font-size: 13px; line-height: 1.6; color: #444; }
+.vital-body p { margin-bottom: 8px; }
+.vital-body strong { color: var(--ink); }
+.vital-body em { color: var(--muted); font-style: italic; }
+.vital-body ul { margin: 6px 0 6px 18px; }
+.vital-body li { margin-bottom: 4px; }
+h2 { font-size: 16px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; margin: 32px 0 16px; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; margin-bottom: 32px; }
+th { text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); font-family: var(--font); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.next-move { background: var(--ink); color: var(--bg); border-radius: 6px; padding: 24px; margin-top: 32px; }
+.next-move h2 { color: var(--bg); margin-top: 0; }
+.next-move p { font-size: 13px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="report">
+<h1>Checkup Report</h1>
+<div class="score-row">
+  <span class="score-number">40/60</span>
+  <div class="score-bar"><div class="score-fill"></div></div>
+  <span>Dashboard (operator/admin SPA) &amp; Kiosk (touch terminal) — 2026-06-19</span>
+</div>
+
+<div class="vital">
+  <div class="vital-header">
+    <span class="vital-name">Intentionalidad</span>
+    <span class="vital-status status-ok">10/10</span>
+  </div>
+  <div class="vital-body">
+    <p>A Propósito. Ambos surfaces tienen identidad visual propia. El dashboard usa paleta cálida y Syne + IBM Plex Mono — no es un SaaS genérico azul. El kiosk es oscuro con acento neón verde, patrón de cuadrícula y noise grain. Nada aquí parece AI-generado por defecto.</p>
+  </div>
+</div>
+
+<div class="vital">
+  <div class="vital-header">
+    <span class="vital-name">Legibilidad</span>
+    <span class="vital-status status-ok">10/10</span>
+  </div>
+  <div class="vital-body">
+    <p>Contraste excelente en ambas superficies (15:1 dashboard, 11:1 kiosk). Escalas tipográficas intencionales. Las tipografías de datos (IBM Plex Mono a 10–11px) son estándar en UI de monitoreo. Sin combinaciones ilegibles.</p>
+  </div>
+</div>
+
+<div class="vital">
+  <div class="vital-header">
+    <span class="vital-name">Usabilidad</span>
+    <span class="vital-status status-warn">5/10</span>
+  </div>
+  <div class="vital-body">
+    <p>Los flujos principales funcionan: llamada entrante → aceptar/rechazar → controles de video. <strong>Problema de composición:</strong> el video en el dashboard vive en una ventana flotante separada del layout principal. El panel del operador muestra instrucciones de texto en vez de integrar el video. La ventana minimizada (PiP) muestra solo una etiqueta sin video en miniatura. Faltan atajos de teclado para acciones principales.</p>
+  </div>
+</div>
+
+<div class="vital">
+  <div class="vital-header">
+    <span class="vital-name">Responsividad</span>
+    <span class="vital-status status-warn">5/10</span>
+  </div>
+  <div class="vital-body">
+    <p>El dashboard es efectivamente <em>solo desktop</em>. Columnas fijas (240px + 1fr + 280px), overlay de video a 640px fijos. Sin media queries ni container queries. Defendible para una sala de control, pero inhabilitante en tablet. El kiosk usa clamp(), vw/vh — inherentemente responsive. Sin verificación en viewports angostos.</p>
+  </div>
+</div>
+
+<div class="vital">
+  <div class="vital-header">
+    <span class="vital-name">Velocidad</span>
+    <span class="vital-status status-ok">10/10</span>
+  </div>
+  <div class="vital-body">
+    <p>SPA estándar con Vite + React. Socket.IO eficiente. Sin layout shift, jank, ni bloqueos síncronos en la ruta crítica. Recharts (reportes admin) es el componente más pesado y está fuera del path crítico.</p>
+  </div>
+</div>
+
+<div class="vital">
+  <div class="vital-header">
+    <span class="vital-name">Accesibilidad</span>
+    <span class="vital-status status-crit">0/10</span>
+  </div>
+  <div class="vital-body">
+    <p><strong>La falla más grave.</strong> El layout del dashboard no tiene landmarks semánticos — ni <code>&lt;header&gt;</code>, <code>&lt;nav&gt;</code> ni <code>&lt;main&gt;</code>. No hay estilos <code>:focus-visible</code> en ninguna superficie. El overlay de video usa estilos inline sin <code>aria-modal</code>, sin focus trapping, sin etiquetas en los SVG. Un operador que use solo teclado <strong>no puede realizar sus tareas primarias</strong>. El kiosk carece de etiquetas en iconos y no soporta <code>prefers-reduced-motion</code>.</p>
+  </div>
+</div>
+
+<h2>Prescripciones</h2>
+<table>
+<tr>
+  <th>Prioridad</th>
+  <th>Problema</th>
+  <th>Solución</th>
+</tr>
+<tr>
+  <td><span class="vital-status status-crit">Critical</span></td>
+  <td>Sin indicadores de foco, landmarks ni atajos de teclado</td>
+  <td><code>interaction</code> — focus-visible, ARIA landmarks, keyboard shortcuts</td>
+</tr>
+<tr>
+  <td><span class="vital-status status-crit">Critical</span></td>
+  <td>Overlay de video sin manejo de foco accesible</td>
+  <td><code>interaction</code> — focus trapping, aria-modal, etiquetas</td>
+</tr>
+<tr>
+  <td><span class="vital-status status-warn">Watch</span></td>
+  <td>Video es ventana flotante, no layout integrado</td>
+  <td><code>relayout</code> — video como contenido principal durante llamada</td>
+</tr>
+<tr>
+  <td><span class="vital-status status-warn">Watch</span></td>
+  <td>Dashboard solo desktop sin adaptación responsive</td>
+  <td><code>responsive</code> — breakpoints para tablets</td>
+</tr>
+<tr>
+  <td><span class="vital-status status-ok">Info</span></td>
+  <td>SVG sin etiquetas accesibles</td>
+  <td><code>surface</code> — aria-labels en botones de íconos</td>
+</tr>
+</table>
+
+<div class="next-move">
+  <h2>Próximo Paso</h2>
+  <p>La accesibilidad necesita atención inmediata — usar <code>/design interaction</code> para agregar focus-visible, landmarks semánticos y atajos de teclado. Luego <code>/design relayout</code> para integrar el video como contenido principal del operador durante llamadas activas.</p>
+</div>
+</div>
+</body>
+</html>

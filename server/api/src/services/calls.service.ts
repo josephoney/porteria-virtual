@@ -105,14 +105,17 @@ export async function getCallById(id: string, orgId: string): Promise<CallResult
   return toCallResult(rows[0]);
 }
 
-export async function getCallsTodayCount(orgId: string): Promise<number> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+export async function getCallsTodayCount(orgId: string, from?: string, to?: string): Promise<number> {
+  const startDate = from ? new Date(from) : new Date(new Date().setHours(0, 0, 0, 0));
+  const conditions = [eq(calls.organizationId, orgId), gte(calls.startedAt, startDate)];
+  if (to) {
+    conditions.push(lte(calls.startedAt, new Date(to)));
+  }
 
   const [result] = await db
     .select({ count: count() })
     .from(calls)
-    .where(and(eq(calls.organizationId, orgId), gte(calls.startedAt, today)));
+    .where(and(...conditions));
 
   return result?.count ?? 0;
 }
