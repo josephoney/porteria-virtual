@@ -275,7 +275,7 @@ el modo kiosk automatico."; then
     sudo tee "$CONFIG_FILE" > /dev/null << EOF
 SERVER_IP=${SERVER_IP}
 BUILDING_ID=${BUILDING_ID}
-BUILDING_NAME=${BUILDING_NAME}
+BUILDING_NAME="${BUILDING_NAME}"
 MQTT_HOST=${SERVER_IP}
 MQTT_PORT=1883
 KIOSK_URL=https://${SERVER_IP}/kiosk/
@@ -284,8 +284,8 @@ EOF
     for i in $(seq 1 "$RELAY_COUNT"); do
         local vname="RELAY_LABEL_${i}"
         local vpin="RELAY_PIN_${i}"
-        echo "RELAY_${i}_LABEL=${!vname}" | sudo tee -a "$CONFIG_FILE" > /dev/null
-        echo "RELAY_${i}_GPIO=${!vpin}"   | sudo tee -a "$CONFIG_FILE" > /dev/null
+        echo "RELAY_${i}_LABEL=\"${!vname}\"" | sudo tee -a "$CONFIG_FILE" > /dev/null
+        echo "RELAY_${i}_GPIO=${!vpin}"      | sudo tee -a "$CONFIG_FILE" > /dev/null
     done
 
     # Generar config.yaml para relay daemon
