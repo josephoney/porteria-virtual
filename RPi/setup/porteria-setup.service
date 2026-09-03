@@ -6,6 +6,10 @@ ConditionPathExists=!/opt/porteria/.configured
 
 [Service]
 Type=oneshot
+# Quitar el splash de plymouth antes de mostrar el wizard:
+# si no, el splash cubre tty1 y plymouth-quit-wait queda colgado
+# esperando al display-manager (que no arranca hasta que el wizard termina).
+ExecStartPre=/bin/bash -c 'command -v plymouth >/dev/null && plymouth --quit || true'
 ExecStart=/bin/bash /opt/porteria/setup/setup-wizard.sh
 StandardInput=tty
 StandardOutput=tty
