@@ -3,6 +3,23 @@
 CONFIG_FILE="/opt/porteria/config.env"
 FLAG_FILE="/opt/porteria/.configured"
 
+# Detectar binario de Chromium:
+#   Bookworm/RPi OS 2023+: 'chromium'   (ya no existe chromium-browser)
+#   Imagenes legacy:                    'chromium-browser'
+CHROMIUM_BIN=""
+for bin in chromium chromium-browser; do
+    if command -v "$bin" >/dev/null 2>&1; then
+        CHROMIUM_BIN="$bin"
+        break
+    fi
+done
+
+if [ -z "$CHROMIUM_BIN" ]; then
+    echo "[Kiosk] ERROR: Chromium no encontrado. Instalar: sudo apt install chromium"
+    exit 1
+fi
+echo "[Kiosk] Usando binario: $CHROMIUM_BIN"
+
 if [ ! -f "$FLAG_FILE" ]; then
     echo "[Kiosk] RPi no configurada. Para ejecutar el asistente:"
     echo "        sudo rm -f $FLAG_FILE && sudo reboot"
@@ -27,7 +44,7 @@ for i in $(seq 1 30); do
 done
 
 while true; do
-    chromium-browser \
+    "$CHROMIUM_BIN" \
         --kiosk \
         --noerrdialogs \
         --disable-infobars \
