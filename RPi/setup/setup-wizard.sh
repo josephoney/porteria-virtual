@@ -10,7 +10,10 @@ KIOSK_DIR="/opt/porteria/kiosk"
 SETUP_DIR="/opt/porteria/setup"
 BACKTITLE="Porteria Virtual — Configuracion Inicial"
 
-if [ -f "$FLAG_FILE" ]; then
+# Salir si ya esta configurado SOLO cuando se invoca sin terminal
+# (caso del systemd service en boot). Si hay terminal, es re-configuracion
+# manual del usuario y se permite entrar.
+if [ -f "$FLAG_FILE" ] && [ ! -t 0 ]; then
     exit 0
 fi
 
@@ -45,12 +48,27 @@ RELAY_COUNT="${RELAY_COUNT:-1}"
 DEFAULT_PINS=(17 18 27 22)
 DEFAULT_LABELS=("Puerta Principal" "Porton" "Luz Hall" "Alarma")
 
+# Pre-cargar config actual si existe (re-configuracion: muestra los
+# valores guardados como defaults en vez de los de fabrica)
+if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$CONFIG_FILE"
+    SERVER_IP="${SERVER_IP:-192.168.1.100}"
+    BUILDING_ID="${BUILDING_ID:-edificio-01}"
+    BUILDING_NAME="${BUILDING_NAME:-EDIFICIO PRINCIPAL}"
+    RELAY_COUNT="${RELAY_COUNT:-1}"
+fi
+
 for i in 1 2 3 4; do
+    idx=$((i-1))
+    # El config.env guarda RELAY_${i}_LABEL/GPIO; el wizard usa
+    # RELAY_LABEL_${i}/RELAY_PIN_${i} — mapear si vinieron de config.env
+    saved_label="RELAY_${i}_LABEL"
+    saved_pin="RELAY_${i}_GPIO"
     varname_label="RELAY_LABEL_${i}"
     varname_pin="RELAY_PIN_${i}"
-    idx=$((i-1))
-    eval "${varname_label}=\"${!varname_label:-${DEFAULT_LABELS[$idx]}}\""
-    eval "${varname_pin}=\"${!varname_pin:-${DEFAULT_PINS[$idx]}}\""
+    eval "${varname_label}=\"${!varname_label:-${!saved_label:-${DEFAULT_LABELS[$idx]}}}\""
+    eval "${varname_pin}=\"${!varname_pin:-${!saved_pin:-${DEFAULT_PINS[$idx]}}}\""
 done
 
 # ─────────────────────────────────────────────
