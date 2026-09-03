@@ -179,6 +179,24 @@ if ! $detect_wayfire && ! $detect_labwc; then
 fi
 
 # ─────────────────────────────────────────────
+# Deshabilitar plymouth (splash screen)
+# ─────────────────────────────────────────────
+echo "[4/5] Deshabilitando plymouth (splash screen)..."
+
+# El wizard bloquea el boot antes del display-manager; plymouth-quit-wait
+# queda esperando el splash y se cuelga. Para un kiosk el splash sobra.
+systemctl mask plymouth.service plymouth-quit-wait.service 2>/dev/null || true
+
+# Ademas, desactivar via kernel cmdline (a prueba de futuras unidades)
+CMDLINE_FILE="/boot/cmdline.txt"
+if [ -f "$CMDLINE_FILE" ]; then
+    if ! grep -q "plymouth.enable=0" "$CMDLINE_FILE"; then
+        sed -i 's/$/ plymouth.enable=0/' "$CMDLINE_FILE"
+        echo "      -> plymouth.enable=0 agregado a $CMDLINE_FILE"
+    fi
+fi
+
+# ─────────────────────────────────────────────
 # Habilitar servicios
 # ─────────────────────────────────────────────
 echo "[5/5] Habilitando servicios..."
