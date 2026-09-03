@@ -127,8 +127,15 @@ class RelayDaemon:
     def start(self):
         host = self.config["mqtt"]["host"]
         port = self.config["mqtt"].get("port", 1883)
-        self.mqtt_client.connect(host, port, keepalive=60)
-        self.mqtt_client.loop_start()
+
+        while True:
+            try:
+                self.mqtt_client.connect(host, port, keepalive=60)
+                self.mqtt_client.loop_start()
+                return
+            except OSError as e:
+                print(f"[MQTT] Connection failed ({e}), retrying in 5s...")
+                time.sleep(5)
 
     def stop(self):
         print("\n[Daemon] Shutting down...")

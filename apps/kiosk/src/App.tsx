@@ -116,7 +116,10 @@ function KioskContent() {
 
   return (
     <div id="app">
-      <TopBar statusDot={kiosk.statusDot} visible={isConnected || kiosk.statusDot !== ''} />
+      <TopBar
+        statusDot={kiosk.statusDot}
+        visible={(isConnected || kiosk.statusDot !== '') && kiosk.screen !== 'in-call'}
+      />
 
       {kiosk.screen === 'idle' && (
         <>

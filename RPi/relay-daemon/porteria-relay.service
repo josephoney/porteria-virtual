@@ -1,15 +1,14 @@
 [Unit]
 Description=Porteria Virtual Relay Daemon
-After=network.target mosquitto.service
-Wants=mosquitto.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
 WorkingDirectory=/opt/porteria/relay-daemon
 ExecStart=/usr/bin/python3 /opt/porteria/relay-daemon/relay-daemon.py
-Restart=on-failure
-RestartSec=10
+Restart=always
+RestartSec=5
 StandardOutput=journal
 StandardError=journal
 

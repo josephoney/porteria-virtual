@@ -6,7 +6,14 @@ const isPrivateIP =
   hostname.match(/^172\.(1[6-9]|2\d|3[01])\./) ||
   hostname.match(/^169\.254\./) ||
   hostname.match(/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./);
-const isDev = window.location.protocol === 'file:' || isLocalhost || isPrivateIP;
+
+// Dev se detecta por servir sobre HTTP en localhost/IP privada.
+// Si la pagina llega por HTTPS (nginx con cert self-signed), es
+// produccion aunque la IP sea privada: usar same-origin para no
+// caer en mixed content (ws:// bloqueado desde pagina https://).
+const isDev =
+  window.location.protocol === 'file:' ||
+  window.location.protocol === 'http:' && (isLocalhost || isPrivateIP);
 
 const TURN_SERVER = {
   urls: `turn:${hostname}:3478`,
