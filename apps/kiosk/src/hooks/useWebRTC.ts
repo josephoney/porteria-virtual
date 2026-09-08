@@ -1,6 +1,14 @@
 import { useState, useRef, useCallback } from 'react';
 import { CONFIG } from '../config';
 
+// Constraint de audio para el kiosk: ganancia automatica + cancelacion
+// de eco + reduccion de ruido. autoGainControl compensa microfono suave.
+const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+};
+
 export function useWebRTC() {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -70,17 +78,17 @@ export function useWebRTC() {
       const constraints: MediaStreamConstraints[] = [];
       if (videoDevices.length > 0 && audioDevices.length > 0) {
         constraints.push(
-          { video: { width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: true },
-          { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true },
-          { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: true },
-          { video: true, audio: true },
+          { video: { width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: AUDIO_CONSTRAINTS },
+          { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: AUDIO_CONSTRAINTS },
+          { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: AUDIO_CONSTRAINTS },
+          { video: true, audio: AUDIO_CONSTRAINTS },
         );
       }
       if (videoDevices.length > 0) {
         constraints.push({ video: true, audio: false });
       }
       // Always try audio capture — enumerateDevices() can miss the default mic
-      constraints.push({ audio: true });
+      constraints.push({ audio: AUDIO_CONSTRAINTS });
 
       for (const c of constraints) {
         try {
