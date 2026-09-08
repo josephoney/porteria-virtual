@@ -47,7 +47,7 @@ if [ ! -d "$REAL_HOME" ]; then
     [ -n "$REAL_USER" ] && REAL_HOME="/home/$REAL_USER"
 fi
 
-echo "[1/5] Usuario detectado: $REAL_USER ($REAL_HOME)"
+echo "[1/6] Usuario detectado: $REAL_USER ($REAL_HOME)"
 
 # ─────────────────────────────────────────────
 # Directorios destino
@@ -61,12 +61,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RPI_DIR="$SCRIPT_DIR"
 [ -d "$RPI_DIR/setup" ] || RPI_DIR="$(cd "$SCRIPT_DIR/RPi" 2>/dev/null && pwd)"
 
-echo "[2/5] Instalando dependencias de sistema..."
+echo "[2/6] Instalando dependencias de sistema..."
 
 export DEBIAN_FRONTEND=noninteractive
 
 # Paquetes apt
-APT_PKGS="whiptail network-manager chromium python3-paho-mqtt python3-gpiozero python3-yaml"
+APT_PKGS="whiptail network-manager chromium dnsmasq python3-paho-mqtt python3-gpiozero python3-yaml"
 if ! apt-get update -y >/dev/null 2>&1; then
     echo "ERROR: apt-get update fallo. Verifique conectividad a internet."
     exit 1
@@ -83,7 +83,7 @@ apt-get install -y $APT_PKGS || {
 # ─────────────────────────────────────────────
 # Copiar archivos a /opt/porteria
 # ─────────────────────────────────────────────
-echo "[3/5] Copiando archivos a /opt/porteria/..."
+echo "[3/6] Copiando archivos a /opt/porteria/..."
 
 mkdir -p "$SETUP_DIR" "$KIOSK_DIR" "$RELAY_DIR"
 
@@ -142,10 +142,28 @@ if [ -n "$SRC" ]; then
     cp "$SRC" "$RELAY_DIR/"
 fi
 
+# web config (pagina de configuracion via ethernet 192.168.1.1)
+WEB_DIR="/opt/porteria/web-config"
+mkdir -p "$WEB_DIR"
+SRC=$(find_src "${RPI_DIR}/web-config/webconfig.py")
+if [ -n "$SRC" ]; then
+    cp "$SRC" "$WEB_DIR/"
+    chmod +x "$WEB_DIR/webconfig.py"
+else
+    echo "ADVERTENCIA: webconfig.py no encontrado."
+fi
+
+SRC=$(find_src "${RPI_DIR}/web-config/porteria-webconfig.service")
+if [ -n "$SRC" ]; then
+    cp "$SRC" /etc/systemd/system/porteria-webconfig.service
+else
+    echo "ADVERTENCIA: porteria-webconfig.service no encontrado."
+fi
+
 # ─────────────────────────────────────────────
 # Autostart del compositor detectado
 # ─────────────────────────────────────────────
-echo "[4/5] Detectando compositor..."
+echo "[4/6] Detectando compositor..."
 
 mkdir -p "${REAL_HOME}/.config"
 
@@ -181,7 +199,7 @@ fi
 # ─────────────────────────────────────────────
 # Deshabilitar plymouth (splash screen)
 # ─────────────────────────────────────────────
-echo "[4/5] Deshabilitando plymouth (splash screen)..."
+echo "   -> Deshabilitando plymouth (splash screen)..."
 
 # El wizard bloquea el boot antes del display-manager; plymouth-quit-wait
 # queda esperando el splash y se cuelga. Para un kiosk el splash sobra.
@@ -197,13 +215,57 @@ if [ -f "$CMDLINE_FILE" ]; then
 fi
 
 # ─────────────────────────────────────────────
+# Puerto ethernet de configuracion (IP fija 192.168.1.1)
+# ─────────────────────────────────────────────
+echo "[5/6] Configurando puerto ethernet (192.168.1.1)..."
+
+# IP fija en la interfaz ethernet del kiosk. El instalador conecta una
+# notebook con cable y accede a http://192.168.1.1/ para configurar.
+ETH_IF=$(nmcli -t -f DEVICE,TYPE device 2>/dev/null | awk -F: '$2=="ethernet" {print $1; exit}')
+if [ -z "$ETH_IF" ]; then
+    ETH_IF="eth0"
+    echo "      -> No se detecto interfaz ethernet via nmcli; usando eth0"
+fi
+echo "      -> Interfaz ethernet: $ETH_IF"
+
+# Desactivar autoconnect de la conexion ethernet por defecto (si existe)
+# para que no compita con la IP estatica del puerto de configuracion.
+DEFAULT_CONN=$(nmcli -t -f NAME,TYPE con show 2>/dev/null | awk -F: '$2=="802-3-ethernet" {print $1; exit}')
+if [ -n "$DEFAULT_CONN" ]; then
+    nmcli con modify "$DEFAULT_CONN" connection.autoconnect no 2>/dev/null || true
+    echo "      -> Autoconnect desactivado en: $DEFAULT_CONN"
+fi
+
+# Conexion NetworkManager con IP fija. NO se trae arriba durante el install
+# (evita cortar la sesion/internet actual); se activa en el proximo boot.
+nmcli con delete porteria-config 2>/dev/null || true
+nmcli con add type ethernet con-name porteria-config ifname "$ETH_IF" \
+    ipv4.method manual ipv4.addresses 192.168.1.1/24 ipv6.method disabled \
+    connection.autoconnect yes connection.autoconnect-priority 100 \
+    2>/dev/null || echo "      -> ADVERTENCIA: no se pudo crear la conexion estatica"
+
+# DNSMASQ: servidor DHCP en el puerto ethernet para que la notebook del
+# instalador obtenga IP automaticamente (192.168.1.100+)
+cat > /etc/dnsmasq.d/porteria-config.conf << EOF
+interface=$ETH_IF
+bind-interfaces
+dhcp-range=192.168.1.100,192.168.1.200,255.255.255.0,12h
+EOF
+
+# dnsmasq solo debe servir DHCP en la interfaz de configuracion; evitar
+# que interfiera con la red WiFi principal. Se habilita (arranca en boot).
+systemctl enable dnsmasq 2>/dev/null || true
+echo "      -> dnsmasq habilitado (DHCP 192.168.1.100-200 en $ETH_IF)"
+
+# ─────────────────────────────────────────────
 # Habilitar servicios
 # ─────────────────────────────────────────────
-echo "[5/5] Habilitando servicios..."
+echo "[6/6] Habilitando servicios..."
 
 systemctl daemon-reload
 systemctl enable porteria-setup 2>/dev/null || true
 systemctl enable porteria-relay 2>/dev/null || true
+systemctl enable porteria-webconfig 2>/dev/null || true
 
 # ─────────────────────────────────────────────
 # Mensaje final
@@ -212,13 +274,19 @@ echo ""
 echo "=============================================="
 echo " Instalacion completada."
 echo ""
-echo " Reinicie la RPi. En el primer boot aparecera"
-echo " el wizard de configuracion en tty1 (necesita"
-echo " teclado USB). Configure IP del servidor,"
-echo " edificio y relays."
+echo " Reinicie la RPi. Hay DOS formas de configurar:"
 echo ""
-echo " Para re-ejecutar el wizard despues de"
-echo " configurar:"
-echo "   sudo rm /opt/porteria/.configured"
-echo "   sudo reboot"
+echo " 1) WEB (recomendado, sin monitor):"
+echo "    Conecte una notebook al puerto ethernet"
+echo "    con cable y abra:  http://192.168.1.1/"
+echo "    (la notebook obtiene IP automaticamente)"
+echo ""
+echo " 2) Terminal (tty1, requiere teclado USB):"
+echo "    En el primer boot aparece el wizard"
+echo "    de configuracion."
+echo ""
+echo " Para re-configurar despues de instalar:"
+echo "   - Web: vuelva a conectar al ethernet 192.168.1.1"
+echo "   - Terminal: sudo rm /opt/porteria/.configured"
+echo "               sudo reboot"
 echo "=============================================="

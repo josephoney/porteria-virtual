@@ -55,6 +55,7 @@ while true; do
         --hide-scrollbars \
         --check-for-update-interval=31536000 \
         --simulate-outdated-no-au='Tue, 31 Dec 2099 23:59:59 GMT' \
+        --password-store=basic \
         --ignore-certificate-errors \
         "$KIOSK_URL"
 
