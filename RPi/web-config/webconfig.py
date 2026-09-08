@@ -29,11 +29,34 @@ import yaml
 CONFIG_FILE = "/opt/porteria/config.env"
 CONFIG_YAML = "/opt/porteria/relay-daemon/config.yaml"
 FLAG_FILE = "/opt/porteria/.configured"
+CHROMIUM_POLICY = "/etc/chromium/policies/managed/porteria-media.json"
 HOST = "0.0.0.0"
 PORT = 80
 
+# Solo se permite configurar desde el puerto ethernet del kiosk
+# (192.168.1.0/24). El acceso por WiFi/red publica es rechazado.
+CONFIG_SUBNET = "192.168.1."
+
 DEFAULT_RELAYS = {1: {"gpio_pin": 17, "label": "Puerta Principal"}}
 RELAY_LINE_RE = re.compile(r"^RELAY_\d+_(LABEL|GPIO)=")
+
+
+def write_chromium_policy(server_ip):
+    """Auto-otorga camara/mic al kiosk SIN prompt (politica managed de Chromium).
+
+    En modo kiosk, VideoCaptureAllowedUrls/AudioCaptureAllowedUrls otorgan
+    acceso sin preguntar. El archivo se regenera cada vez que cambia la IP.
+    """
+    policy = {
+        "VideoCaptureAllowedUrls": [f"https://{server_ip}/*"],
+        "AudioCaptureAllowedUrls": [f"https://{server_ip}/*"],
+    }
+    try:
+        os.makedirs(os.path.dirname(CHROMIUM_POLICY), exist_ok=True)
+        with open(CHROMIUM_POLICY, "w", encoding="utf-8") as f:
+            json.dump(policy, f, indent=2)
+    except OSError as e:
+        print(f"[web-config] ADVERTENCIA: no se pudo escribir politica Chromium: {e}")
 
 
 # ─────────────────────────────────────────────
@@ -156,7 +179,15 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _allowed(self):
+        """Solo se configura desde el puerto ethernet (192.168.1.0/24)."""
+        client = self.client_address[0]
+        return client.startswith(CONFIG_SUBNET)
+
     def do_GET(self):
+        if not self._allowed():
+            self._send(403, "Acceso restringido al puerto ethernet de configuracion")
+            return
         if self.path in ("/", "/index.html"):
             self._send(200, HTML)
         elif self.path == "/api/status":
@@ -168,6 +199,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, "Not found")
 
     def do_POST(self):
+        if not self._allowed():
+            self._send(403, "Acceso restringido al puerto ethernet de configuracion")
+            return
         if self.path == "/api/save":
             self._save()
         elif self.path == "/api/reboot":
@@ -197,6 +231,7 @@ class Handler(BaseHTTPRequestHandler):
 
         write_env(server_ip, building_name, building_id)
         write_yaml(server_ip, building_id)
+        write_chromium_policy(server_ip)
 
         wifi_ok = True
         if wifi_ssid:

@@ -306,6 +306,16 @@ EOF
         echo "RELAY_${i}_GPIO=${!vpin}"      | sudo tee -a "$CONFIG_FILE" > /dev/null
     done
 
+    # Politica managed de Chromium: auto-otorga camara/mic al kiosk sin
+    # prompt (solo funciona en kiosk mode). Se regenera con cada IP.
+    sudo mkdir -p /etc/chromium/policies/managed
+    sudo tee /etc/chromium/policies/managed/porteria-media.json > /dev/null << POLICY_EOF
+{
+  "VideoCaptureAllowedUrls": ["https://${SERVER_IP}/*"],
+  "AudioCaptureAllowedUrls": ["https://${SERVER_IP}/*"]
+}
+POLICY_EOF
+
     # Generar config.yaml para relay daemon
     sudo tee "${RELAY_DIR}/config.yaml" > /dev/null << YAML_EOF
 mqtt:
