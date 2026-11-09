@@ -1,76 +1,570 @@
 import 'dotenv/config';
+import { eq, and, inArray } from 'drizzle-orm';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { slugify } from '@porteria/shared';
 import { createDb } from './connection.js';
 import { organizations } from './schema/organizations.js';
-import { locations } from './schema/locations.js';
-import { accessPoints } from './schema/access-points.js';
-import { relayOutputs } from './schema/relay-outputs.js';
-import { kiosks } from './schema/kiosks.js';
+import { communities } from './schema/communities.js';
+import { buildings } from './schema/buildings.js';
+import { units } from './schema/units.js';
 import { users } from './schema/users.js';
+import { people } from './schema/people.js';
+import { accounts } from './schema/accounts.js';
+import { memberships } from './schema/memberships.js';
+import { accessPoints } from './schema/access-points.js';
+import { kiosks } from './schema/kiosks.js';
+import { relayOutputs } from './schema/relay-outputs.js';
 import { visitors } from './schema/visitors.js';
-import bcrypt from 'bcryptjs';
+import { locationStructures } from './schema/location-structures.js';
+import { locationUnits } from './schema/location-units.js';
+import { locationResidents } from './schema/location-residents.js';
 
-async function seed() {
-  const db = createDb();
-  const passwordHash = await bcrypt.hash('porteria123', 10);
+const db = createDb();
+const DEMO_PASSWORD = 'porteria123';
+const DEVICE_TOKEN = 'dev-kiosk-token';
+const DEVICE_TOKEN_HASH = crypto.createHash('sha256').update(DEVICE_TOKEN).digest('hex');
 
-  console.log('🌱 Seeding database...');
+async function getOrCreateOrganization(name: string) {
+  const [existing] = await db
+    .select()
+    .from(organizations)
+    .where(eq(organizations.name, name))
+    .limit(1);
+  if (existing) return existing;
+  const [created] = await db.insert(organizations).values({ name, slug: slugify(name) }).returning();
+  return created;
+}
 
-  // ─── Organization ──────────────────────────────────────────────────
-  const [org] = await db
-    .insert(organizations)
-    .values({ name: 'Edificio Demo' })
-    .onConflictDoNothing()
+async function getOrCreateCommunity(
+  organizationId: string,
+  data: { name: string; address: string; timezone: string },
+) {
+  const [existing] = await db
+    .select()
+    .from(communities)
+    .where(
+      and(
+        eq(communities.organizationId, organizationId),
+        eq(communities.name, data.name),
+      ),
+    )
+    .limit(1);
+  if (existing) return existing;
+  const [created] = await db
+    .insert(communities)
+    .values({ ...data, organizationId, slug: slugify(data.name) })
     .returning();
+  return created;
+}
 
-  const orgId = org?.id;
-  if (!orgId) {
-    console.log('  Organization already exists, skipping...');
-    return;
+async function getOrCreateBuilding(
+  communityId: string,
+  data: { name: string; code: string; floors: number },
+) {
+  const [existing] = await db
+    .select()
+    .from(buildings)
+    .where(and(eq(buildings.communityId, communityId), eq(buildings.code, data.code)))
+    .limit(1);
+  if (existing) return existing;
+  const [created] = await db
+    .insert(buildings)
+    .values({ ...data, communityId })
+    .returning();
+  return created;
+}
+
+async function getOrCreateUnit(
+  communityId: string,
+  data: {
+    buildingId: string | null;
+    code: string;
+    floor: number;
+    type: 'apartment' | 'house' | 'office' | 'parking' | 'storage';
+  },
+) {
+  const [existing] = await db
+    .select()
+    .from(units)
+    .where(and(eq(units.communityId, communityId), eq(units.code, data.code)))
+    .limit(1);
+  if (existing) return existing;
+  const [created] = await db
+    .insert(units)
+    .values({ ...data, communityId })
+    .returning();
+  return created;
+}
+
+async function ensurePersonAccount(
+  user: typeof users.$inferSelect,
+  passwordHash: string,
+) {
+  let [person] = await db
+    .select()
+    .from(people)
+    .where(eq(people.contactEmail, user.email))
+    .limit(1);
+
+  if (!person) {
+    const [firstName, ...lastNameParts] = user.name.split(/\s+/);
+    [person] = await db
+      .insert(people)
+      .values({
+        firstName: firstName || user.email,
+        lastName: lastNameParts.join(' '),
+        contactEmail: user.email,
+        status: 'active',
+      })
+      .returning();
   }
 
-  console.log(`  ✓ Organization: ${org.name}`);
+  const [account] = await db
+    .select()
+    .from(accounts)
+    .where(eq(accounts.email, user.email))
+    .limit(1);
+  if (!account) {
+    await db.insert(accounts).values({
+      personId: person.id,
+      email: user.email,
+      passwordHash,
+      active: user.active,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+  }
 
-  // ─── Location ──────────────────────────────────────────────────────
-  const [location] = await db
-    .insert(locations)
-    .values({
-      name: 'Torre Principal',
-      address: 'Av. Siempre Viva 742, Bogotá',
-      timezone: 'America/Bogota',
-      organizationId: orgId,
-    })
+  return person;
+}
+
+async function getOrCreateUser(
+  data: { email: string; name: string; isPlatformAdmin?: boolean },
+  passwordHash: string,
+) {
+  const [existing] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, data.email))
+    .limit(1);
+  if (existing) {
+    await ensurePersonAccount(existing, passwordHash);
+    return existing;
+  }
+  const [created] = await db
+    .insert(users)
+    .values({ ...data, passwordHash, isPlatformAdmin: data.isPlatformAdmin ?? false })
     .returning();
+  await ensurePersonAccount(created, passwordHash);
+  return created;
+}
 
-  console.log(`  ✓ Location: ${location.name}`);
+async function addMembership(data: {
+  userId: string;
+  organizationId: string;
+  communityId?: string | null;
+  unitId?: string | null;
+  role:
+    | 'org_admin'
+    | 'community_admin'
+    | 'operator'
+    | 'guard'
+    | 'owner'
+    | 'tenant'
+    | 'resident'
+    | 'staff';
+}) {
+  const [user] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, data.userId))
+    .limit(1);
+  const [person] = user
+    ? await db
+        .select({ id: people.id })
+        .from(people)
+        .where(eq(people.contactEmail, user.email))
+        .limit(1)
+    : [];
 
-  // ─── Access Point ──────────────────────────────────────────────────
-  const [accessPoint] = await db
+  await db
+    .insert(memberships)
+    .values({
+      userId: data.userId,
+      personId: person?.id ?? null,
+      organizationId: data.organizationId,
+      communityId: data.communityId ?? null,
+      unitId: data.unitId ?? null,
+      locationUnitId: data.unitId ?? null,
+      role: data.role,
+      status: 'active',
+    })
+    .onConflictDoNothing();
+}
+
+async function getOrCreateAccessPoint(
+  communityId: string,
+  data: { name: string; gpioPin: number },
+) {
+  const [existing] = await db
+    .select()
+    .from(accessPoints)
+    .where(
+      and(eq(accessPoints.communityId, communityId), eq(accessPoints.name, data.name)),
+    )
+    .limit(1);
+  if (existing) return existing;
+  const [created] = await db
     .insert(accessPoints)
     .values({
-      name: 'Puerta Principal',
+      ...data,
+      communityId,
       type: 'door',
-      gpioPin: 17,
-      locationId: location.id,
+      failPolicy: 'closed',
+      direction: 'both',
     })
     .returning();
+  return created;
+}
 
-  console.log(`  ✓ Access Point: ${accessPoint.name} (GPIO ${accessPoint.gpioPin})`);
-
-  // ─── Kiosk ─────────────────────────────────────────────────────────
-  const [kiosk] = await db
+async function getOrCreateKiosk(
+  communityId: string,
+  data: { name: string; rpiId: string; accessPointId: string },
+) {
+  const [existing] = await db
+    .select()
+    .from(kiosks)
+    .where(and(eq(kiosks.communityId, communityId), eq(kiosks.rpiId, data.rpiId)))
+    .limit(1);
+  if (existing) {
+    await db
+      .update(kiosks)
+      .set({ deviceTokenHash: DEVICE_TOKEN_HASH, deviceTokenRotatedAt: new Date() })
+      .where(eq(kiosks.id, existing.id));
+    return existing;
+  }
+  const [created] = await db
     .insert(kiosks)
     .values({
-      name: 'Kiosk-01',
-      rpiId: 'edificio-01',
-      ipAddress: '192.168.1.100',
+      ...data,
+      communityId,
       status: 'offline',
-      accessPointId: accessPoint.id,
+      deviceTokenHash: DEVICE_TOKEN_HASH,
+      deviceTokenRotatedAt: new Date(),
     })
     .returning();
+  return created;
+}
 
-  console.log(`  ✓ Kiosk: ${kiosk.name}`);
+async function seedLocationHierarchy(
+  communityId: string,
+  buildingList: (typeof buildings.$inferSelect)[],
+  unitList: (typeof units.$inferSelect)[],
+) {
+  let [structure] = await db
+    .select()
+    .from(locationStructures)
+    .where(
+      and(
+        eq(locationStructures.communityId, communityId),
+        eq(locationStructures.name, 'Estructura principal'),
+      ),
+    )
+    .limit(1);
 
-  // ─── Relay Outputs ───────────────────────────────────────────────────
+  if (!structure) {
+    [structure] = await db
+      .insert(locationStructures)
+      .values({
+        communityId,
+        name: 'Estructura principal',
+        levelCount: 3,
+        level1Name: 'Sección',
+        level2Name: 'Piso',
+        level3Name: 'Unidad',
+      })
+      .returning();
+  }
+
+  for (const building of buildingList) {
+    await db
+      .insert(locationUnits)
+      .values({
+        id: building.id,
+        communityId,
+        structureId: structure.id,
+        parentId: null,
+        levelPosition: 1,
+        name: building.name,
+        code: building.code,
+        sectionType: 'building',
+        metadata: {},
+        status: 'active',
+      })
+      .onConflictDoNothing();
+  }
+
+  for (const unit of unitList) {
+    if (!unit.buildingId) continue;
+    const floorName = `Piso ${unit.floor ?? 0}`;
+    let [floorNode] = await db
+      .select()
+      .from(locationUnits)
+      .where(
+        and(
+          eq(locationUnits.parentId, unit.buildingId),
+          eq(locationUnits.levelPosition, 2),
+          eq(locationUnits.name, floorName),
+        ),
+      )
+      .limit(1);
+
+    if (!floorNode) {
+      [floorNode] = await db
+        .insert(locationUnits)
+        .values({
+          communityId,
+          structureId: structure.id,
+          parentId: unit.buildingId,
+          levelPosition: 2,
+          name: floorName,
+          metadata: {},
+          status: 'active',
+        })
+        .returning();
+    }
+
+    await db
+      .insert(locationUnits)
+      .values({
+        id: unit.id,
+        communityId,
+        structureId: structure.id,
+        parentId: floorNode.id,
+        levelPosition: 3,
+        name: unit.code,
+        code: unit.code,
+        metadata: { legacyFloor: unit.floor, legacyType: unit.type },
+        status: unit.status,
+      })
+      .onConflictDoNothing();
+  }
+}
+
+async function seed() {
+  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
+  console.log('Seeding multi-tenant demo data...');
+
+  const adminOrg = await getOrCreateOrganization('Administradora Demo');
+  const independentOrg = await getOrCreateOrganization('Comunidad Independiente Demo');
+  console.log(`  Organization: ${adminOrg.name}`);
+  console.log(`  Organization: ${independentOrg.name}`);
+
+  const torreNorte = await getOrCreateCommunity(adminOrg.id, {
+    name: 'Torre Norte',
+    address: 'Av. Siempre Viva 742, Bogotá',
+    timezone: 'America/Bogota',
+  });
+  const losAlamos = await getOrCreateCommunity(independentOrg.id, {
+    name: 'Condominio Los Álamos',
+    address: 'Calle 10 #5-20, Bogotá',
+    timezone: 'America/Bogota',
+  });
+  console.log(`  Community: ${torreNorte.name}`);
+  console.log(`  Community: ${losAlamos.name}`);
+
+  const torreA = await getOrCreateBuilding(torreNorte.id, {
+    name: 'Torre A',
+    code: 'A',
+    floors: 10,
+  });
+  const torreB = await getOrCreateBuilding(torreNorte.id, {
+    name: 'Torre B',
+    code: 'B',
+    floors: 8,
+  });
+  const bloque1 = await getOrCreateBuilding(losAlamos.id, {
+    name: 'Bloque 1',
+    code: 'B1',
+    floors: 5,
+  });
+  console.log(`  Buildings: ${torreA.name}, ${torreB.name}, ${bloque1.name}`);
+
+  const unitA101 = await getOrCreateUnit(torreNorte.id, {
+    buildingId: torreA.id,
+    code: 'A-101',
+    floor: 1,
+    type: 'apartment',
+  });
+  const unitA102 = await getOrCreateUnit(torreNorte.id, {
+    buildingId: torreA.id,
+    code: 'A-102',
+    floor: 1,
+    type: 'apartment',
+  });
+  const unitB201 = await getOrCreateUnit(torreNorte.id, {
+    buildingId: torreB.id,
+    code: 'B-201',
+    floor: 2,
+    type: 'apartment',
+  });
+  const unitA201 = await getOrCreateUnit(losAlamos.id, {
+    buildingId: bloque1.id,
+    code: '101',
+    floor: 1,
+    type: 'house',
+  });
+  console.log(
+    `  Units: ${unitA101.code}, ${unitA102.code}, ${unitB201.code}, ${unitA201.code}`,
+  );
+
+  await seedLocationHierarchy(
+    torreNorte.id,
+    [torreA, torreB],
+    [unitA101, unitA102, unitB201],
+  );
+  await seedLocationHierarchy(losAlamos.id, [bloque1], [unitA201]);
+
+  const superAdmin = await getOrCreateUser(
+    {
+      email: 'superadmin@porteria.local',
+      name: 'Super Admin',
+      isPlatformAdmin: true,
+    },
+    passwordHash,
+  );
+  const orgAdmin = await getOrCreateUser(
+    { email: 'admin@porteria.local', name: 'Admin Administradora' },
+    passwordHash,
+  );
+  const orgAdmin2 = await getOrCreateUser(
+    { email: 'admin2@porteria.local', name: 'Admin Comunidad Independiente' },
+    passwordHash,
+  );
+  const communityAdmin = await getOrCreateUser(
+    { email: 'communityadmin@porteria.local', name: 'Admin Torre Norte' },
+    passwordHash,
+  );
+  const operator = await getOrCreateUser(
+    { email: 'operador@porteria.local', name: 'Operador Turno Mañana' },
+    passwordHash,
+  );
+  const guard = await getOrCreateUser(
+    { email: 'guardia@porteria.local', name: 'Carlos Guardia' },
+    passwordHash,
+  );
+  const resident = await getOrCreateUser(
+    { email: 'residente@porteria.local', name: 'María Residente' },
+    passwordHash,
+  );
+  const resident2 = await getOrCreateUser(
+    { email: 'residente2@porteria.local', name: 'Juan Familiar' },
+    passwordHash,
+  );
+  const resident3 = await getOrCreateUser(
+    { email: 'residente3@porteria.local', name: 'Ana Los Álamos' },
+    passwordHash,
+  );
+  const multi = await getOrCreateUser(
+    { email: 'multi@porteria.local', name: 'Usuario Multi-Comunidad' },
+    passwordHash,
+  );
+  console.log('  Users created');
+
+  // Reset demo memberships so the seed stays deterministic and removes legacy
+  // backfilled rows with incomplete scope.
+  const demoUserIds = [
+    orgAdmin.id,
+    orgAdmin2.id,
+    communityAdmin.id,
+    operator.id,
+    guard.id,
+    resident.id,
+    resident2.id,
+    resident3.id,
+    multi.id,
+  ];
+  await db.delete(memberships).where(inArray(memberships.userId, demoUserIds));
+
+  await addMembership({ userId: orgAdmin.id, organizationId: adminOrg.id, role: 'org_admin' });
+  await addMembership({ userId: orgAdmin2.id, organizationId: independentOrg.id, role: 'org_admin' });
+  await addMembership({
+    userId: communityAdmin.id,
+    organizationId: adminOrg.id,
+    communityId: torreNorte.id,
+    role: 'community_admin',
+  });
+  await addMembership({
+    userId: operator.id,
+    organizationId: adminOrg.id,
+    communityId: torreNorte.id,
+    role: 'operator',
+  });
+  await addMembership({
+    userId: guard.id,
+    organizationId: adminOrg.id,
+    communityId: torreNorte.id,
+    role: 'guard',
+  });
+  await addMembership({
+    userId: resident.id,
+    organizationId: adminOrg.id,
+    communityId: torreNorte.id,
+    unitId: unitA101.id,
+    role: 'owner',
+  });
+  await addMembership({
+    userId: resident2.id,
+    organizationId: adminOrg.id,
+    communityId: torreNorte.id,
+    unitId: unitA101.id,
+    role: 'resident',
+  });
+  await addMembership({
+    userId: resident3.id,
+    organizationId: independentOrg.id,
+    communityId: losAlamos.id,
+    unitId: unitA201.id,
+    role: 'tenant',
+  });
+  await addMembership({
+    userId: multi.id,
+    organizationId: adminOrg.id,
+    communityId: torreNorte.id,
+    unitId: unitA102.id,
+    role: 'owner',
+  });
+  await addMembership({
+    userId: multi.id,
+    organizationId: independentOrg.id,
+    communityId: losAlamos.id,
+    unitId: unitA201.id,
+    role: 'resident',
+  });
+  console.log(`  Memberships created (superadmin: ${superAdmin.email})`);
+
+  await db
+    .insert(locationResidents)
+    .values([
+      { locationUnitId: unitA101.id, userId: resident.id, relationship: 'owner', validFrom: '2026-01-01', status: 'active' },
+      { locationUnitId: unitA101.id, userId: resident2.id, relationship: 'resident', validFrom: '2026-01-01', status: 'active' },
+      { locationUnitId: unitA201.id, userId: resident3.id, relationship: 'tenant', validFrom: '2026-01-01', status: 'active' },
+      { locationUnitId: unitA102.id, userId: multi.id, relationship: 'owner', validFrom: '2026-01-01', status: 'active' },
+      { locationUnitId: unitA201.id, userId: multi.id, relationship: 'resident', validFrom: '2026-01-01', status: 'active' },
+    ])
+    .onConflictDoNothing();
+
+  const accessPoint = await getOrCreateAccessPoint(torreNorte.id, {
+    name: 'Puerta Principal',
+    gpioPin: 17,
+  });
+  const kiosk = await getOrCreateKiosk(torreNorte.id, {
+    name: 'Kiosk-01',
+    rpiId: 'edificio-01',
+    accessPointId: accessPoint.id,
+  });
+  console.log(`  Access point: ${accessPoint.name} / Kiosk: ${kiosk.name}`);
+
   const relayData = [
     { relayIndex: 1, gpioPin: 17, label: 'Puerta', mode: 'momentary' as const, durationMs: 5000, accessPointId: accessPoint.id },
     { relayIndex: 2, gpioPin: 18, label: 'Portón', mode: 'momentary' as const, durationMs: 3000, accessPointId: null },
@@ -78,87 +572,42 @@ async function seed() {
     { relayIndex: 4, gpioPin: 22, label: 'Alarma', mode: 'momentary' as const, durationMs: 10000, accessPointId: null },
   ];
 
-  for (const r of relayData) {
+  for (const relay of relayData) {
     await db
       .insert(relayOutputs)
-      .values({
-        kioskId: kiosk.id,
-        relayIndex: r.relayIndex,
-        gpioPin: r.gpioPin,
-        label: r.label,
-        mode: r.mode,
-        durationMs: r.durationMs,
-        accessPointId: r.accessPointId ?? null,
-      })
+      .values({ ...relay, kioskId: kiosk.id })
       .onConflictDoNothing();
-    console.log(`  ✓ Relay ${r.relayIndex}: ${r.label} (GPIO ${r.gpioPin}, ${r.mode})`);
   }
+  console.log('  Relay outputs ready');
 
-  // ─── Users ─────────────────────────────────────────────────────────
-  const roles = [
-    { email: 'admin@porteria.local', name: 'Admin Principal', role: 'admin' as const },
-    { email: 'operador@porteria.local', name: 'Operador Turno Mañana', role: 'operator' as const },
-    { email: 'guardia@porteria.local', name: 'Carlos Guardia', role: 'guard' as const, locationId: location.id },
-    { email: 'residente@porteria.local', name: 'María Residente', role: 'resident' as const },
-  ];
-
-  const createdUsers: Record<string, string> = {};
-
-  for (const userData of roles) {
-    const [user] = await db
-      .insert(users)
-      .values({
-        email: userData.email,
-        passwordHash,
-        name: userData.name,
-        role: userData.role,
-        organizationId: orgId,
-        locationId: userData.locationId ?? null,
-        active: true,
-      })
-      .onConflictDoNothing()
-      .returning();
-
-    if (user) {
-      createdUsers[userData.role] = user.id;
-      console.log(`  ✓ User: ${user.name} (${user.role})`);
-    }
-  }
-
-  // ─── Visitors ──────────────────────────────────────────────────────
-  const [visitor1] = await db
-    .insert(visitors)
-    .values({
+  const [existingVisitor] = await db
+    .select()
+    .from(visitors)
+    .where(and(eq(visitors.organizationId, adminOrg.id), eq(visitors.name, 'Juan García')))
+    .limit(1);
+  if (!existingVisitor) {
+    await db.insert(visitors).values({
       name: 'Juan García',
       document: '12345678',
       type: 'permanent',
-      organizationId: orgId,
-      createdBy: createdUsers.resident ?? null,
-    })
-    .returning();
+      organizationId: adminOrg.id,
+      createdBy: resident.id,
+    });
+  }
 
-  console.log(`  ✓ Visitor: ${visitor1.name} (permanent)`);
-
-  const [visitor2] = await db
-    .insert(visitors)
-    .values({
-      name: 'Delivery Express',
-      document: '87654321',
-      type: 'delivery',
-      organizationId: orgId,
-      validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-      createdBy: createdUsers.resident ?? null,
-    })
-    .returning();
-
-  console.log(`  ✓ Visitor: ${visitor2.name} (delivery)`);
-
-  console.log('\n✅ Seed complete!');
-  console.log('   Demo credentials:');
-  console.log('   admin@porteria.local / porteria123');
-  console.log('   operador@porteria.local / porteria123');
-  console.log('   guardia@porteria.local / porteria123');
-  console.log('   residente@porteria.local / porteria123');
+  console.log(`\n  Kiosk device token (dev): ${DEVICE_TOKEN}`);
+  console.log('\nSeed complete!');
+  console.log(`   Password for all demo users: ${DEMO_PASSWORD}`);
+  console.log('   superadmin@porteria.local  (platform admin)');
+  console.log('   admin@porteria.local       (org_admin - Administradora Demo)');
+  console.log('   admin2@porteria.local      (org_admin - Comunidad Independiente)');
+  console.log('   communityadmin@porteria.local (community_admin - Torre Norte)');
+  console.log('   operador@porteria.local    (operator - Torre Norte)');
+  console.log('   guardia@porteria.local     (guard - Torre Norte)');
+  console.log('   residente@porteria.local   (owner - Torre Norte A-101)');
+  console.log('   residente2@porteria.local  (resident - Torre Norte A-101)');
+  console.log('   residente3@porteria.local  (tenant - Los Álamos 101)');
+  console.log('   multi@porteria.local       (owner Torre Norte + resident Los Álamos)');
 
   process.exit(0);
 }

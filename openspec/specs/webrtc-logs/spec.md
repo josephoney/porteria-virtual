@@ -4,7 +4,7 @@
 
 Provides detailed console logging at each step of the WebRTC handshake (offer, answer, ICE candidates, connection state) in both kiosk and dashboard to facilitate debugging of video transmission issues.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: WebRTC offer logs
 The kiosk SHALL log detailed information when creating and sending a WebRTC offer.

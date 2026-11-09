@@ -8,3 +8,19 @@ mosquitto_data/
 .turbo
 *.tsbuildinfo
 docker/nginx/certs/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Local artifacts
+.engram/
+backups/
+__pycache__/
+*.pyc
+server/api/uploads/
+mqtt-msg.json
+apps/dashboard/vite-log.txt

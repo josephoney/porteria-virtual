@@ -1,18 +1,23 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { eq } from 'drizzle-orm';
+import { createDb } from '@porteria/database';
+import { kiosks } from '@porteria/database/schema';
 import { requireRole } from '../middlewares/rbac.js';
 import * as relaysService from '../services/relays.service.js';
 import { triggerRelaySchema } from '../schemas/index.js';
 import config from '../config.js';
 
+const db = createDb();
+
 export async function relaysRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
-    } catch (err: any) {
+    } catch (err) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: err.code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
       });
     }
   });
@@ -65,9 +70,15 @@ export async function internalRelayRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'Relay not found' });
     }
 
+    const [kioskRow] = await db
+      .select({ rpiId: kiosks.rpiId })
+      .from(kiosks)
+      .where(eq(kiosks.id, kioskId))
+      .limit(1);
+
     const state = relay.mode === 'latch' ? 'TOGGLE' : 'ON';
     const body: Record<string, unknown> = {
-      buildingId: kioskId,
+      buildingId: kioskRow?.rpiId ?? kioskId,
       relayIndex: relay.relayIndex,
       state,
       requestId: crypto.randomUUID(),

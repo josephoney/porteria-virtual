@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import type { Socket } from 'socket.io-client';
 import { CONFIG } from '../config';
 
 export function useWebRTC() {
@@ -61,7 +62,7 @@ export function useWebRTC() {
   }, []);
 
   const handleOffer = useCallback(
-    async (socket: any, callId: string, offer: RTCSessionDescriptionInit) => {
+    async (socket: Socket, callId: string, offer: RTCSessionDescriptionInit) => {
       console.log('[WebRTC-D] Offer received for callId:', callId);
       const pc = createPeerConnection();
       if (localStream) {

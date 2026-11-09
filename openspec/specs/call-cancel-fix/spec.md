@@ -4,7 +4,7 @@
 
 Prevents race conditions when the kiosk user cancels a call and immediately starts a new one. The `call:ended` handler validates the `callId` to avoid resetting a new call with a stale server event.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: onCallEnded validates callId
 The kiosk's `call:ended` handler SHALL receive and validate the `callId` parameter, ignoring events that don't match the current call.

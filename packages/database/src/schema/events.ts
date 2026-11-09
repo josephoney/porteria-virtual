@@ -1,8 +1,9 @@
 import { pgTable, uuid, text, jsonb, timestamp, primaryKey } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { organizations } from './organizations';
-import { locations } from './locations';
+import { communities } from './communities';
 import { accessPoints } from './access-points';
+import { people } from './people';
 
 export const events = pgTable(
   'events',
@@ -10,12 +11,19 @@ export const events = pgTable(
     id: uuid('id').defaultRandom().notNull(),
     eventType: text('event_type').notNull(),
     actorId: uuid('actor_id'),
+    actorPersonId: uuid('actor_person_id').references(() => people.id, {
+      onDelete: 'set null',
+    }),
     actorRole: text('actor_role'),
     organizationId: uuid('organization_id')
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
-    locationId: uuid('location_id').references(() => locations.id, { onDelete: 'set null' }),
-    accessPointId: uuid('access_point_id').references(() => accessPoints.id, { onDelete: 'set null' }),
+    communityId: uuid('community_id').references(() => communities.id, {
+      onDelete: 'set null',
+    }),
+    accessPointId: uuid('access_point_id').references(() => accessPoints.id, {
+      onDelete: 'set null',
+    }),
     metadata: jsonb('metadata').default(sql`'{}'::jsonb`).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },

@@ -1,6 +1,6 @@
 export interface CreateCallDto {
   callId: string;
-  buildingId: string;
+  kioskId: string;
   visitor?: {
     name?: string;
     known?: boolean;

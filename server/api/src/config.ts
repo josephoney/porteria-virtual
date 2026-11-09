@@ -19,6 +19,19 @@ const config = {
 
   internalApiKey: process.env.INTERNAL_API_KEY || 'dev-internal-key-change-me',
   mqttBridgeUrl: process.env.MQTT_BRIDGE_URL || 'http://localhost:3002',
+  publicAppUrl: process.env.PUBLIC_APP_URL || 'http://localhost:5174',
+  invitationExpiryDays: parseInt(process.env.INVITATION_EXPIRY_DAYS || '7', 10),
+  features: {
+    configurableLocationHierarchy: process.env.CONFIGURABLE_LOCATION_HIERARCHY !== 'false',
+  },
+  outbox: {
+    workerEnabled: process.env.OUTBOX_WORKER_ENABLED !== 'false',
+    batchSize: parseInt(process.env.OUTBOX_BATCH_SIZE || '50', 10),
+    pollIntervalMs: parseInt(process.env.OUTBOX_POLL_INTERVAL_MS || '1000', 10),
+    maxAttempts: parseInt(process.env.OUTBOX_MAX_ATTEMPTS || '10', 10),
+    retentionDays: parseInt(process.env.OUTBOX_RETENTION_DAYS || '7', 10),
+    lagWarnSeconds: parseInt(process.env.OUTBOX_LAG_WARN_SECONDS || '60', 10),
+  },
 } as const;
 
 export function validateConfig() {

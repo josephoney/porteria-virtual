@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Kiosk touch UI states and screens for idle, calling, and in-call flows.
+
+## Requirements
 
 ### Requirement: Idle screen
 The kiosk SHALL display an idle screen with building name, address, current time, and a call button when not in a call.

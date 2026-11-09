@@ -10,15 +10,19 @@ import {
 } from '../lib/ringtones';
 
 interface KioskInfo {
-  buildingId: string;
-  buildingName: string;
+  kioskId: string;
+  rpiId: string;
+  communityId: string;
+  kioskName: string;
   status: string;
 }
 
 interface CallInfo {
   callId: string;
-  buildingId: string;
-  buildingName: string;
+  kioskId: string;
+  kioskRpiId: string;
+  kioskName: string;
+  communityId: string;
   visitor?: { name: string; known: boolean; similarity: number; photo?: string } | null;
   timestamp: number;
 }
@@ -58,7 +62,7 @@ const SocketContext = createContext<SocketContextValue>({
 });
 
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const { user, token } = useAuth();
+  const { user, token, activeMembership } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [kiosks, setKiosks] = useState<KioskInfo[]>([]);
@@ -124,20 +128,26 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    if (!user || !token) return;
+  const isPlatformContext = Boolean(user?.isPlatformAdmin && activeMembership?.id === 'platform');
+  const isOperational = Boolean(
+    activeMembership &&
+      ['operator', 'guard', 'community_admin', 'org_admin'].includes(activeMembership.role),
+  );
 
-    const s = io(CONFIG.SIGNALING_URL, { transports: ['websocket'] });
+  useEffect(() => {
+    if (!user || !token || isPlatformContext || !isOperational) return;
+
+    const s = io(CONFIG.SIGNALING_URL, {
+      transports: ['websocket'],
+      auth: { token },
+    });
     socketRef.current = s;
     setSocket(s);
 
     s.on('connect', () => {
       setIsConnected(true);
       addLog('SYS', 'Conectado al servidor de señalización');
-      s.emit('operator:register', {
-        operatorId: user.id,
-        name: user.name,
-      });
+      s.emit('operator:register', { name: user.name });
     });
 
     s.on('operator:registered', ({ kiosks: list }: { kiosks: KioskInfo[] }) => {
@@ -155,7 +165,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         next.set(call.callId, { ...call, timestamp: Date.now() });
         return next;
       });
-      addLog('CALL', `Llamada entrante: ${call.buildingName}${call.visitor?.known ? ' — ' + call.visitor.name : ''}`);
+      addLog('CALL', `Llamada entrante: ${call.kioskName}${call.visitor?.known ? ' — ' + call.visitor.name : ''}`);
       startRing();
     });
 
@@ -185,7 +195,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       stopRing();
       s.disconnect();
     };
-  }, [user, token]);
+  }, [user, token, activeMembership, isPlatformContext, isOperational]);
 
   return (
     <SocketContext.Provider

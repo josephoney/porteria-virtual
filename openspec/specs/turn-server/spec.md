@@ -4,7 +4,7 @@
 
 Provides a Coturn STUN/TURN server as a Docker service for WebRTC NAT traversal, enabling video/audio relay when direct P2P connections fail due to symmetric NATs.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Coturn Docker service
 The docker-compose SHALL include a coturn service running on `network_mode: host` with the configuration from `docker/coturn/turnserver.conf`.

@@ -36,7 +36,7 @@ export function OperatorPanel() {
     }
 
     const apiBase = CONFIG.API_BASE_URL || 'http://localhost:3000';
-    const url = `${apiBase}/api/kiosks/${activeCall.buildingId}/relays`;
+    const url = `${apiBase}/api/kiosks/${activeCall.kioskId}/relays`;
     fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -61,7 +61,7 @@ export function OperatorPanel() {
     mqttSocketRef.current = mqttSocket;
 
     mqttSocket.on('relay:status', (data: { buildingId: string; relayIndex: number; state: 'ON' | 'OFF' }) => {
-      if (data.buildingId === activeCall.buildingId) {
+      if (data.buildingId === activeCall.kioskRpiId) {
         setRelayStates((prev) => ({ ...prev, [data.relayIndex]: data.state }));
       }
     });
@@ -76,7 +76,7 @@ export function OperatorPanel() {
     (relayIndex: number) => {
       if (!socket || !activeCall) return;
       socket.emit('relay:trigger', {
-        buildingId: activeCall.buildingId,
+        kioskId: activeCall.kioskId,
         relayIndex,
       });
     },
@@ -88,7 +88,7 @@ export function OperatorPanel() {
       const call = pendingCalls.get(callId);
       if (!call) return;
       stopRing();
-      socket?.emit('call:accept', { callId, buildingId: call.buildingId });
+      socket?.emit('call:accept', { callId, kioskId: call.kioskId });
       setActiveCall({ ...call });
       removePendingCall(callId);
     },
@@ -117,7 +117,7 @@ export function OperatorPanel() {
         {activeCall && (
           <div className="p-4">
             <div className="font-syne text-base font-bold text-foreground mb-3">
-              🟢 {activeCall.buildingName}
+              🟢 {activeCall.kioskName}
             </div>
             <p className="font-mono text-xs text-muted-foreground mb-4">
               La videollamada se muestra en la ventana flotante. Usá los controles de la ventana para colgar, silenciar o abrir la puerta.

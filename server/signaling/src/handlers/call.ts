@@ -1,7 +1,7 @@
 import type { Server as SocketIOServer } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents, TypedSocket } from '../types.js';
 import type { SignalingState } from '../state.js';
-import { broadcastOperatorState } from '../utils.js';
+import { broadcastOperatorState, emitToKioskScope } from '../utils.js';
 import { persistCallEnd } from '../persist.js';
 
 export function registerCallHandlers(
@@ -9,7 +9,7 @@ export function registerCallHandlers(
   io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>,
   state: SignalingState,
 ): void {
-  socket.on('call:end', ({ callId, buildingId }: { callId: string; buildingId?: string }) => {
+  socket.on('call:end', ({ callId, kioskId }) => {
     const pendingTimeout = state.callTimeouts.get(callId);
     if (pendingTimeout) {
       clearTimeout(pendingTimeout);
@@ -19,27 +19,31 @@ export function registerCallHandlers(
     const call = state.calls.get(callId);
 
     if (!call) {
-      if (socket.data.role === 'kiosk' && socket.data.buildingId) {
-        const kiosk = state.kiosks.get(socket.data.buildingId);
-        if (kiosk) {
-          kiosk.status = 'idle';
-        }
+      if (socket.data.role === 'kiosk' && socket.data.kioskId) {
+        const kiosk = state.kiosks.get(socket.data.kioskId);
+        if (kiosk) kiosk.status = 'idle';
       }
-      if (buildingId) {
-        const kiosk = state.kiosks.get(buildingId);
+      const targetKioskId = kioskId ?? socket.data.kioskId;
+      if (targetKioskId) {
+        const kiosk = state.kiosks.get(targetKioskId);
         if (kiosk && kiosk.status === 'calling') {
           kiosk.status = 'idle';
           io.to(kiosk.socketId).emit('call:ended', { callId, reason: 'cancelled' });
         }
       }
       socket.emit('call:ended', { callId, reason: 'cancelled' });
-      io.to('operators').emit('call:ended', { callId, reason: 'cancelled' });
+      if (targetKioskId) {
+        const scopeKiosk = state.kiosks.get(targetKioskId);
+        if (scopeKiosk) {
+          emitToKioskScope(io, scopeKiosk, 'call:ended', { callId, reason: 'cancelled' });
+        }
+      }
       broadcastOperatorState(io, state);
       persistCallEnd(callId, 'missed', Date.now());
       return;
     }
 
-    const kiosk = state.kiosks.get(call.buildingId);
+    const kiosk = state.kiosks.get(call.kioskId);
     if (kiosk) kiosk.status = 'idle';
 
     const targetId =

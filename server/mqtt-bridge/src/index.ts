@@ -127,7 +127,7 @@ mqttClient.on('message', (topic, message) => {
 
 // ─── Start: Fastify handles REST, HTTP server handles Socket.io ─────────────
 app.ready().then(() => {
-  httpServer.on('request', app.server.emit.bind(app.server, 'request'));
+  httpServer.on('request', (req, res) => app.server.emit('request', req, res));
 });
 
 httpServer.listen(PORT, HOST, () => {

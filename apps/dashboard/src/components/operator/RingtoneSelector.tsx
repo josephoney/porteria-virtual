@@ -3,10 +3,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { RINGTONE_DEFINITIONS } from '../../lib/ringtones';
 
 export function RingtoneSelector() {
-  const { user } = useAuth();
+  const { user, activeMembership } = useAuth();
   const { selectedRingtoneId, setRingtone, previewRingtone } = useSocket();
 
-  if (!user || user.role === 'guard') return null;
+  if (!user || activeMembership?.role === 'guard') return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const id = e.target.value;

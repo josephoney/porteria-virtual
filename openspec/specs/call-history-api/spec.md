@@ -1,13 +1,22 @@
-## ADDED Requirements
+## Purpose
 
+Paginated call history with role-scoped listings and call metrics for the dashboard.
+## Requirements
 ### Requirement: List calls paginated
-The API SHALL provide a `GET /api/calls` endpoint returning paginated call history with joined kiosk and operator names.
+The API SHALL provide a `GET /api/calls` endpoint returning paginated call history with
+joined kiosk and operator names, scoped by role.
 
-#### Scenario: Admin lists calls
-- **WHEN** an admin makes a GET request to `/api/calls`
+#### Scenario: Org admin lists calls
+- **WHEN** an `org_admin` makes a GET request to `/api/calls`
 - **THEN** the response contains paginated calls belonging to the admin's organization
-- **THEN** each call includes `kioskName`, `operatorName`, and `accessPointName` (not just UUIDs)
+- **THEN** each call includes `kioskName`, `operatorName`, and `accessPointName` (not
+  just UUIDs)
 - **THEN** calls are ordered by `startedAt` descending (most recent first)
+
+#### Scenario: Community admin lists community calls
+- **WHEN** a `community_admin` makes a GET request to `/api/calls`
+- **THEN** only calls of their active community are returned
+- **THEN** they are not restricted to calls they personally handled
 
 #### Scenario: Operator lists only their own calls
 - **WHEN** an operator makes a GET request to `/api/calls`
@@ -17,6 +26,10 @@ The API SHALL provide a `GET /api/calls` endpoint returning paginated call histo
 #### Scenario: Non-authorized user
 - **WHEN** a guard or resident makes a GET request to `/api/calls`
 - **THEN** the response has status 403
+
+#### Scenario: Platform context without tenant
+- **WHEN** a platform admin without a tenant context makes a GET request to `/api/calls`
+- **THEN** the response has status 403 with a "select a community" message
 
 #### Scenario: Pagination
 - **WHEN** a request is made with `?page=1&pageSize=10`
@@ -37,7 +50,7 @@ The API SHALL provide a `GET /api/calls` endpoint returning paginated call histo
 
 #### Scenario: Admin lists all calls without operator filter
 - **WHEN** an admin makes a GET request to `/api/calls` without `operatorId`
-- **THEN** all calls in the organization are returned (existing behavior)
+- **THEN** all calls in their scope are returned
 
 ### Requirement: Get call by ID
 The API SHALL provide a `GET /api/calls/:id` endpoint with joined detail.
@@ -102,3 +115,4 @@ The API SHALL provide a `PATCH /api/internal/calls/:callId` endpoint for the sig
 #### Scenario: Call not found for update
 - **WHEN** a PATCH request is made for a non-existent `callId`
 - **THEN** the response has status 404 with `{ success: false, error: "Call not found" }`
+

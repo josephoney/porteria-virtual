@@ -1,26 +1,31 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
-
-:root {
-  --bg: var(--background);
-  --surface: var(--card);
-  --ink: var(--foreground);
-  --green: var(--primary);
-  --green-bg: var(--success-bg);
-  --amber: var(--warning);
-  --amber-bg: var(--warning-bg);
-  --red: var(--destructive);
-  --red-bg: var(--destructive-bg);
-  --blue: var(--secondary);
-  --blue-bg: var(--secondary-bg);
-  --font-disp: 'Manrope Variable', sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
 }
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-/* ── Animations ── */
-@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes pipIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+/* Animations */
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pipIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

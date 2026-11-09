@@ -5,4 +5,5 @@ export const config = {
   CALL_TIMEOUT_MS: 30_000,
   API_BASE_URL: process.env.API_BASE_URL || 'http://localhost:3000',
   INTERNAL_API_KEY: process.env.INTERNAL_API_KEY || 'dev-internal-key-change-me',
+  JWT_SECRET: process.env.JWT_SECRET || 'dev-secret-change-me',
 } as const;

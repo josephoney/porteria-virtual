@@ -1,0 +1,92 @@
+---
+id: 113068d6-ed01-42e4-8bfb-56ebe39fd2fb
+---
+%% Estructura objetivo del proyecto PorteriaVirtual
+%% Abrir en https://mermaid.live o en cualquier visor compatible con Mermaid.
+%% Leyenda:
+%%   AZUL   = existente / en uso
+%%   AMBAR  = planificado (Fases 1 y 2)
+%%   GRIS   = infraestructura
+flowchart TB
+  subgraph APPS["apps/ — Frontends"]
+    KIOSK["kiosk<br/>React + Vite<br/>Terminal táctil RPi"]
+    DASH["dashboard<br/>React + Vite + shadcn<br/>Admin · Operador · Guardia"]
+    RES["resident<br/>React PWA<br/>Residentes"]
+  end
+
+  subgraph PACKAGES["packages/ — Código compartido"]
+    SHARED["shared<br/>tipos · DTOs · enums"]
+    DBPKG["database<br/>Drizzle schema · migrations · seed"]
+  end
+
+  subgraph SERVER["server/ — Backend"]
+    API["api<br/>Fastify · REST"]
+    RT["realtime<br/>(signaling) · Socket.io<br/>llamadas · chat · alertas"]
+    DEVBR["device-bridge<br/>MQTT · adaptadores · outbox"]
+
+    subgraph MODULES["server/api/src/modules/ — Contextos objetivo"]
+      M_ID["identity"]
+      M_TEN["tenancy"]
+      M_ACC["access"]
+      M_DEV["devices"]
+      M_VIS["visitors"]
+      M_ITC["intercom"]
+      M_SEC["security-ops"]
+      M_COM["communications"]
+      M_SRV["services<br/>reservas · tickets · docs"]
+      M_FIN["finance"]
+      M_ANA["analytics"]
+    end
+  end
+
+  subgraph INFRA["Infraestructura — docker compose"]
+    PG[("PostgreSQL<br/>+ TimescaleDB")]
+    REDIS[("Redis")]
+    MQTT[("Mosquitto<br/>MQTT")]
+    EDGE["nginx + coturn<br/>HTTPS · TURN"]
+    OBJ[("Object Storage<br/>fotos · documentos")]
+  end
+
+  subgraph HW["Hardware de acceso"]
+    BIO["Lector biométrico"]
+    QRD["Lector QR"]
+    TURN["Torniquete / barrera"]
+    RELAY["Relés / GPIO"]
+  end
+
+  KIOSK --> EDGE
+  DASH --> EDGE
+  RES --> EDGE
+  EDGE --> RT
+  EDGE --> API
+  RT --> API
+
+  API --> SHARED
+  API --> DBPKG
+  API --> PG
+  API --> REDIS
+  API --> OBJ
+
+  RT --> SHARED
+  RT --> REDIS
+
+  DEVBR <--> MQTT
+  DEVBR --> PG
+  DEVBR --> API
+
+  MQTT <--> BIO
+  MQTT <--> QRD
+  MQTT <--> TURN
+  MQTT <--> RELAY
+
+  KIOSK --> RELAY
+
+  classDef existing fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111827
+  classDef planned fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#111827
+  classDef infra fill:#e5e7eb,stroke:#4b5563,stroke-width:2px,color:#111827
+  classDef hardware fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#111827
+
+  class KIOSK,DASH,SHARED,DBPKG,API,RT,DEVBR,EDGE existing
+  class RES,M_ID,M_TEN,M_ACC,M_DEV,M_VIS,M_ITC,M_SEC,M_COM,M_SRV,M_FIN,M_ANA planned
+  class PG,REDIS,MQTT,OBJ infra
+  class BIO,QRD,TURN,RELAY hardware

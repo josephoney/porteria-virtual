@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
+import { Skeleton } from '../ui/skeleton';
 
 interface CallData {
   id: string;
@@ -32,7 +33,11 @@ const statusLabel: Record<string, string> = {
 };
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(iso).toLocaleTimeString('es-CO', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 function formatDuration(seconds: number | null): string {
@@ -50,8 +55,13 @@ export function CallHistoryTable() {
   const [statusFilter, setStatusFilter] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const fetchCalls = useCallback(async () => {
+    setLoading(true);
+    setError('');
+
     try {
       const params = new URLSearchParams();
       params.set('page', String(page));
@@ -60,26 +70,39 @@ export function CallHistoryTable() {
       if (fromDate) params.set('from', fromDate);
       if (toDate) params.set('to', toDate);
 
-      const { data } = await get<{ data: CallData[]; total: number }>(`/api/calls?${params.toString()}`);
+      const { data } = await get<{ data: CallData[]; total: number }>(
+        `/api/calls?${params.toString()}`,
+      );
       setCalls(data.data);
       setTotal(data.total);
     } catch {
       setCalls([]);
       setTotal(0);
+      setError('No se pudieron cargar las llamadas. Reintentá en unos segundos.');
+    } finally {
+      setLoading(false);
     }
   }, [page, statusFilter, fromDate, toDate]);
 
-  useEffect(() => { fetchCalls(); }, [fetchCalls]);
+  useEffect(() => {
+    fetchCalls();
+  }, [fetchCalls]);
 
   const totalPages = Math.ceil(total / 10);
 
   return (
     <div className="space-y-4">
-      <h3 className="font-sans text-lg font-extrabold tracking-wide">Historial de Llamadas</h3>
-
-      <div className="flex gap-3 flex-wrap">
-        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Todas" /></SelectTrigger>
+      <div className="flex flex-wrap gap-3">
+        <Select
+          value={statusFilter}
+          onValueChange={(value) => {
+            setStatusFilter(value);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-36" aria-label="Filtrar por estado">
+            <SelectValue placeholder="Todas" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="pending">Pendiente</SelectItem>
             <SelectItem value="active">Activa</SelectItem>
@@ -90,13 +113,21 @@ export function CallHistoryTable() {
         <Input
           type="date"
           value={fromDate}
-          onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
+          aria-label="Desde"
+          onChange={(event) => {
+            setFromDate(event.target.value);
+            setPage(1);
+          }}
           className="w-40"
         />
         <Input
           type="date"
           value={toDate}
-          onChange={(e) => { setToDate(e.target.value); setPage(1); }}
+          aria-label="Hasta"
+          onChange={(event) => {
+            setToDate(event.target.value);
+            setPage(1);
+          }}
           className="w-40"
         />
       </div>
@@ -113,31 +144,76 @@ export function CallHistoryTable() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {calls.length === 0 && (
+          {loading &&
+            [...Array(5)].map((_, index) => (
+              <TableRow key={`loading-${index}`}>
+                <TableCell colSpan={6}>
+                  <Skeleton className="h-8 w-full" />
+                </TableCell>
+              </TableRow>
+            ))}
+
+          {!loading && error && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={6} className="py-8 text-center">
+                <p className="text-sm text-destructive" role="alert">
+                  {error}
+                </p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={fetchCalls}>
+                  Reintentar
+                </Button>
+              </TableCell>
+            </TableRow>
+          )}
+
+          {!loading && !error && calls.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                 No hay llamadas registradas
               </TableCell>
             </TableRow>
           )}
-          {calls.map((c) => (
-            <TableRow key={c.id}>
-              <TableCell><Badge variant={statusBadgeVariant[c.status] || 'outline'}>{statusLabel[c.status] || c.status}</Badge></TableCell>
-              <TableCell>{c.kioskName || '--'}</TableCell>
-              <TableCell>{c.operatorName || '--'}</TableCell>
-              <TableCell>{c.accessPointName || '--'}</TableCell>
-              <TableCell>{formatTime(c.startedAt)}</TableCell>
-              <TableCell>{formatDuration(c.duration)}</TableCell>
-            </TableRow>
-          ))}
+
+          {!loading &&
+            !error &&
+            calls.map((call) => (
+              <TableRow key={call.id}>
+                <TableCell>
+                  <Badge variant={statusBadgeVariant[call.status] || 'outline'}>
+                    {statusLabel[call.status] || call.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>{call.kioskName || '--'}</TableCell>
+                <TableCell>{call.operatorName || '--'}</TableCell>
+                <TableCell>{call.accessPointName || '--'}</TableCell>
+                <TableCell className="font-mono">{formatTime(call.startedAt)}</TableCell>
+                <TableCell className="font-mono">{formatDuration(call.duration)}</TableCell>
+              </TableRow>
+            ))}
         </TableBody>
       </Table>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 text-sm font-mono">
-          <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>←</Button>
-          <span className="text-muted-foreground">{page} / {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>→</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === 1 || loading}
+            onClick={() => setPage(page - 1)}
+          >
+            Anterior
+          </Button>
+          <span className="text-muted-foreground">
+            {page} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage(page + 1)}
+          >
+            Siguiente
+          </Button>
         </div>
       )}
     </div>

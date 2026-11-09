@@ -4,7 +4,7 @@
 
 Prevents the kiosk from getting stuck in "calling" state when no operator answers. The signaling server auto-cancels unanswered calls after 30 seconds.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Server timeout for unanswered calls
 The signaling server SHALL automatically cancel calls that are not answered within 30 seconds.

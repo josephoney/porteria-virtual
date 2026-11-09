@@ -29,7 +29,7 @@ function KioskContent() {
     webRTC.scanDevices();
   }, []);
 
-  function emit(event: string, data: any) {
+  function emit(event: string, data: Record<string, unknown>) {
     const s = ctxSocketRef.current;
     s?.emit(event, data);
     setDebugMsg(`${new Date().toLocaleTimeString()} → ${event}`);
@@ -74,6 +74,7 @@ function KioskContent() {
       setDebugMsg(`${new Date().toLocaleTimeString()} ← call:waiting ${callId}`);
     }
     async function onCallAccepted({ callId, operatorName }: { callId: string; operatorName: string }) {
+      if (!s) return;
       kioskRef.current.acceptCall(operatorName);
       await webRTCRef.current.createAndSendOffer(s, callId);
     }

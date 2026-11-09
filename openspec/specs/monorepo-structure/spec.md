@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+pnpm monorepo layout, workspace conventions, and shared package boundaries.
+
+## Requirements
 
 ### Requirement: Monorepo directory structure
 The project SHALL use a monorepo structure with pnpm workspaces, organizing code into `apps/`, `packages/`, `server/`, and root-level configuration files.

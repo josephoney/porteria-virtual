@@ -15,6 +15,76 @@
       "when": 1781289112051,
       "tag": "0001_open_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793846928407,
+      "tag": "0002_establish_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793890152600,
+      "tag": "0003_cooing_nemesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793894970119,
+      "tag": "0004_giant_shen",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793918326949,
+      "tag": "0005_melted_black_cat",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794013452992,
+      "tag": "0006_petite_darwin",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794019724454,
+      "tag": "0007_peaceful_kat_farrell",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794147509630,
+      "tag": "0008_young_ezekiel",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794164555154,
+      "tag": "0009_lively_northstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794193600000,
+      "tag": "0010_location_hierarchy_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794200000000,
+      "tag": "0011_people_accounts_rollback",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,7 @@ export interface Event {
   actorId: string | null;
   actorRole: string | null;
   organizationId: string;
-  locationId: string | null;
+  communityId: string | null;
   accessPointId: string | null;
   metadata: EventMetadata;
   createdAt: Date;

@@ -21,7 +21,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     console.log('[Kiosk] Connecting to:', CONFIG.SERVER_URL);
-    const s = io(CONFIG.SERVER_URL, { transports: ['websocket'] });
+    const s = io(CONFIG.SERVER_URL, {
+      transports: ['websocket'],
+      auth: { deviceToken: CONFIG.KIOSK_TOKEN },
+    });
     socketRef.current = s;
     setSocket(s);
 
@@ -29,14 +32,18 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       console.log('[Kiosk] Socket connected, registering...');
       setIsConnected(true);
       s.emit('kiosk:register', {
-        buildingId: CONFIG.BUILDING_ID,
-        buildingName: CONFIG.BUILDING_NAME,
+        kioskId: CONFIG.BUILDING_ID,
+        communityId: CONFIG.COMMUNITY_ID,
+        name: CONFIG.BUILDING_NAME,
       });
     });
 
-    s.on('kiosk:registered', (data: any) => {
-      console.log('[Kiosk] Registered:', data);
-    });
+    s.on(
+      'kiosk:registered',
+      (data: { kioskId: string; communityId: string; serverTime: number }) => {
+        console.log('[Kiosk] Registered:', data);
+      },
+    );
 
     s.on('disconnect', (reason: string) => {
       console.log('[Kiosk] Disconnected:', reason);

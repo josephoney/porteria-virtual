@@ -1,7 +1,9 @@
 import { eq, and, gte, lte, count, desc } from 'drizzle-orm';
+import type { CallStatus } from '@porteria/shared';
 import { createDb } from '@porteria/database';
-import { calls, kiosks, users, accessPoints, locations } from '@porteria/database/schema';
-import { insertEvent } from './events.service.js';
+import { calls, kiosks, users, people, accessPoints, communities } from '@porteria/database/schema';
+import { createEventEnvelope } from '@porteria/shared';
+import { enqueueEvent } from './outbox.service.js';
 
 const db = createDb();
 
@@ -11,6 +13,8 @@ export interface CallResult {
   startedAt: Date | null;
   endedAt: Date | null;
   duration: number | null;
+  communityId: string;
+  communityName: string | null;
   kioskName: string | null;
   operatorName: string | null;
   accessPointName: string | null;
@@ -23,6 +27,8 @@ function toCallResult(row: Record<string, unknown>): CallResult {
     startedAt: row.startedAt as Date | null,
     endedAt: row.endedAt as Date | null,
     duration: row.duration as number | null,
+    communityId: row.communityId as string,
+    communityName: (row.communityName as string) ?? null,
     kioskName: (row.kioskName as string) ?? null,
     operatorName: (row.operatorName as string) ?? null,
     accessPointName: (row.accessPointName as string) ?? null,
@@ -31,23 +37,24 @@ function toCallResult(row: Record<string, unknown>): CallResult {
 
 export async function listCalls(
   orgId: string,
-  filters: { page: number; pageSize: number; status?: string; from?: string; to?: string; operatorId?: string },
+  filters: {
+    page: number;
+    pageSize: number;
+    status?: string;
+    from?: string;
+    to?: string;
+    operatorId?: string;
+    communityId?: string;
+  },
 ): Promise<{ data: CallResult[]; total: number; page: number; pageSize: number }> {
   const offset = (filters.page - 1) * filters.pageSize;
   const conditions = [eq(calls.organizationId, orgId)];
 
-  if (filters.status) {
-    conditions.push(eq(calls.status, filters.status as any));
-  }
-  if (filters.from) {
-    conditions.push(gte(calls.startedAt, new Date(filters.from)));
-  }
-  if (filters.to) {
-    conditions.push(lte(calls.startedAt, new Date(filters.to)));
-  }
-  if (filters.operatorId) {
-    conditions.push(eq(calls.operatorId, filters.operatorId));
-  }
+  if (filters.status) conditions.push(eq(calls.status, filters.status as CallStatus));
+  if (filters.from) conditions.push(gte(calls.startedAt, new Date(filters.from)));
+  if (filters.to) conditions.push(lte(calls.startedAt, new Date(filters.to)));
+  if (filters.operatorId) conditions.push(eq(calls.operatorId, filters.operatorId));
+  if (filters.communityId) conditions.push(eq(calls.communityId, filters.communityId));
 
   const data = await db
     .select({
@@ -56,11 +63,14 @@ export async function listCalls(
       startedAt: calls.startedAt,
       endedAt: calls.endedAt,
       duration: calls.duration,
+      communityId: calls.communityId,
+      communityName: communities.name,
       kioskName: kiosks.name,
       operatorName: users.name,
       accessPointName: accessPoints.name,
     })
     .from(calls)
+    .innerJoin(communities, eq(calls.communityId, communities.id))
     .leftJoin(kiosks, eq(calls.kioskId, kiosks.id))
     .leftJoin(users, eq(calls.operatorId, users.id))
     .leftJoin(accessPoints, eq(calls.accessPointId, accessPoints.id))
@@ -90,11 +100,14 @@ export async function getCallById(id: string, orgId: string): Promise<CallResult
       startedAt: calls.startedAt,
       endedAt: calls.endedAt,
       duration: calls.duration,
+      communityId: calls.communityId,
+      communityName: communities.name,
       kioskName: kiosks.name,
       operatorName: users.name,
       accessPointName: accessPoints.name,
     })
     .from(calls)
+    .innerJoin(communities, eq(calls.communityId, communities.id))
     .leftJoin(kiosks, eq(calls.kioskId, kiosks.id))
     .leftJoin(users, eq(calls.operatorId, users.id))
     .leftJoin(accessPoints, eq(calls.accessPointId, accessPoints.id))
@@ -105,12 +118,16 @@ export async function getCallById(id: string, orgId: string): Promise<CallResult
   return toCallResult(rows[0]);
 }
 
-export async function getCallsTodayCount(orgId: string, from?: string, to?: string): Promise<number> {
+export async function getCallsTodayCount(
+  orgId: string,
+  from?: string,
+  to?: string,
+  communityId?: string,
+): Promise<number> {
   const startDate = from ? new Date(from) : new Date(new Date().setHours(0, 0, 0, 0));
   const conditions = [eq(calls.organizationId, orgId), gte(calls.startedAt, startDate)];
-  if (to) {
-    conditions.push(lte(calls.startedAt, new Date(to)));
-  }
+  if (to) conditions.push(lte(calls.startedAt, new Date(to)));
+  if (communityId) conditions.push(eq(calls.communityId, communityId));
 
   const [result] = await db
     .select({ count: count() })
@@ -120,70 +137,66 @@ export async function getCallsTodayCount(orgId: string, from?: string, to?: stri
   return result?.count ?? 0;
 }
 
-export async function getActiveCallsCount(orgId: string): Promise<number> {
+export async function getActiveCallsCount(orgId: string, communityId?: string): Promise<number> {
+  const conditions = [eq(calls.organizationId, orgId), eq(calls.status, 'active')];
+  if (communityId) conditions.push(eq(calls.communityId, communityId));
+
   const [result] = await db
     .select({ count: count() })
     .from(calls)
-    .where(
-      and(
-        eq(calls.organizationId, orgId),
-        eq(calls.status, 'active' as any),
-      ),
-    );
+    .where(and(...conditions));
 
   return result?.count ?? 0;
 }
 
 export async function createCall(input: {
   callId: string;
-  buildingId: string;
+  kioskId: string;
   visitor?: { name?: string; known?: boolean } | null;
 }): Promise<{ success: boolean; error?: string }> {
   const [kiosk] = await db
-    .select({ id: kiosks.id, accessPointId: kiosks.accessPointId })
+    .select({
+      id: kiosks.id,
+      accessPointId: kiosks.accessPointId,
+      communityId: kiosks.communityId,
+    })
     .from(kiosks)
-    .where(eq(kiosks.rpiId, input.buildingId))
+    .where(eq(kiosks.id, input.kioskId))
     .limit(1);
 
   if (!kiosk) return { success: false, error: 'Kiosk not found' };
 
-  let organizationId: string | null = null;
-  if (kiosk.accessPointId) {
-    const [ap] = await db
-      .select({ locationId: accessPoints.locationId })
-      .from(accessPoints)
-      .where(eq(accessPoints.id, kiosk.accessPointId))
-      .limit(1);
+  const [community] = await db
+    .select({ organizationId: communities.organizationId })
+    .from(communities)
+    .where(eq(communities.id, kiosk.communityId))
+    .limit(1);
 
-    if (ap) {
-      const [loc] = await db
-        .select({ organizationId: locations.organizationId })
-        .from(locations)
-        .where(eq(locations.id, ap.locationId))
-        .limit(1);
-
-      if (loc) organizationId = loc.organizationId;
-    }
-  }
-
-  if (!organizationId) {
+  if (!community) {
     return { success: false, error: 'Kiosk not linked to an organization' };
   }
 
-  await db.insert(calls).values({
-    id: input.callId,
-    kioskId: kiosk.id,
-    organizationId,
-    accessPointId: kiosk.accessPointId,
-    status: 'pending',
-  });
+  await db.transaction(async (tx) => {
+    await tx.insert(calls).values({
+      id: input.callId,
+      kioskId: kiosk.id,
+      organizationId: community.organizationId,
+      communityId: kiosk.communityId,
+      accessPointId: kiosk.accessPointId,
+      status: 'pending',
+    });
 
-  await insertEvent({
-    eventType: 'call.started',
-    actorRole: 'kiosk',
-    organizationId,
-    accessPointId: kiosk.accessPointId ?? null,
-    metadata: input.visitor ? { visitor: input.visitor } : null,
+    await enqueueEvent(
+      tx,
+      createEventEnvelope({
+        eventType: 'call.started',
+        actorRole: 'kiosk',
+        organizationId: community.organizationId,
+        communityId: kiosk.communityId,
+        accessPointId: kiosk.accessPointId ?? null,
+        payload: input.visitor ? { visitor: input.visitor } : {},
+      }),
+    );
   });
 
   return { success: true };
@@ -202,7 +215,20 @@ export async function updateCall(
   const updates: Record<string, unknown> = {};
 
   if (input.status) updates.status = input.status;
-  if (input.operatorId !== undefined) updates.operatorId = input.operatorId;
+  if (input.operatorId !== undefined) {
+    updates.operatorId = input.operatorId;
+    if (input.operatorId) {
+      const [operator] = await db
+        .select({ personId: people.id })
+        .from(users)
+        .innerJoin(people, eq(people.contactEmail, users.email))
+        .where(eq(users.id, input.operatorId))
+        .limit(1);
+      updates.operatorPersonId = operator?.personId ?? null;
+    } else {
+      updates.operatorPersonId = null;
+    }
+  }
   if (input.endedAt) updates.endedAt = new Date(input.endedAt);
   if (input.duration !== undefined) updates.duration = input.duration;
 
@@ -210,28 +236,36 @@ export async function updateCall(
     return { success: false, error: 'No fields to update' };
   }
 
-  await db.update(calls).set(updates).where(eq(calls.id, callId));
+  try {
+    await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(calls)
+        .set(updates)
+        .where(eq(calls.id, callId))
+        .returning();
 
-  if (input.eventType) {
-    const [call] = await db
-      .select({
-        organizationId: calls.organizationId,
-        accessPointId: calls.accessPointId,
-      })
-      .from(calls)
-      .where(eq(calls.id, callId))
-      .limit(1);
+      if (!updated) throw new Error('CALL_NOT_FOUND');
 
-    if (call) {
-      await insertEvent({
-        eventType: input.eventType,
-        actorRole: input.operatorId ? 'operator' : 'kiosk',
-        organizationId: call.organizationId,
-        accessPointId: call.accessPointId ?? null,
-        metadata: input.duration !== undefined ? { duration: input.duration } : null,
-      });
+      if (input.eventType) {
+        await enqueueEvent(
+          tx,
+          createEventEnvelope({
+            eventType: input.eventType,
+            actorRole: input.operatorId ? 'operator' : 'kiosk',
+            organizationId: updated.organizationId,
+            communityId: updated.communityId,
+            accessPointId: updated.accessPointId ?? null,
+            payload: input.duration !== undefined ? { duration: input.duration } : {},
+          }),
+        );
+      }
+    });
+
+    return { success: true };
+  } catch (err) {
+    if ((err as Error).message === 'CALL_NOT_FOUND') {
+      return { success: false, error: 'Call not found' };
     }
+    throw err;
   }
-
-  return { success: true };
 }

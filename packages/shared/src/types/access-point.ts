@@ -3,8 +3,10 @@ export interface AccessPoint {
   name: string;
   type: 'door' | 'gate' | 'turnstile';
   gpioPin: number;
-  locationId: string;
+  communityId: string;
   kioskId: string | null;
+  failPolicy: 'open' | 'closed';
+  direction: 'entry' | 'exit' | 'both';
   createdAt: Date;
   updatedAt: Date;
 }

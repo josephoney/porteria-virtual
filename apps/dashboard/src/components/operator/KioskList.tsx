@@ -36,11 +36,13 @@ export function KioskList() {
         ) : (
           kiosks.map((k) => (
             <div
-              key={k.buildingId}
+              key={k.kioskId}
               className="flex items-center gap-2.5 py-2 px-1 border-b border-border last:border-0"
             >
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot[k.status] || 'bg-muted-foreground'}`} />
-              <span className="text-xs flex-1 text-foreground">{k.buildingName}</span>
+              <span
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot[k.status] || 'bg-muted-foreground'}`}
+              />
+              <span className="text-xs flex-1 text-foreground">{k.kioskName}</span>
               <span className="font-mono text-[10px] text-muted-foreground">
                 {statusLabels[k.status] || k.status}
               </span>

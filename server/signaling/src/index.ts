@@ -1,4 +1,3 @@
-import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import Fastify from 'fastify';
 import type { ClientToServerEvents, ServerToClientEvents, TypedSocket } from './types.js';
@@ -10,17 +9,19 @@ import { registerCallHandlers } from './handlers/call.js';
 import { registerWebRTCHandlers } from './handlers/webrtc.js';
 import { broadcastOperatorState } from './utils.js';
 import { setPersistLogger, persistCallEnd, persistEvent } from './persist.js';
+import { authenticateSocket } from './auth.js';
 
 const app = Fastify({ logger: true });
-const httpServer = createServer(app.server);
 
 setPersistLogger({ warn: (obj, msg) => app.log.warn(obj, msg) });
 
-const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
+const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(app.server, {
   cors: { origin: config.CORS_ORIGIN, methods: ['GET', 'POST'] },
 });
 
 const state = createState();
+
+io.use(authenticateSocket);
 
 io.on('connection', (rawSocket) => {
   const socket = rawSocket as TypedSocket;
@@ -35,13 +36,18 @@ io.on('connection', (rawSocket) => {
     const role = socket.data.role || 'unknown';
     app.log.info({ socketId: socket.id, role }, 'Socket disconnected');
 
-    if (socket.data.role === 'kiosk' && socket.data.buildingId) {
+    if (socket.data.role === 'kiosk' && socket.data.kioskId) {
       for (const [callId, timeout] of state.callTimeouts.entries()) {
         clearTimeout(timeout);
         state.callTimeouts.delete(callId);
       }
-      persistEvent('kiosk.offline', socket.data.buildingId);
-      state.kiosks.delete(socket.data.buildingId);
+      if (socket.data.organizationId && socket.data.communityId) {
+        persistEvent('kiosk.offline', {
+          organizationId: socket.data.organizationId,
+          communityId: socket.data.communityId,
+        });
+      }
+      state.kiosks.delete(socket.data.kioskId);
       broadcastOperatorState(io, state);
     }
 
@@ -56,7 +62,7 @@ io.on('connection', (rawSocket) => {
 
         io.to(targetId).emit('call:ended', { callId, reason: 'peer_disconnected' });
 
-        const kiosk = state.kiosks.get(call.buildingId);
+        const kiosk = state.kiosks.get(call.kioskId);
         if (kiosk) kiosk.status = 'idle';
 
         const now = Date.now();
@@ -80,6 +86,12 @@ app.get('/health', async () => ({
   timestamp: Date.now(),
 }));
 
-httpServer.listen(config.PORT, config.HOST, () => {
-  app.log.info(`Signaling server listening on port ${config.PORT}`);
-});
+app
+  .listen({ port: config.PORT, host: config.HOST })
+  .then(() => {
+    app.log.info(`Signaling server listening on port ${config.PORT}`);
+  })
+  .catch((err) => {
+    app.log.error(err);
+    process.exit(1);
+  });

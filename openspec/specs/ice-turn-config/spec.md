@@ -4,7 +4,7 @@
 
 Ensures both kiosk and dashboard WebRTC clients include the local TURN server in their ICE server configurations for reliable NAT traversal.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: TURN ICE servers in kiosk
 The kiosk app SHALL include the local TURN server in its ICE servers configuration.

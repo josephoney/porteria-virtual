@@ -1,6 +1,8 @@
 import { eq, and, gte, lte, count, desc } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { events, users, kiosks, accessPoints, locations } from '@porteria/database/schema';
+import type { EventEnvelope } from '@porteria/shared';
+import type { DbExecutor } from './outbox.service.js';
+import { events, users, communities, ingestedEvents } from '@porteria/database/schema';
 
 const db = createDb();
 
@@ -28,26 +30,26 @@ function toEventResult(row: Record<string, unknown>): EventResult {
 
 export async function listEvents(
   orgId: string,
-  filters: { page: number; pageSize: number; eventType?: string; from?: string; to?: string; actorId?: string; accessPointId?: string },
+  filters: {
+    page: number;
+    pageSize: number;
+    eventType?: string;
+    from?: string;
+    to?: string;
+    actorId?: string;
+    accessPointId?: string;
+    communityId?: string;
+  },
 ): Promise<{ data: EventResult[]; total: number; page: number; pageSize: number }> {
   const offset = (filters.page - 1) * filters.pageSize;
   const conditions = [eq(events.organizationId, orgId)];
 
-  if (filters.eventType) {
-    conditions.push(eq(events.eventType, filters.eventType));
-  }
-  if (filters.from) {
-    conditions.push(gte(events.createdAt, new Date(filters.from)));
-  }
-  if (filters.to) {
-    conditions.push(lte(events.createdAt, new Date(filters.to)));
-  }
-  if (filters.actorId) {
-    conditions.push(eq(events.actorId, filters.actorId));
-  }
-  if (filters.accessPointId) {
-    conditions.push(eq(events.accessPointId, filters.accessPointId));
-  }
+  if (filters.eventType) conditions.push(eq(events.eventType, filters.eventType));
+  if (filters.from) conditions.push(gte(events.createdAt, new Date(filters.from)));
+  if (filters.to) conditions.push(lte(events.createdAt, new Date(filters.to)));
+  if (filters.actorId) conditions.push(eq(events.actorId, filters.actorId));
+  if (filters.accessPointId) conditions.push(eq(events.accessPointId, filters.accessPointId));
+  if (filters.communityId) conditions.push(eq(events.communityId, filters.communityId));
 
   const data = await db
     .select({
@@ -84,18 +86,19 @@ export interface EventStats {
   total: number;
 }
 
-export async function getEventStats(orgId: string, from?: string, to?: string): Promise<EventStats> {
+export async function getEventStats(
+  orgId: string,
+  from?: string,
+  to?: string,
+  communityId?: string,
+): Promise<EventStats> {
   const startDate = from ? new Date(from) : new Date(new Date().setHours(0, 0, 0, 0));
   const conditions = [eq(events.organizationId, orgId), gte(events.createdAt, startDate)];
-  if (to) {
-    conditions.push(lte(events.createdAt, new Date(to)));
-  }
+  if (to) conditions.push(lte(events.createdAt, new Date(to)));
+  if (communityId) conditions.push(eq(events.communityId, communityId));
 
   const rows = await db
-    .select({
-      eventType: events.eventType,
-      count: count(),
-    })
+    .select({ eventType: events.eventType, count: count() })
     .from(events)
     .where(and(...conditions))
     .groupBy(events.eventType);
@@ -111,12 +114,16 @@ export async function getEventStats(orgId: string, from?: string, to?: string): 
   return { byType, total };
 }
 
-export async function getEventsTodayCount(orgId: string, from?: string, to?: string): Promise<number> {
+export async function getEventsTodayCount(
+  orgId: string,
+  from?: string,
+  to?: string,
+  communityId?: string,
+): Promise<number> {
   const startDate = from ? new Date(from) : new Date(new Date().setHours(0, 0, 0, 0));
   const conditions = [eq(events.organizationId, orgId), gte(events.createdAt, startDate)];
-  if (to) {
-    conditions.push(lte(events.createdAt, new Date(to)));
-  }
+  if (to) conditions.push(lte(events.createdAt, new Date(to)));
+  if (communityId) conditions.push(eq(events.communityId, communityId));
 
   const [result] = await db
     .select({ count: count() })
@@ -126,38 +133,67 @@ export async function getEventsTodayCount(orgId: string, from?: string, to?: str
   return result?.count ?? 0;
 }
 
-export async function resolveOrgIdFromBuildingId(buildingId: string): Promise<string> {
-  const rows = await db
-    .select({ orgId: locations.organizationId })
-    .from(kiosks)
-    .innerJoin(accessPoints, eq(kiosks.accessPointId, accessPoints.id))
-    .innerJoin(locations, eq(accessPoints.locationId, locations.id))
-    .where(eq(kiosks.rpiId, buildingId))
+export async function resolveOrgIdFromCommunityId(communityId: string): Promise<string> {
+  const [row] = await db
+    .select({ orgId: communities.organizationId })
+    .from(communities)
+    .where(eq(communities.id, communityId))
     .limit(1);
 
-  if (rows.length === 0) {
-    throw new Error(`No organization found for building ${buildingId}`);
+  if (!row) {
+    throw new Error(`No organization found for community ${communityId}`);
   }
 
-  return rows[0].orgId;
+  return row.orgId;
 }
 
 export async function insertEvent(event: {
   eventType: string;
   actorId?: string | null;
+  actorPersonId?: string | null;
   actorRole?: string | null;
   organizationId: string;
-  locationId?: string | null;
+  communityId?: string | null;
   accessPointId?: string | null;
   metadata?: Record<string, unknown> | null;
-}): Promise<void> {
-  await db.insert(events).values({
+}, executor: DbExecutor = db): Promise<void> {
+  await executor.insert(events).values({
     eventType: event.eventType,
     actorId: event.actorId ?? null,
+    actorPersonId: event.actorPersonId ?? null,
     actorRole: event.actorRole ?? null,
     organizationId: event.organizationId,
-    locationId: event.locationId ?? null,
+    communityId: event.communityId ?? null,
     accessPointId: event.accessPointId ?? null,
     metadata: event.metadata ?? undefined,
+  });
+}
+export async function ingestEnvelope(
+  envelope: EventEnvelope,
+): Promise<{ duplicate: boolean }> {
+  return db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(ingestedEvents)
+      .values({ eventId: envelope.eventId })
+      .onConflictDoNothing()
+      .returning({ eventId: ingestedEvents.eventId });
+
+    if (!inserted) return { duplicate: true };
+
+    await tx.insert(events).values({
+      eventType: envelope.eventType,
+      actorId: envelope.actor?.id ?? null,
+      actorRole: envelope.actor?.role ?? envelope.actorRole ?? null,
+      organizationId: envelope.organizationId,
+      communityId: envelope.communityId ?? null,
+      accessPointId: envelope.accessPointId ?? null,
+      metadata: {
+        ...envelope.payload,
+        eventId: envelope.eventId,
+        occurredAt: envelope.occurredAt,
+      },
+    });
+
+    return { duplicate: false };
   });
 }

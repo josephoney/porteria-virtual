@@ -4,11 +4,21 @@ import { useWebRTC } from '../../hooks/useWebRTC';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 
+interface ToastCall {
+  callId: string;
+  kioskId: string;
+  kioskRpiId: string;
+  kioskName: string;
+  communityId: string;
+  visitor?: { name: string; known: boolean; similarity: number; photo?: string } | null;
+  timestamp: number;
+}
+
 export function IncomingCallOverlay() {
   const { socket, pendingCalls, activeCall, setActiveCall, removePendingCall, stopRing, addLog } = useSocket();
   const webRTC = useWebRTC();
 
-  const [toastCall, setToastCall] = useState<any>(null);
+  const [toastCall, setToastCall] = useState<ToastCall | null>(null);
   const [minimized, setMinimized] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [pos, setPos] = useState({ x: -1, y: -1 });
@@ -41,15 +51,15 @@ export function IncomingCallOverlay() {
   useEffect(() => {
     if (pendingCalls.size === 0) { setToastCall(null); return; }
     const latest = Array.from(pendingCalls.values()).pop();
-    setToastCall(latest);
+    if (latest) setToastCall(latest);
     const t = setTimeout(() => setToastCall(null), 30000);
     return () => clearTimeout(t);
   }, [pendingCalls.size]);
 
   useEffect(() => {
     if (!socket) return;
-    const onOffer = async ({ callId, offer }: any) => { await webRTCRef.current.handleOffer(socket, callId, offer); };
-    const onIceCandidate = async ({ candidate }: any) => { await webRTCRef.current.handleIceCandidate(candidate); };
+    const onOffer = async ({ callId, offer }: { callId: string; offer: RTCSessionDescriptionInit }) => { await webRTCRef.current.handleOffer(socket, callId, offer); };
+    const onIceCandidate = async ({ candidate }: { candidate: RTCIceCandidateInit }) => { await webRTCRef.current.handleIceCandidate(candidate); };
     const onCallEnded = () => { activeCallIdRef.current = null; webRTCRef.current.cleanupPeer(); setActiveCall(null); setMinimized(false); };
     socket.on('webrtc:offer', onOffer);
     socket.on('webrtc:ice-candidate', onIceCandidate);
@@ -66,7 +76,7 @@ export function IncomingCallOverlay() {
     if (!call) return;
     stopRing();
     await webRTCRef.current.getLocalStream();
-    socket?.emit('call:accept', { callId, buildingId: call.buildingId });
+    socket?.emit('call:accept', { callId, kioskId: call.kioskId });
     activeCallIdRef.current = callId;
     setActiveCall({ ...call });
     removePendingCall(callId);
@@ -87,8 +97,8 @@ export function IncomingCallOverlay() {
   const handleOpenDoor = useCallback(() => {
     const cid = activeCallIdRef.current;
     if (!cid || !activeCall) return;
-    socket?.emit('door:open', { callId: cid, buildingId: activeCall.buildingId });
-    addLogRef.current('DOOR', `Puerta abierta: ${activeCall.buildingName}`);
+    socket?.emit('door:open', { callId: cid, kioskId: activeCall.kioskId });
+    addLogRef.current('DOOR', `Puerta abierta: ${activeCall.kioskName}`);
   }, [socket, activeCall]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
@@ -122,7 +132,7 @@ export function IncomingCallOverlay() {
       {toastCall && !activeCall && (
         <div className="fixed top-20 right-6 z-[10000] bg-card border border-border rounded-lg shadow-lg p-5 min-w-[300px]">
           <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Llamada entrante</p>
-          <p className="text-lg font-bold mb-1">{toastCall.buildingName}</p>
+          <p className="text-lg font-bold mb-1">{toastCall.kioskName}</p>
           {toastCall.visitor?.known && (
             <p className="text-sm text-muted-foreground mb-3">Visitante: {toastCall.visitor.name}</p>
           )}
@@ -143,7 +153,7 @@ export function IncomingCallOverlay() {
           <div className="flex items-center justify-between px-4 py-2 bg-muted/50">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-primary" />
-              <span className="text-sm font-semibold">{activeCall.buildingName}</span>
+              <span className="text-sm font-semibold">{activeCall.kioskName}</span>
             </div>
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="sm" onClick={handleOpenDoor}>🚪 Abrir</Button>
@@ -158,7 +168,7 @@ export function IncomingCallOverlay() {
             <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-[360px] object-contain bg-black" />
             {webRTC.localStream && (
               <video ref={localVideoRef} autoPlay playsInline muted
-                className="absolute bottom-2 right-2 w-[140px] h-[100px] object-cover rounded-lg border-2 border-ring bg-[#111]" />
+                className="absolute bottom-2 right-2 w-[140px] h-[100px] object-cover rounded-lg border-2 border-ring bg-black" />
             )}
           </div>
         </div>
@@ -171,7 +181,7 @@ export function IncomingCallOverlay() {
           variant="secondary"
           onClick={() => { setMinimized(false); resetPos(); }}
         >
-          📹 {activeCall.buildingName}
+          📹 {activeCall.kioskName}
         </Badge>
       )}
     </>

@@ -85,8 +85,6 @@ export function BitacoraView() {
 
   return (
     <div className="space-y-4">
-      <h3 className="font-sans text-lg font-extrabold tracking-wide">Bitácora de Eventos</h3>
-
       <div className="flex gap-3 flex-wrap">
         <Select value={filters.eventType} onValueChange={(v) => { setFilters((f) => ({ ...f, eventType: v })); setPage(1); }}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Todos los tipos" /></SelectTrigger>

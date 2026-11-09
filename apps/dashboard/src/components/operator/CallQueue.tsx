@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 
 interface CallInfo {
   callId: string;
-  buildingName: string;
+  kioskName: string;
   visitor?: { name: string; known: boolean; similarity: number; photo?: string } | null;
   timestamp: number;
 }
@@ -39,7 +39,7 @@ export function CallQueue({ pendingCalls, onAccept }: CallQueueProps) {
               <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-warning animate-pulse" />
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-foreground">{call.buildingName}</span>
+                  <span className="text-sm font-bold text-foreground">{call.kioskName}</span>
                   <span className="font-mono text-xs text-muted-foreground">
                     hace {Math.round((Date.now() - call.timestamp) / 1000)}s
                   </span>

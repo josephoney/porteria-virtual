@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Drizzle ORM setup, migrations and database tooling.
+
+## Requirements
 
 ### Requirement: Drizzle ORM package
 The project SHALL have a `packages/database/` package with Drizzle ORM installed and configured for PostgreSQL + TimescaleDB.

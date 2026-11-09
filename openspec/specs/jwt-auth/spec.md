@@ -1,23 +1,68 @@
-## ADDED Requirements
+## Purpose
 
+Authentication and authorization: JWT access/refresh tokens, active membership context and role-based access control.
+## Requirements
 ### Requirement: Login endpoint
-The API SHALL provide a `POST /api/auth/login` endpoint that validates email and password and returns JWT tokens.
+The API SHALL provide a `POST /api/auth/login` endpoint that validates email and
+password and returns JWT tokens bound to an active membership context, optionally
+scoped to a community by `communitySlug`.
 
-#### Scenario: Successful login
+#### Scenario: Successful login without communitySlug
 - **WHEN** a POST request is made to `/api/auth/login` with valid `{ email, password }`
-- **THEN** the response has status 200 with `{ accessToken, refreshToken, user: { id, email, name, role, organizationId } }`
+  and the user has exactly one active membership
+- **THEN** the response has status 200 with `{ accessToken, refreshToken, user: { id,
+  email, name, isPlatformAdmin }, activeMembership: { id, role, organizationId,
+  communityId, unitId } }`
+
+#### Scenario: Multiple memberships without communitySlug
+- **WHEN** the user has more than one active membership and no `communitySlug` is sent
+- **THEN** the response has status 200 with `{ requiresContextSelection: true,
+  memberships: [...] }` and no tokens
+- **THEN** the client must call `POST /api/auth/context` to obtain tokens
+
+#### Scenario: Single membership in the scoped community
+- **WHEN** the request includes a valid `communitySlug` and the user has exactly one
+  active membership in that community
+- **THEN** the response has status 200 with tokens and that membership as the active
+  context
+- **THEN** memberships in other communities are not returned
+
+#### Scenario: Multiple memberships in the scoped community
+- **WHEN** the request includes a valid `communitySlug` and the user has more than one
+  active membership in that community
+- **THEN** the response has status 200 with `{ requiresContextSelection: true,
+  memberships: [...] }` containing only memberships of that community
+- **THEN** the client must call `POST /api/auth/context`
+
+#### Scenario: No membership in the scoped community
+- **WHEN** the request includes a valid `communitySlug` and the user has no active
+  membership in that community
+- **THEN** the response has status 403
+- **THEN** the response does not reveal memberships in other communities
+
+#### Scenario: Unknown or inactive community slug
+- **WHEN** the request includes a `communitySlug` that does not resolve to an active
+  community
+- **THEN** the response has status 404
+
+#### Scenario: Platform admin with communitySlug
+- **WHEN** the user has `is_platform_admin = true` and includes a `communitySlug`
+- **THEN** the response has status 200 with tokens and the platform context
+- **THEN** the platform context is not restricted to the community
 
 #### Scenario: Invalid credentials
 - **WHEN** a POST request is made with incorrect password
-- **THEN** the response has status 401 with `{ statusCode: 401, error: "Unauthorized", message: "Invalid email or password" }`
+- **THEN** the response has status 401 with `{ statusCode: 401, error: "Unauthorized",
+  message: "Invalid email or password" }`
 
 #### Scenario: Inactive user
 - **WHEN** a user with `active = false` attempts login
 - **THEN** the response has status 401 regardless of correct credentials
 
-#### Scenario: Access token contains user claims
+#### Scenario: Access token contains membership context
 - **WHEN** a login is successful
-- **THEN** the access token payload contains `{ sub: userId, email, role, orgId }` signed with JWT_SECRET
+- **THEN** the access token payload contains `{ sub, email, orgId, membershipId, role,
+  communityId?, unitId?, isPlatformAdmin }` signed with JWT_SECRET
 - **THEN** the access token expires in 15 minutes
 
 ### Requirement: Refresh token endpoint
@@ -45,12 +90,14 @@ The API SHALL provide a `POST /api/auth/logout` endpoint that revokes the refres
 - **THEN** the response has status 200 with `{ message: "Logged out" }`
 
 ### Requirement: Authentication middleware
-The API SHALL have a Fastify plugin that validates JWT access tokens on protected routes.
+The API SHALL have a Fastify plugin that validates JWT access tokens on protected
+routes and exposes the active membership context.
 
 #### Scenario: Valid token
 - **WHEN** a request includes `Authorization: Bearer <valid-token>`
 - **THEN** the request proceeds to the route handler
-- **THEN** `request.user` is populated with `{ userId, email, role, orgId }`
+- **THEN** `request.user` is populated with `{ userId, email, orgId, membershipId,
+  role, communityId, unitId, isPlatformAdmin }`
 
 #### Scenario: Missing token
 - **WHEN** a request to a protected route has no Authorization header
@@ -64,21 +111,34 @@ The API SHALL have a Fastify plugin that validates JWT access tokens on protecte
 - **WHEN** a request includes a malformed or tampered token
 - **THEN** the response has status 401
 
-### Requirement: RBAC middleware
-The API SHALL have a middleware that restricts route access by user role.
+#### Scenario: Inactive membership in token
+- **WHEN** the token references a membership that is now inactive
+- **THEN** the response has status 401
+- **THEN** the client must re-authenticate
 
-#### Scenario: Admin accesses admin route
-- **WHEN** a user with role `admin` accesses a route protected with `requireRole('admin')`
+### Requirement: RBAC middleware
+The API SHALL have a middleware that restricts route access using the active
+membership role and scope.
+
+#### Scenario: Org admin accesses admin route
+- **WHEN** a user with active role `org_admin` accesses a route protected with
+  `requireRole('org_admin')`
 - **THEN** the request proceeds normally
 
 #### Scenario: Operator accesses admin route
-- **WHEN** a user with role `operator` accesses a route protected with `requireRole('admin')`
+- **WHEN** a user with active role `operator` accesses a route protected with
+  `requireRole('org_admin')`
 - **THEN** the response has status 403 with message "Insufficient permissions"
 
 #### Scenario: Multiple roles allowed
-- **WHEN** a route is protected with `requireRole('admin', 'operator')`
-- **THEN** both admin and operator users can access it
+- **WHEN** a route is protected with `requireRole('org_admin', 'community_admin',
+  'operator')`
+- **THEN** users with any of those active roles can access it
 - **THEN** guard and resident users receive 403
+
+#### Scenario: Platform admin bypass
+- **WHEN** a platform admin with an active context accesses a tenant route
+- **THEN** the request proceeds
 
 ### Requirement: Client-side token persistence
 The client SHALL persist the authentication tokens and user data to localStorage upon successful login.
@@ -175,3 +235,26 @@ The dashboard SHALL have a centralized HTTP client module that all authenticated
 #### Scenario: apiClient throws on non-401 errors
 - **WHEN** an apiClient request receives an HTTP error that is not 401
 - **THEN** an error is thrown with the response status and body
+
+### Requirement: Context switch endpoint
+
+The API SHALL provide `POST /api/auth/context` to switch the active membership context.
+
+#### Scenario: Switch to owned active membership
+
+- **WHEN** an authenticated user posts `{ membershipId }` for an active membership they
+  own
+- **THEN** the response has status 200 with a new `{ accessToken, refreshToken,
+  user, activeMembership }`
+- **THEN** the previously active refresh token is revoked
+
+#### Scenario: Switch to foreign or inactive membership
+
+- **WHEN** the `membershipId` does not belong to the user or is inactive
+- **THEN** the response has status 404
+
+#### Scenario: Unauthenticated context switch
+
+- **WHEN** the request has no valid access token
+- **THEN** the response has status 401
+

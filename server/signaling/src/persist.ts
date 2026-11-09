@@ -1,4 +1,9 @@
 import { config } from './config.js';
+import { createDb } from '@porteria/database';
+import { outboxEvents } from '@porteria/database/schema';
+import { createEventEnvelope } from '@porteria/shared';
+
+const db = createDb();
 
 let log: { warn: (obj: Record<string, unknown>, msg: string) => void };
 
@@ -15,19 +20,19 @@ function apiHeaders(): Record<string, string> {
 
 export async function persistCallRequest(
   callId: string,
-  buildingId: string,
+  kioskId: string,
   visitor?: { name?: string; known?: boolean; similarity?: number } | null,
 ) {
   try {
     const res = await fetch(`${config.API_BASE_URL}/api/internal/calls`, {
       method: 'POST',
       headers: apiHeaders(),
-      body: JSON.stringify({ callId, buildingId, visitor }),
+      body: JSON.stringify({ callId, kioskId, visitor }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       log?.warn(
-        { callId, buildingId, status: res.status, body },
+        { callId, kioskId, status: res.status, body },
         'Failed to persist call request',
       );
     }
@@ -86,10 +91,7 @@ export async function persistCallEnd(
   }
 }
 
-export async function persistRelayTrigger(
-  kioskId: string,
-  relayIndex: number,
-) {
+export async function persistRelayTrigger(kioskId: string, relayIndex: number) {
   try {
     const res = await fetch(`${config.API_BASE_URL}/api/internal/relays/trigger`, {
       method: 'POST',
@@ -108,9 +110,7 @@ export async function persistRelayTrigger(
   }
 }
 
-export async function persistDoorRelay(
-  kioskId: string,
-) {
+export async function persistDoorRelay(kioskId: string) {
   try {
     const res = await fetch(`${config.API_BASE_URL}/api/internal/relays/trigger`, {
       method: 'POST',
@@ -119,10 +119,7 @@ export async function persistDoorRelay(
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      log?.warn(
-        { kioskId, status: res.status, body },
-        'Failed to trigger door relay',
-      );
+      log?.warn({ kioskId, status: res.status, body }, 'Failed to trigger door relay');
     }
   } catch (err) {
     log?.warn({ kioskId, err: (err as Error).message }, 'Failed to trigger door relay (network)');
@@ -131,24 +128,41 @@ export async function persistDoorRelay(
 
 export async function persistEvent(
   eventType: string,
-  buildingId: string,
-  extra?: { actorId?: string; actorRole?: string; accessPointId?: string; locationId?: string; metadata?: Record<string, unknown> },
+  context: {
+    organizationId: string;
+    communityId?: string | null;
+    actorId?: string;
+    actorRole?: string;
+    accessPointId?: string;
+    metadata?: Record<string, unknown>;
+  },
 ) {
   try {
-    const body: Record<string, unknown> = { eventType, buildingId, ...extra };
-    const res = await fetch(`${config.API_BASE_URL}/api/internal/events`, {
-      method: 'POST',
-      headers: apiHeaders(),
-      body: JSON.stringify(body),
+    const envelope = createEventEnvelope({
+      eventType,
+      organizationId: context.organizationId,
+      communityId: context.communityId ?? null,
+      actorId: context.actorId ?? null,
+      actorRole: context.actorRole ?? null,
+      accessPointId: context.accessPointId ?? null,
+      payload: context.metadata ?? {},
     });
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
-      log?.warn(
-        { eventType, buildingId, status: res.status, body: errBody },
-        'Failed to persist event',
-      );
-    }
+
+    await db
+      .insert(outboxEvents)
+      .values({
+        eventId: envelope.eventId,
+        eventType: envelope.eventType,
+        organizationId: envelope.organizationId,
+        communityId: envelope.communityId ?? null,
+        payload: envelope.payload,
+        envelope,
+      })
+      .onConflictDoNothing({ target: outboxEvents.eventId });
   } catch (err) {
-    log?.warn({ eventType, buildingId, err: (err as Error).message }, 'Failed to persist event (network)');
+    log?.warn(
+      { eventType, err: (err as Error).message },
+      'Failed to persist event in outbox',
+    );
   }
 }

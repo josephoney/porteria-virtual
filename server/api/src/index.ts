@@ -1,9 +1,12 @@
 import dotenv from 'dotenv';
 import path from 'path';
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest, type FastifyReply } from 'fastify';
 import fjwt from '@fastify/jwt';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
+import { registerMembershipGuard } from './plugins/auth.js';
+import { startOutboxWorker, stopOutboxWorker } from './workers/outbox.worker.js';
 import config, { validateConfig } from './config.js';
 import { errorHandler } from './plugins/error-handler.js';
 import { createDb } from '@porteria/database';
@@ -14,8 +17,10 @@ export async function buildApp() {
 
   // Core plugins
   await app.register(cors, { origin: true, credentials: true });
+  await app.register(multipart, { limits: { fileSize: 500 * 1024 } });
   await app.register(errorHandler);
   await app.register(fjwt, { secret: config.jwt.secret });
+  registerMembershipGuard(app);
 
   app.addHook('onRequest', async (_request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
@@ -43,15 +48,17 @@ export async function buildApp() {
     timestamp: Date.now(),
   }));
 
+  app.get('/api/features', async () => config.features);
+
   // Auth middleware factory
-  const authenticate = async (request: any, reply: any) => {
+  const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
-    } catch (err: any) {
+    } catch (err) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: err.code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
       });
     }
   };
@@ -60,8 +67,47 @@ export async function buildApp() {
   const { authRoutes } = await import('./routes/auth.routes.js');
   await app.register(authRoutes, { prefix: '/api/auth' });
 
+  const { publicRoutes } = await import('./routes/public.routes.js');
+  await app.register(publicRoutes, { prefix: '/api/public' });
+
+  const { invitationRoutes } = await import('./routes/invitations.routes.js');
+  await app.register(invitationRoutes, { prefix: '/api/invitations' });
+
+  const { platformRoutes } = await import('./routes/platform.routes.js');
+  await app.register(platformRoutes, { prefix: '/api/platform' });
+
   const { userRoutes } = await import('./routes/users.routes.js');
   await app.register(userRoutes, { prefix: '/api' });
+
+  const { peopleRoutes } = await import('./routes/people.routes.js');
+  await app.register(peopleRoutes, { prefix: '/api/people' });
+
+  const { assetRoutes } = await import('./routes/assets.routes.js');
+  await app.register(assetRoutes, { prefix: '/api/assets' });
+
+  const { membershipRoutes } = await import('./routes/memberships.routes.js');
+  await app.register(membershipRoutes, { prefix: '/api/memberships' });
+
+  const { communityRoutes } = await import('./routes/communities.routes.js');
+  await app.register(communityRoutes, { prefix: '/api/communities' });
+
+  const { organizationAdminRoutes } = await import('./routes/organization-admin.routes.js');
+  await app.register(organizationAdminRoutes, { prefix: '/api/organizations' });
+
+  const { sectionRoutes } = await import('./routes/sections.routes.js');
+  await app.register(sectionRoutes, { prefix: '/api/sections' });
+
+  const { unitRoutes } = await import('./routes/units.routes.js');
+  await app.register(unitRoutes, { prefix: '/api/units' });
+
+  const { structureRoutes } = await import('./routes/structures.routes.js');
+  await app.register(structureRoutes, { prefix: '/api/location-structures' });
+  await app.register(structureRoutes, {
+    prefix: '/api/communities/:communityId/location-structures',
+  });
+
+  const { locationNodeRoutes } = await import('./routes/location-nodes.routes.js');
+  await app.register(locationNodeRoutes, { prefix: '/api/location-units' });
 
   const { callsRoutes } = await import('./routes/calls.routes.js');
   await app.register(callsRoutes, { prefix: '/api/calls' });
@@ -73,9 +119,12 @@ export async function buildApp() {
   await app.register(eventsRoutes, { prefix: '/api/events' });
   await app.register(internalEventsRoutes, { prefix: '/api/internal/events' });
 
-  const { kiosksRoutes, dashboardRoutes } = await import('./routes/kiosks.routes.js');
+  const { kiosksRoutes, dashboardRoutes, internalKioskRoutes } = await import(
+    './routes/kiosks.routes.js'
+  );
   await app.register(kiosksRoutes, { prefix: '/api/kiosks' });
   await app.register(dashboardRoutes, { prefix: '/api/dashboard' });
+  await app.register(internalKioskRoutes, { prefix: '/api/internal/kiosks' });
 
   const { relaysRoutes, internalRelayRoutes } = await import('./routes/relays.routes.js');
   await app.register(relaysRoutes, { prefix: '/api/kiosks' });
@@ -83,6 +132,12 @@ export async function buildApp() {
 
   const { reportsRoutes } = await import('./routes/reports.routes.js');
   await app.register(reportsRoutes, { prefix: '/api/reports' });
+
+  const { internalOutboxRoutes } = await import('./routes/outbox.routes.js');
+  await app.register(internalOutboxRoutes, { prefix: '/api/internal/outbox' });
+
+  await startOutboxWorker(app.log);
+  app.addHook('onClose', async () => stopOutboxWorker());
 
   return { app, authenticate };
 }

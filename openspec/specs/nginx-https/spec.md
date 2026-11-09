@@ -4,7 +4,7 @@
 
 Provides an Nginx reverse proxy with HTTPS (self-signed certs for development) that terminates TLS and routes traffic to the appropriate backend services (signaling, API, kiosk app, dashboard app).
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Nginx Docker service
 The docker-compose SHALL include an nginx service acting as HTTPS reverse proxy.

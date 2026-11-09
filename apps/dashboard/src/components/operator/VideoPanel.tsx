@@ -9,7 +9,7 @@ interface RelayButton {
 }
 
 interface ActiveCall {
-  buildingName: string;
+  kioskName: string;
 }
 
 interface VideoPanelProps {
@@ -102,7 +102,7 @@ export function VideoPanel({
         <audio ref={audioRef} autoPlay />
         {!compact && (
           <div className="video-info">
-            <div className="video-building">{activeCall.buildingName}</div>
+            <div className="video-building">{activeCall.kioskName}</div>
             <div className="video-timer">{callTimer}</div>
           </div>
         )}

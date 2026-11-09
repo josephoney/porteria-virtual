@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Aggregated dashboard statistics for kiosks, calls, and access activity.
+
+## Requirements
 
 ### Requirement: Dashboard aggregated stats
 The API SHALL provide a `GET /api/dashboard/stats` endpoint with aggregated counts for the dashboard.

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import type { Socket } from 'socket.io-client';
 import { CONFIG } from '../config';
 
 // Constraint de audio para el kiosk: ganancia automatica + cancelacion
@@ -32,8 +33,8 @@ export function useWebRTC() {
         const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         testStream.getTracks().forEach((t) => t.stop());
         gumAudioOk = 'OK';
-      } catch (e: any) {
-        gumAudioOk = `FAIL: ${e.name}`;
+      } catch (e) {
+        gumAudioOk = `FAIL: ${(e as Error).name}`;
       }
       summaryLines.push(`gUM audio test: ${gumAudioOk}`);
 
@@ -113,10 +114,10 @@ export function useWebRTC() {
             .forEach((t) => console.log('[WebRTC]   Audio track:', t.label, 'enabled:', t.enabled, 'readyState:', t.readyState, 'muted:', t.muted));
           setLocalStream(stream);
           return stream;
-        } catch (e: any) {
-          console.warn('[WebRTC] ✗ Failed:', e.name, '—', e.message?.substring(0, 120));
-          if (e.constraint) {
-            console.warn('[WebRTC]   Constraint error on:', e.constraint);
+        } catch (e) {
+          console.warn('[WebRTC] ✗ Failed:', (e as DOMException).name, '—', (e as DOMException).message?.substring(0, 120));
+          if ((e as DOMException & { constraint?: string }).constraint) {
+            console.warn('[WebRTC]   Constraint error on:', (e as DOMException & { constraint?: string }).constraint);
           }
         }
       }
@@ -130,7 +131,7 @@ export function useWebRTC() {
   }, []);
 
   const createPeerConnection = useCallback(
-    (socket: any, callId: string) => {
+    (socket: Socket, callId: string) => {
       console.log('[WebRTC] Creating PeerConnection for callId:', callId);
       const pc = new RTCPeerConnection({
         iceServers: CONFIG.ICE_SERVERS as unknown as RTCIceServer[],
@@ -175,7 +176,7 @@ export function useWebRTC() {
   );
 
   const createAndSendOffer = useCallback(
-    async (socket: any, callId: string) => {
+    async (socket: Socket, callId: string) => {
       console.log('[WebRTC] Creating offer for callId:', callId);
       const stream = localStream;
       const pc = createPeerConnection(socket, callId);

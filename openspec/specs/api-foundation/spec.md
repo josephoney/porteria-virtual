@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+HTTP API foundation: Fastify, error handling, health checks and internal API conventions.
+
+## Requirements
 
 ### Requirement: Config module
 The API server SHALL have a typed configuration module that reads environment variables and validates required values at startup.

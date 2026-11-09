@@ -1,6 +1,7 @@
 import { pgTable, uuid, varchar, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 import { organizations } from './organizations';
 import { users } from './users';
+import { people } from './people';
 
 export const visitorTypeEnum = pgEnum('visitor_type', ['permanent', 'temporary', 'delivery']);
 
@@ -16,6 +17,9 @@ export const visitors = pgTable('visitors', {
     .notNull()
     .references(() => organizations.id, { onDelete: 'cascade' }),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdByPersonId: uuid('created_by_person_id').references(() => people.id, {
+    onDelete: 'set null',
+  }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

@@ -12,9 +12,24 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+export function RequirePlatformAdmin({ children }: { children: ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.isPlatformAdmin) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 export function RequireRole({ role, children }: { role: string | string[]; children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, activeMembership } = useAuth();
   const roles = Array.isArray(role) ? role : [role];
-  if (!user || !roles.includes(user.role)) return <Navigate to="/" replace />;
+  if (!user) return <Navigate to="/" replace />;
+  if (user.isPlatformAdmin && activeMembership?.id === 'platform') {
+    return <Navigate to="/platform" replace />;
+  }
+  if (user.isPlatformAdmin) return <>{children}</>;
+  if (!activeMembership || !roles.includes(activeMembership.role)) {
+    return <Navigate to="/" replace />;
+  }
   return <>{children}</>;
 }

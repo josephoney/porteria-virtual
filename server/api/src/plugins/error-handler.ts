@@ -50,6 +50,17 @@ export async function errorHandler(app: FastifyInstance) {
       });
     }
 
+    const databaseCode =
+      fastifyError.code ?? (fastifyError as FastifyError & { cause?: { code?: string } }).cause?.code;
+
+    if (databaseCode === '22P02') {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Invalid identifier format',
+      });
+    }
+
     _request.log.error(error);
     return reply.status(code).send({
       statusCode: code,

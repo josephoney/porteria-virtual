@@ -3,9 +3,7 @@
 ## Purpose
 
 Provides the admin panel within the dashboard: user management with paginated listing, create/edit user forms, role management, and active status toggling. All operations go through the REST API with JWT authentication.
-
-## ADDED Requirements
-
+## Requirements
 ### Requirement: Users list
 The admin SHALL see a paginated table of all users in their organization.
 
@@ -89,19 +87,24 @@ The admin panel SHALL include a paginated call history table with status and dat
 - **THEN** selecting an operator adds `?operatorId=<id>` to the API call
 
 ### Requirement: Call history design consistency
-The call history table SHALL follow the existing design system.
 
-#### Scenario: Same design tokens
+The call history table SHALL use the shared design system.
+
+#### Scenario: Shared components
 - **WHEN** the call history table is rendered
-- **THEN** it uses the same table styles as `UsersTable` (`.users-table` class pattern)
-- **THEN** buttons and selects follow the existing `.btn-primary`, `.form-input` styles
-- **THEN** badges use the existing `.badge-*` color classes
+- **THEN** it uses the shared `Table`, `Button`, `Badge` and `Select` components
+- **THEN** it uses semantic tokens for color, spacing and borders
+- **THEN** it does not use legacy class names or hardcoded colors
 
 ### Requirement: Admin panel design consistency
-The admin panel SHALL follow the same visual design as the operator panel.
+
+The admin panel SHALL follow the shared design system in light and dark mode.
 
 #### Scenario: Same design system
 - **WHEN** the admin panel is rendered
-- **THEN** it uses the same color scheme (#f5f4ef background, #1a1916 text)
-- **THEN** it uses the same font families (Syne for headings, IBM Plex Mono for data)
-- **THEN** buttons and inputs follow the same style
+- **THEN** it uses the same semantic color, typography and radius tokens as the rest of
+  the dashboard
+- **THEN** it uses `font-sans` for UI and `font-mono` for technical data
+- **THEN** it has no hardcoded colors, font families or legacy visual aliases
+- **THEN** it remains legible in both light and dark mode
+

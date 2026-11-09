@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema/index';
 
-export function createDb(databaseUrl?: string) {
+function buildDb(databaseUrl?: string) {
   const pool = new Pool(
     databaseUrl
       ? { connectionString: databaseUrl }
@@ -18,4 +18,24 @@ export function createDb(databaseUrl?: string) {
   return drizzle(pool, { schema });
 }
 
-export type Database = ReturnType<typeof createDb>;
+export type Database = ReturnType<typeof buildDb>;
+
+/**
+ * `createDb()` is called at module scope from ~30 route/service/plugin files.
+ * Without memoization each module created its own pg.Pool (default max 10),
+ * so a single API process could open hundreds of connections and exhaust
+ * Postgres `max_connections`. Keep one pool per connection target instead.
+ */
+const databases = new Map<string, Database>();
+
+export function createDb(databaseUrl?: string): Database {
+  const key = databaseUrl ?? '__default__';
+  let db = databases.get(key);
+
+  if (!db) {
+    db = buildDb(databaseUrl);
+    databases.set(key, db);
+  }
+
+  return db;
+}

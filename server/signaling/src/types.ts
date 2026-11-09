@@ -8,7 +8,11 @@ export interface VisitorData {
 
 export interface KioskData {
   socketId: string;
-  buildingName: string;
+  kioskId: string;
+  rpiId: string;
+  communityId: string;
+  organizationId: string;
+  kioskName: string;
   status: 'idle' | 'calling' | 'in-call';
   registeredAt: string;
   lastVisitor?: VisitorData;
@@ -17,35 +21,56 @@ export interface KioskData {
 export interface OperatorData {
   operatorId: string;
   name: string;
+  communityId: string | null;
+  orgId: string;
+  role: string;
 }
 
 export interface CallData {
   kioskSocketId: string;
   operatorSocketId: string;
-  buildingId: string;
+  kioskId: string;
+  communityId: string;
   startedAt: number;
 }
 
 export interface KioskStatus {
-  buildingId: string;
-  buildingName: string;
+  kioskId: string;
+  rpiId: string;
+  communityId: string;
+  kioskName: string;
   status: string;
 }
 
 export interface TypedSocket extends Socket {
   data: {
     role?: 'kiosk' | 'operator';
-    buildingId?: string;
+    authType?: 'kiosk' | 'operator';
+    kioskId?: string;
+    rpiId?: string;
+    kioskName?: string;
+    communityId?: string;
+    organizationId?: string;
+    orgId?: string;
     operatorId?: string;
+    email?: string;
+    membershipId?: string;
+    membershipRole?: string;
   };
 }
 
 export interface ServerToClientEvents {
-  'kiosk:registered': (data: { buildingId: string; serverTime: number }) => void;
+  'kiosk:registered': (data: { kioskId: string; communityId: string; serverTime: number }) => void;
   'call:waiting': (data: { callId: string }) => void;
   'call:accepted': (data: { callId: string; operatorName: string }) => void;
   'call:ended': (data: { callId: string; reason?: string }) => void;
-  'call:ready': (data: { callId: string; buildingId: string; buildingName: string }) => void;
+  'call:ready': (data: {
+    callId: string;
+    kioskId: string;
+    kioskRpiId: string;
+    kioskName: string;
+    communityId: string;
+  }) => void;
   'webrtc:answer': (data: { callId: string; answer: RTCSessionDescriptionInit }) => void;
   'webrtc:ice-candidate': (data: { callId: string; candidate: RTCIceCandidateInit }) => void;
   'door:open': (data: { authorizedBy: string; timestamp: number }) => void;
@@ -54,16 +79,19 @@ export interface ServerToClientEvents {
   'kiosks:update': (data: KioskStatus[]) => void;
   'call:incoming': (data: {
     callId: string;
-    buildingId: string;
-    buildingName: string;
+    kioskId: string;
+    kioskRpiId: string;
+    kioskName: string;
+    communityId: string;
     visitor: VisitorData | null;
     timestamp: number;
   }) => void;
-  'call:taken': (data: { callId: string; buildingId: string }) => void;
+  'call:taken': (data: { callId: string; kioskId: string }) => void;
   'webrtc:offer': (data: { callId: string; offer: RTCSessionDescriptionInit }) => void;
   'visitor:identified': (data: {
-    buildingId: string;
-    buildingName: string;
+    kioskId: string;
+    kioskName: string;
+    communityId: string;
     visitor: VisitorData;
     timestamp: number;
   }) => void;
@@ -72,16 +100,16 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  'kiosk:register': (data: { buildingId: string; buildingName: string }) => void;
+  'kiosk:register': (data: { name?: string }) => void;
   'call:request': () => void;
-  'call:end': (data: { callId: string; buildingId?: string }) => void;
+  'call:end': (data: { callId: string; kioskId?: string }) => void;
   'webrtc:offer': (data: { callId: string; offer: RTCSessionDescriptionInit }) => void;
   'webrtc:ice-candidate': (data: { callId: string; candidate: RTCIceCandidateInit }) => void;
-  'visitor:identified': (data: { buildingId: string; visitor: VisitorData }) => void;
+  'visitor:identified': (data: { kioskId?: string; visitor: VisitorData }) => void;
 
-  'operator:register': (data: { operatorId: string; name: string }) => void;
-  'call:accept': (data: { callId: string; buildingId: string }) => void;
+  'operator:register': (data: { name: string }) => void;
+  'call:accept': (data: { callId: string; kioskId: string }) => void;
   'webrtc:answer': (data: { callId: string; answer: RTCSessionDescriptionInit }) => void;
-  'door:open': (data: { callId: string; buildingId: string }) => void;
-  'relay:trigger': (data: { buildingId: string; relayIndex: number }) => void;
+  'door:open': (data: { callId: string; kioskId: string }) => void;
+  'relay:trigger': (data: { kioskId: string; relayIndex: number }) => void;
 }

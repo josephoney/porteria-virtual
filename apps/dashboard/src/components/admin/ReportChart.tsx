@@ -11,7 +11,7 @@ interface ChartProps {
 export function ReportChart({ data, type, xKey, yKeys, height = 250 }: ChartProps) {
   if (data.length === 0) {
     return (
-      <p style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)', fontSize: 13, textAlign: 'center', padding: 40 }}>
+      <p style={{ color: 'var(--color-muted-foreground)', fontFamily: 'var(--font-mono)', fontSize: 13, textAlign: 'center', padding: 40 }}>
         Sin datos para el período seleccionado
       </p>
     );
@@ -23,17 +23,17 @@ export function ReportChart({ data, type, xKey, yKeys, height = 250 }: ChartProp
   return (
     <ResponsiveContainer width="100%" height={height}>
       <Chart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-        <XAxis dataKey={xKey} stroke="var(--muted-foreground)" tick={{ fontSize: 12 }} />
-        <YAxis stroke="var(--muted-foreground)" tick={{ fontSize: 12 }} allowDecimals={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+        <XAxis dataKey={xKey} stroke="var(--color-muted-foreground)" tick={{ fontSize: 12 }} />
+        <YAxis stroke="var(--color-muted-foreground)" tick={{ fontSize: 12 }} allowDecimals={false} />
         <Tooltip
           contentStyle={{
             fontFamily: 'var(--font-mono)',
             fontSize: 12,
             borderRadius: 6,
-            border: '1px solid var(--border)',
-            background: 'var(--popover)',
-            color: 'var(--popover-foreground)',
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-popover)',
+            color: 'var(--color-popover-foreground)',
           }}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />

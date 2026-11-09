@@ -1,13 +1,56 @@
-export const UserRole = {
-  Admin: 'admin',
+export const MembershipRole = {
+  OrgAdmin: 'org_admin',
+  CommunityAdmin: 'community_admin',
   Operator: 'operator',
   Guard: 'guard',
+  Owner: 'owner',
+  Tenant: 'tenant',
   Resident: 'resident',
+  Staff: 'staff',
 } as const;
 
-export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+export type MembershipRole = (typeof MembershipRole)[keyof typeof MembershipRole];
 
-export const UserRoleValues = Object.values(UserRole) as UserRole[];
+export const MembershipRoleValues = Object.values(MembershipRole) as MembershipRole[];
+
+export const MembershipStatus = {
+  Active: 'active',
+  Inactive: 'inactive',
+} as const;
+
+export type MembershipStatus = (typeof MembershipStatus)[keyof typeof MembershipStatus];
+
+export const MembershipStatusValues = Object.values(MembershipStatus) as MembershipStatus[];
+
+export const CommunityStatus = {
+  Active: 'active',
+  Inactive: 'inactive',
+} as const;
+
+export type CommunityStatus = (typeof CommunityStatus)[keyof typeof CommunityStatus];
+
+export const CommunityStatusValues = Object.values(CommunityStatus) as CommunityStatus[];
+
+export const UnitType = {
+  Apartment: 'apartment',
+  House: 'house',
+  Office: 'office',
+  Parking: 'parking',
+  Storage: 'storage',
+} as const;
+
+export type UnitType = (typeof UnitType)[keyof typeof UnitType];
+
+export const UnitTypeValues = Object.values(UnitType) as UnitType[];
+
+export const UnitStatus = {
+  Active: 'active',
+  Inactive: 'inactive',
+} as const;
+
+export type UnitStatus = (typeof UnitStatus)[keyof typeof UnitStatus];
+
+export const UnitStatusValues = Object.values(UnitStatus) as UnitStatus[];
 
 export const EventType = {
   CallStarted: 'call.started',
@@ -31,6 +74,10 @@ export const EventType = {
   VisitorAccessDenied: 'visitor.access_denied',
   UserLogin: 'user.login',
   UserLogout: 'user.logout',
+  MembershipCreated: 'membership.created',
+  MembershipUpdated: 'membership.updated',
+  AccessGranted: 'access.granted',
+  AccessDenied: 'access.denied',
 } as const;
 
 export type EventType = (typeof EventType)[keyof typeof EventType];
@@ -58,3 +105,23 @@ export const CallStatus = {
 export type CallStatus = (typeof CallStatus)[keyof typeof CallStatus];
 
 export const CallStatusValues = Object.values(CallStatus) as CallStatus[];
+export const InvitationStatus = {
+  Pending: 'pending',
+  Accepted: 'accepted',
+  Revoked: 'revoked',
+  Expired: 'expired',
+} as const;
+
+export type InvitationStatus = (typeof InvitationStatus)[keyof typeof InvitationStatus];
+
+export const InvitationStatusValues = Object.values(InvitationStatus) as InvitationStatus[];
+export const OutboxStatus = {
+  Pending: 'pending',
+  Processing: 'processing',
+  Done: 'done',
+  Dead: 'dead',
+} as const;
+
+export type OutboxStatus = (typeof OutboxStatus)[keyof typeof OutboxStatus];
+
+export const OutboxStatusValues = Object.values(OutboxStatus) as OutboxStatus[];

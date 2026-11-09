@@ -5,8 +5,8 @@ export interface Call {
   kioskId: string;
   operatorId: string | null;
   organizationId: string;
-  locationId: string;
-  accessPointId: string;
+  communityId: string;
+  accessPointId: string | null;
   status: CallStatus;
   startedAt: Date;
   endedAt: Date | null;

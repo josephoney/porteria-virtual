@@ -1,7 +1,13 @@
 import { eq, and, gte, lte, count, avg as sqlAvg, sql } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { calls, events } from '@porteria/database/schema';
-import type { DailyReport, WeeklyReport, MonthlyReport, CallStats, EventTimeSeries } from '@porteria/shared';
+import { calls, events, memberships } from '@porteria/database/schema';
+import type {
+  DailyReport,
+  WeeklyReport,
+  MonthlyReport,
+  CallStats,
+  EventTimeSeries,
+} from '@porteria/shared';
 
 const db = createDb();
 
@@ -17,50 +23,80 @@ function dayEnd(date: string): Date {
   return d;
 }
 
-// ─── Daily Report ────────────────────────────────────────────────────────────
+function callCommunityFilter(communityId?: string) {
+  return communityId ? sql`AND community_id = ${communityId}::uuid` : sql``;
+}
 
-export async function getDailyReport(orgId: string, date?: string): Promise<DailyReport> {
+function eventCommunityFilter(communityId?: string) {
+  return communityId ? sql`AND community_id = ${communityId}::uuid` : sql``;
+}
+
+export async function getDailyReport(
+  orgId: string,
+  date?: string,
+  communityId?: string,
+): Promise<DailyReport> {
   const targetDate = date || new Date().toISOString().slice(0, 10);
   const start = dayStart(targetDate);
   const end = dayEnd(targetDate);
 
-  const [callCounts, doorOpens, callsByHour] = await Promise.all([
+  const callConditions = [
+    eq(calls.organizationId, orgId),
+    gte(calls.startedAt, start),
+    lte(calls.startedAt, end),
+  ];
+  if (communityId) callConditions.push(eq(calls.communityId, communityId));
+
+  const eventConditions = [
+    eq(events.organizationId, orgId),
+    eq(events.eventType, 'door.open'),
+    gte(events.createdAt, start),
+    lte(events.createdAt, end),
+  ];
+  if (communityId) eventConditions.push(eq(events.communityId, communityId));
+
+  const callsByHourFilter = callCommunityFilter(communityId);
+  const allEventsConditions = [
+    eq(events.organizationId, orgId),
+    gte(events.createdAt, start),
+    lte(events.createdAt, end),
+  ];
+  if (communityId) allEventsConditions.push(eq(events.communityId, communityId));
+
+  const operatorConditions = [
+    eq(memberships.organizationId, orgId),
+    eq(memberships.role, 'operator'),
+    eq(memberships.status, 'active'),
+  ];
+  if (communityId) operatorConditions.push(eq(memberships.communityId, communityId));
+
+  const [callCounts, doorOpens, callsByHour, activeOperators] = await Promise.all([
     db
-      .select({
-        status: calls.status,
-        count: count(),
-      })
+      .select({ status: calls.status, count: count() })
       .from(calls)
-      .where(
-        and(
-          eq(calls.organizationId, orgId),
-          gte(calls.startedAt, start),
-          lte(calls.startedAt, end),
-        ),
-      )
+      .where(and(...callConditions))
       .groupBy(calls.status),
 
     db
       .select({ count: count() })
       .from(events)
-      .where(
-        and(
-          eq(events.organizationId, orgId),
-          eq(events.eventType, 'door.open'),
-          gte(events.createdAt, start),
-          lte(events.createdAt, end),
-        ),
-      ),
+      .where(and(...eventConditions)),
 
     db.execute<{ hour: number; count: number }>(sql`
       SELECT EXTRACT(HOUR FROM started_at)::int AS hour, COUNT(*)::int AS count
       FROM calls
       WHERE organization_id = ${orgId}::uuid
+        ${callsByHourFilter}
         AND started_at >= ${start.toISOString()}::timestamptz
         AND started_at < ${new Date(end.getTime() + 86400000).toISOString()}::timestamptz
       GROUP BY hour
       ORDER BY hour
     `),
+
+    db
+      .select({ count: count() })
+      .from(memberships)
+      .where(and(...operatorConditions)),
   ]);
 
   const statusMap: Record<string, number> = {};
@@ -73,13 +109,7 @@ export async function getDailyReport(orgId: string, date?: string): Promise<Dail
   const eventsByType = await db
     .select({ eventType: events.eventType, count: count() })
     .from(events)
-    .where(
-      and(
-        eq(events.organizationId, orgId),
-        gte(events.createdAt, start),
-        lte(events.createdAt, end),
-      ),
-    )
+    .where(and(...allEventsConditions))
     .groupBy(events.eventType);
 
   return {
@@ -90,13 +120,15 @@ export async function getDailyReport(orgId: string, date?: string): Promise<Dail
     callsByHour: callsByHour.rows,
     totalDoorOpens: doorOpens[0]?.count ?? 0,
     eventsByType: eventsByType.map((r) => ({ eventType: r.eventType, count: r.count })),
-    activeOperators: 0,
+    activeOperators: activeOperators[0]?.count ?? 0,
   };
 }
 
-// ─── Weekly Report ───────────────────────────────────────────────────────────
-
-export async function getWeeklyReport(orgId: string, weekStart?: string): Promise<WeeklyReport> {
+export async function getWeeklyReport(
+  orgId: string,
+  weekStart?: string,
+  communityId?: string,
+): Promise<WeeklyReport> {
   let monday: Date;
   if (weekStart) {
     monday = dayStart(weekStart);
@@ -109,7 +141,7 @@ export async function getWeeklyReport(orgId: string, weekStart?: string): Promis
   }
 
   const days: WeeklyReport['days'] = [];
-  let totals = { calls: 0, answered: 0, missed: 0, doors: 0 };
+  const totals = { calls: 0, answered: 0, missed: 0, doors: 0 };
 
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(monday);
@@ -118,30 +150,29 @@ export async function getWeeklyReport(orgId: string, weekStart?: string): Promis
     const start = dayStart(dateStr);
     const end = dayEnd(dateStr);
 
+    const callConditions = [
+      eq(calls.organizationId, orgId),
+      gte(calls.startedAt, start),
+      lte(calls.startedAt, end),
+    ];
+    if (communityId) callConditions.push(eq(calls.communityId, communityId));
+
+    const eventConditions = [
+      eq(events.organizationId, orgId),
+      eq(events.eventType, 'door.open'),
+      gte(events.createdAt, start),
+      lte(events.createdAt, end),
+    ];
+    if (communityId) eventConditions.push(eq(events.communityId, communityId));
+
     const [dayCalls, dayDoors] = await Promise.all([
       db
         .select({ status: calls.status, count: count() })
         .from(calls)
-        .where(
-          and(
-            eq(calls.organizationId, orgId),
-            gte(calls.startedAt, start),
-            lte(calls.startedAt, end),
-          ),
-        )
+        .where(and(...callConditions))
         .groupBy(calls.status),
 
-      db
-        .select({ count: count() })
-        .from(events)
-        .where(
-          and(
-            eq(events.organizationId, orgId),
-            eq(events.eventType, 'door.open'),
-            gte(events.createdAt, start),
-            lte(events.createdAt, end),
-          ),
-        ),
+      db.select({ count: count() }).from(events).where(and(...eventConditions)),
     ]);
 
     const statusMap: Record<string, number> = {};
@@ -154,7 +185,13 @@ export async function getWeeklyReport(orgId: string, weekStart?: string): Promis
     const missed = statusMap['missed'] || 0;
     const doors = dayDoors[0]?.count ?? 0;
 
-    days.push({ date: dateStr, totalCalls: dayTotal, answeredCalls: answered, missedCalls: missed, doorOpens: doors });
+    days.push({
+      date: dateStr,
+      totalCalls: dayTotal,
+      answeredCalls: answered,
+      missedCalls: missed,
+      doorOpens: doors,
+    });
     totals.calls += dayTotal;
     totals.answered += answered;
     totals.missed += missed;
@@ -164,13 +201,18 @@ export async function getWeeklyReport(orgId: string, weekStart?: string): Promis
   return { weekStart: monday.toISOString().slice(0, 10), days, totals };
 }
 
-// ─── Monthly Report ──────────────────────────────────────────────────────────
-
-export async function getMonthlyReport(orgId: string, month?: string): Promise<MonthlyReport> {
+export async function getMonthlyReport(
+  orgId: string,
+  month?: string,
+  communityId?: string,
+): Promise<MonthlyReport> {
   const target = month || new Date().toISOString().slice(0, 7);
   const [y, m] = target.split('-').map(Number);
   const monthStart = new Date(y, m - 1, 1);
   const monthEnd = new Date(y, m, 0, 23, 59, 59, 999);
+
+  const callFilter = callCommunityFilter(communityId);
+  const eventFilter = eventCommunityFilter(communityId);
 
   const result = await db.execute<{
     week_start: string;
@@ -187,6 +229,7 @@ export async function getMonthlyReport(orgId: string, month?: string): Promise<M
         COUNT(*) FILTER (WHERE status = 'missed')::int AS missed
       FROM calls
       WHERE organization_id = ${orgId}::uuid
+        ${callFilter}
         AND started_at >= ${monthStart.toISOString()}::timestamptz
         AND started_at <= ${monthEnd.toISOString()}::timestamptz
       GROUP BY week_start
@@ -197,6 +240,7 @@ export async function getMonthlyReport(orgId: string, month?: string): Promise<M
         COUNT(*)::int AS doors
       FROM events
       WHERE organization_id = ${orgId}::uuid
+        ${eventFilter}
         AND event_type = 'door.open'
         AND created_at >= ${monthStart.toISOString()}::timestamptz
         AND created_at <= ${monthEnd.toISOString()}::timestamptz
@@ -234,42 +278,43 @@ export async function getMonthlyReport(orgId: string, month?: string): Promise<M
   return { month: target, weeks, totals };
 }
 
-// ─── Call Stats ──────────────────────────────────────────────────────────────
-
-export async function getCallStats(orgId: string, from?: string, to?: string): Promise<CallStats> {
+export async function getCallStats(
+  orgId: string,
+  from?: string,
+  to?: string,
+  communityId?: string,
+): Promise<CallStats> {
   const defaultFrom = from || new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
   const defaultTo = to || new Date().toISOString().slice(0, 10);
   const start = dayStart(defaultFrom);
   const end = dayEnd(defaultTo);
 
+  const conditions = [
+    eq(calls.organizationId, orgId),
+    gte(calls.startedAt, start),
+    lte(calls.startedAt, end),
+  ];
+  if (communityId) conditions.push(eq(calls.communityId, communityId));
+
+  const filter = callCommunityFilter(communityId);
+  const kioskCommunityFilter = communityId
+    ? sql`AND c.community_id = ${communityId}::uuid`
+    : sql``;
+
   const [counts, avgResult, callsByHour, callsByKiosk] = await Promise.all([
     db
       .select({ status: calls.status, count: count() })
       .from(calls)
-      .where(
-        and(
-          eq(calls.organizationId, orgId),
-          gte(calls.startedAt, start),
-          lte(calls.startedAt, end),
-        ),
-      )
+      .where(and(...conditions))
       .groupBy(calls.status),
 
-    db
-      .select({ avgDuration: sqlAvg(calls.duration) })
-      .from(calls)
-      .where(
-        and(
-          eq(calls.organizationId, orgId),
-          gte(calls.startedAt, start),
-          lte(calls.startedAt, end),
-        ),
-      ),
+    db.select({ avgDuration: sqlAvg(calls.duration) }).from(calls).where(and(...conditions)),
 
     db.execute<{ hour: number; count: number }>(sql`
       SELECT EXTRACT(HOUR FROM started_at)::int AS hour, COUNT(*)::int AS count
       FROM calls
       WHERE organization_id = ${orgId}::uuid
+        ${filter}
         AND started_at >= ${start.toISOString()}::timestamptz
         AND started_at <= ${end.toISOString()}::timestamptz
       GROUP BY hour
@@ -281,6 +326,7 @@ export async function getCallStats(orgId: string, from?: string, to?: string): P
       FROM calls c
       INNER JOIN kiosks k ON c.kiosk_id = k.id
       WHERE c.organization_id = ${orgId}::uuid
+        ${kioskCommunityFilter}
         AND c.started_at >= ${start.toISOString()}::timestamptz
         AND c.started_at <= ${end.toISOString()}::timestamptz
       GROUP BY k.id, k.name
@@ -309,17 +355,17 @@ export async function getCallStats(orgId: string, from?: string, to?: string): P
   };
 }
 
-// ─── Event Breakdown ─────────────────────────────────────────────────────────
-
 export async function getEventBreakdown(
   orgId: string,
   from: string,
   to: string,
   bucket: 'hour' | 'day' = 'day',
+  communityId?: string,
 ): Promise<EventTimeSeries> {
   const start = new Date(from);
   const end = new Date(to);
   const bucketInterval = bucket === 'hour' ? '1 hour' : '1 day';
+  const filter = eventCommunityFilter(communityId);
 
   const result = await db.execute<{ time: string; event_type: string; count: number }>(sql`
     SELECT
@@ -328,6 +374,7 @@ export async function getEventBreakdown(
       COUNT(*)::int AS count
     FROM events
     WHERE organization_id = ${orgId}::uuid
+      ${filter}
       AND created_at >= ${start.toISOString()}::timestamptz
       AND created_at <= ${end.toISOString()}::timestamptz
     GROUP BY time, event_type

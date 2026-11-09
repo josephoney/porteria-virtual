@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { get } from '../../lib/apiClient';
+import { useAuth } from '../../contexts/AuthContext';
 import { ReportChart } from './ReportChart';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
@@ -15,6 +16,8 @@ function weekMonday(): string { const d = new Date(); const day = d.getDay(); d.
 function thisMonth(): string { return new Date().toISOString().slice(0, 7); }
 
 export function ReportsPanel() {
+  const { user } = useAuth();
+  const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
   const [period, setPeriod] = useState<Period>('daily');
   const [date, setDate] = useState(todayStr());
   const [week, setWeek] = useState(weekMonday());
@@ -22,23 +25,70 @@ export function ReportsPanel() {
   const [data, setData] = useState<DailyReport | WeeklyReport | MonthlyReport | null>(null);
   const [callStats, setCallStats] = useState<CallStats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [organizationId, setOrganizationId] = useState('');
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [communityId, setCommunityId] = useState('');
+  const [communities, setCommunities] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    if (!isPlatformAdmin) {
+      get<{ id: string; name: string }[]>('/api/communities')
+        .then(({ data }) => setCommunities(data))
+        .catch(() => setCommunities([]));
+      return;
+    }
+    get<{ data: { id: string; name: string }[] }>('/api/platform/organizations?pageSize=100')
+      .then(({ data }) => {
+        setOrganizations(data.data);
+        setOrganizationId((current) => current || data.data[0]?.id || '');
+      })
+      .catch(() => setOrganizations([]));
+  }, [isPlatformAdmin]);
+
+  useEffect(() => {
+    if (!isPlatformAdmin) return;
+    if (!organizationId) {
+      setCommunities([]);
+      setCommunityId('');
+      return;
+    }
+    get<{ id: string; name: string }[]>(
+      `/api/communities?organizationId=${encodeURIComponent(organizationId)}`,
+    )
+      .then(({ data }) => {
+        setCommunities(data);
+        setCommunityId('');
+      })
+      .catch(() => setCommunities([]));
+  }, [isPlatformAdmin, organizationId]);
 
   async function fetchReport() {
+    setError('');
+    if (isPlatformAdmin && !organizationId) {
+      setError('Seleccioná una organización para cargar los reportes.');
+      return;
+    }
     setLoading(true);
+    const orgQuery = isPlatformAdmin ? `&organizationId=${organizationId}` : '';
+    const communityQuery = communityId ? `&communityId=${communityId}` : '';
     try {
-      if (period === 'daily') { const d = await get<DailyReport>(`/api/reports/daily?date=${date}`); setData(d.data); }
-      else if (period === 'weekly') { const w = await get<WeeklyReport>(`/api/reports/weekly?week=${week}`); setData(w.data); }
-      else { const m = await get<MonthlyReport>(`/api/reports/monthly?month=${month}`); setData(m.data); }
+      if (period === 'daily') { const d = await get<DailyReport>(`/api/reports/daily?date=${date}${orgQuery}${communityQuery}`); setData(d.data); }
+      else if (period === 'weekly') { const w = await get<WeeklyReport>(`/api/reports/weekly?week=${week}${orgQuery}${communityQuery}`); setData(w.data); }
+      else { const m = await get<MonthlyReport>(`/api/reports/monthly?month=${month}${orgQuery}${communityQuery}`); setData(m.data); }
       const from = period === 'weekly' ? week : period === 'monthly' ? `${month}-01` : date;
-      const cs = await get<CallStats>(`/api/reports/call-stats?from=${from}&to=${date}`);
+      const cs = await get<CallStats>(`/api/reports/call-stats?from=${from}&to=${date}${orgQuery}${communityQuery}`);
       setCallStats(cs.data);
-    } catch (err) { console.error('Failed to fetch report', err); } finally { setLoading(false); }
+    } catch (err) {
+      console.error('Failed to fetch report', err);
+      setError('No se pudieron cargar los reportes para el alcance seleccionado.');
+      setData(null);
+      setCallStats(null);
+    } finally { setLoading(false); }
   }
 
   return (
     <div className="space-y-4">
-      <h3 className="font-sans text-lg font-extrabold tracking-wide">Reportes</h3>
-
       <Tabs value={period} onValueChange={(v) => setPeriod(v as Period)}>
         <TabsList>
           <TabsTrigger value="daily">Diario</TabsTrigger>
@@ -47,14 +97,58 @@ export function ReportsPanel() {
         </TabsList>
 
         <TabsContent value={period}>
-          <div className="flex gap-3 items-center mt-2">
+          <div className="flex flex-wrap gap-3 items-center mt-2">
+            {isPlatformAdmin && (
+              <select
+                aria-label="Organización"
+                className="h-9 px-2 rounded border border-border bg-card text-foreground font-mono text-[11px] outline-none focus:border-ring"
+                value={organizationId}
+                onChange={(e) => setOrganizationId(e.target.value)}
+              >
+                <option value="">Seleccionar organización</option>
+                {organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name}
+                  </option>
+                ))}
+              </select>
+            )}
             {period === 'daily' && <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />}
             {period === 'weekly' && <Input type="date" value={week} onChange={(e) => setWeek(e.target.value)} className="w-44" />}
             {period === 'monthly' && <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />}
-            <Button onClick={fetchReport} disabled={loading}>{loading ? 'Cargando…' : 'Cargar'}</Button>
+            <select
+              aria-label="Comunidad"
+              className="h-9 px-2 rounded border border-border bg-card text-foreground font-mono text-[11px] outline-none focus:border-ring"
+              value={communityId}
+              onChange={(e) => setCommunityId(e.target.value)}
+              disabled={isPlatformAdmin && !organizationId}
+            >
+              <option value="">Todas las comunidades</option>
+              {communities.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <Button
+              onClick={fetchReport}
+              disabled={loading || (isPlatformAdmin && !organizationId)}
+            >
+              {loading ? 'Cargando…' : 'Cargar'}
+            </Button>
           </div>
         </TabsContent>
       </Tabs>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {!data && !loading && !error && (
+        <p className="text-sm text-muted-foreground">
+          {isPlatformAdmin && !organizationId
+            ? 'Seleccioná una organización para ver reportes globales.'
+            : 'Elegí un período y presioná Cargar para ver los reportes.'}
+        </p>
+      )}
 
       {data && callStats && !loading && (
         <>
@@ -71,20 +165,20 @@ export function ReportsPanel() {
               {period === 'daily' ? 'Llamadas por Hora' : period === 'weekly' ? 'Tendencia Diaria' : 'Por Semana'}
             </h4>
             {period === 'daily' && 'callsByHour' in data && (
-              <ReportChart data={data.callsByHour} type="bar" xKey="hour" yKeys={[{ key: 'count', name: 'Llamadas', color: 'var(--secondary)' }]} />
+              <ReportChart data={data.callsByHour} type="bar" xKey="hour" yKeys={[{ key: 'count', name: 'Llamadas', color: 'var(--color-secondary)' }]} />
             )}
             {period === 'weekly' && 'days' in data && (
               <ReportChart
                 data={(data as WeeklyReport).days.map((d) => ({ day: d.date.slice(5), Llamadas: d.totalCalls, Atendidas: d.answeredCalls, Perdidas: d.missedCalls, Puertas: d.doorOpens }))}
                 type="line" xKey="day"
-                yKeys={[{ key: 'Llamadas', name: 'Llamadas', color: 'var(--secondary)' }, { key: 'Atendidas', name: 'Atendidas', color: 'var(--primary)' }, { key: 'Puertas', name: 'Puertas', color: 'var(--warning)' }]}
+                yKeys={[{ key: 'Llamadas', name: 'Llamadas', color: 'var(--color-secondary)' }, { key: 'Atendidas', name: 'Atendidas', color: 'var(--color-primary)' }, { key: 'Puertas', name: 'Puertas', color: 'var(--color-warning)' }]}
               />
             )}
             {period === 'monthly' && 'weeks' in data && (
               <ReportChart
                 data={(data as MonthlyReport).weeks.map((w) => ({ week: w.weekStart.slice(5), Llamadas: w.totalCalls, Atendidas: w.answeredCalls, Perdidas: w.missedCalls, Puertas: w.doorOpens }))}
                 type="bar" xKey="week"
-                yKeys={[{ key: 'Llamadas', name: 'Llamadas', color: '#3b82f6' }, { key: 'Atendidas', name: 'Atendidas', color: '#10b981' }, { key: 'Puertas', name: 'Puertas', color: '#f59e0b' }]}
+                yKeys={[{ key: 'Llamadas', name: 'Llamadas', color: 'var(--color-secondary)' }, { key: 'Atendidas', name: 'Atendidas', color: 'var(--color-primary)' }, { key: 'Puertas', name: 'Puertas', color: 'var(--color-warning)' }]}
               />
             )}
           </div>

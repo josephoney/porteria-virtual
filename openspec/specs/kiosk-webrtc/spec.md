@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+WebRTC media flow between the kiosk and the operator dashboard.
+
+## Requirements
 
 ### Requirement: Camera and microphone access
 The kiosk SHALL request camera and microphone access when initiating a call.

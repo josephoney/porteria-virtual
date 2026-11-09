@@ -1,11 +1,25 @@
-## ADDED Requirements
+## Purpose
 
+User and membership management, including scoped roles and profile endpoints.
+## Requirements
 ### Requirement: List users
-The API SHALL provide a `GET /api/users` endpoint accessible only to admin users.
+The API SHALL provide a `GET /api/users` endpoint accessible to `org_admin` and
+`community_admin`, returning users with their memberships scoped to the caller.
 
-#### Scenario: Admin lists users
-- **WHEN** an admin makes a GET request to `/api/users`
-- **THEN** the response contains a list of users belonging to the admin's organization
+#### Scenario: Org admin lists users
+- **WHEN** an `org_admin` makes a GET request to `/api/users`
+- **THEN** the response contains users with at least one membership in the admin's
+  organization
+- **THEN** each user includes their membership role and community
+
+#### Scenario: Community admin lists users
+- **WHEN** a `community_admin` makes a GET request to `/api/users`
+- **THEN** only users with a membership in their community are returned
+
+#### Scenario: Filter by community
+- **WHEN** a request includes `?communityId=<uuid>`
+- **THEN** only users with a membership in that community are returned
+- **THEN** the community must belong to the caller's organization
 
 #### Scenario: Non-admin cannot list users
 - **WHEN** an operator makes a GET request to `/api/users`
@@ -16,45 +30,76 @@ The API SHALL provide a `GET /api/users` endpoint accessible only to admin users
 - **THEN** the response contains `{ data: [...], total, page, pageSize }`
 
 ### Requirement: Create user
-The API SHALL provide a `POST /api/users` endpoint for admin to create users.
+The API SHALL provide a `POST /api/users` endpoint for admins to create a global user
+and an initial membership, subject to the role assignment policy.
 
-#### Scenario: Admin creates user
-- **WHEN** an admin makes a POST request to `/api/users` with `{ email, password, name, role }`
-- **THEN** the user is created with hashed password in the admin's organization
-- **THEN** the response has status 201 with the created user (without password_hash)
+#### Scenario: Admin creates user with membership
+- **WHEN** an `org_admin` makes a POST request with `{ email, password, name, role,
+  communityId?, unitId? }`
+- **THEN** a global user is created with a hashed password
+- **THEN** a membership is created in the admin's organization with the given role and
+  scope
+- **THEN** the response has status 201 with the user and membership (without
+  password_hash)
 
-#### Scenario: Duplicate email in same organization
-- **WHEN** an admin tries to create a user with an email that already exists in the organization
+#### Scenario: Platform admin creates org_admin
+- **WHEN** a platform admin creates a user with `role = 'org_admin'`
+- **THEN** the assignment is allowed
+
+#### Scenario: Org admin cannot create org_admin
+- **WHEN** an `org_admin` tries to create a user with `role = 'org_admin'`
+- **THEN** the response has status 403
+
+#### Scenario: Community admin cannot create org_admin or community_admin
+- **WHEN** a `community_admin` tries to create a user with `role = 'org_admin'` or
+  `role = 'community_admin'`
+- **THEN** the response has status 403
+
+#### Scenario: Community admin creates community role
+- **WHEN** a `community_admin` creates an `operator`, `guard`, `owner`, `tenant`,
+  `resident`, or `staff` in their community
+- **THEN** the assignment is allowed
+
+#### Scenario: Duplicate email
+- **WHEN** an admin tries to create a user with an email that already exists
 - **THEN** the response has status 409 with message "Email already in use"
 
 #### Scenario: Invalid role
 - **WHEN** a request includes an invalid role value
 - **THEN** the response has status 400 with validation error
 
+#### Scenario: Invalid scope for role
+- **WHEN** a request creates an operational role without `communityId`
+- **THEN** the response has status 400 with a scope validation error
+
 ### Requirement: Get user by ID
-The API SHALL provide a `GET /api/users/:id` endpoint accessible to admin and the user themselves.
+The API SHALL provide a `GET /api/users/:id` endpoint accessible to admins and the
+user themselves, returning the user with their visible memberships.
 
 #### Scenario: Admin views any user
-- **WHEN** an admin requests a user by ID from their organization
-- **THEN** the response contains the full user object (without password_hash)
+- **WHEN** an admin requests a user by ID that belongs to their organization
+- **THEN** the response contains the user (without password_hash) and their memberships
+  within the admin's scope
 
 #### Scenario: User views own profile
 - **WHEN** a user requests their own ID
-- **THEN** the response contains their profile
+- **THEN** the response contains their profile and all their memberships
 
 #### Scenario: User views other user
 - **WHEN** a non-admin user requests another user's ID
 - **THEN** the response has status 403
 
-#### Scenario: User not found
-- **WHEN** a request is made for a non-existent user ID
+#### Scenario: User not found or out of scope
+- **WHEN** a request is made for a non-existent user or a user outside the caller's
+  organization
 - **THEN** the response has status 404
 
 ### Requirement: Update user
-The API SHALL provide a `PATCH /api/users/:id` endpoint for admin to update user details.
+The API SHALL provide a `PATCH /api/users/:id` endpoint for admins to update global
+user details.
 
 #### Scenario: Admin updates user
-- **WHEN** an admin patches `{ name, role, active }` for a user in their organization
+- **WHEN** an admin patches `{ name, active }` for a user in their organization
 - **THEN** the user is updated
 - **THEN** the response has status 200 with the updated user
 
@@ -63,15 +108,17 @@ The API SHALL provide a `PATCH /api/users/:id` endpoint for admin to update user
 - **THEN** the email field is ignored (email is immutable after creation)
 
 #### Scenario: Cannot update user from another organization
-- **WHEN** an admin tries to update a user from a different organization
+- **WHEN** an admin tries to update a user with no membership in their organization
 - **THEN** the response has status 404 (not found — don't leak existence)
 
 ### Requirement: Get current user profile
-The API SHALL provide a `GET /api/me` endpoint for any authenticated user.
+The API SHALL provide a `GET /api/me` endpoint for any authenticated user, returning
+the user profile and membership context.
 
 #### Scenario: Authenticated user sees their profile
 - **WHEN** any authenticated user makes a GET request to `/api/me`
-- **THEN** the response contains their full profile (id, email, name, role, organizationId, active)
+- **THEN** the response contains their profile (id, email, name, isPlatformAdmin,
+  active) and their active membership context
 
 #### Scenario: Unauthenticated request
 - **WHEN** a request is made without a valid token
@@ -88,3 +135,34 @@ The API SHALL provide a `PATCH /api/me/password` endpoint for password changes.
 #### Scenario: Wrong current password
 - **WHEN** the current password is incorrect
 - **THEN** the response has status 401 with message "Current password is incorrect"
+
+### Requirement: Manage memberships
+The API SHALL provide endpoints to manage user memberships within the caller's scope,
+subject to the role assignment policy.
+
+#### Scenario: Create membership
+- **WHEN** an `org_admin` posts `{ userId, role, communityId?, unitId? }` for their
+  organization
+- **THEN** a membership is created with `status = 'active'`
+- **THEN** the response has status 201 with the membership
+
+#### Scenario: Update membership role
+- **WHEN** an `org_admin` patches a membership's `role` or `status`
+- **THEN** the change is persisted
+- **THEN** the affected user's existing tokens for that context are rejected
+
+#### Scenario: Community admin scope
+- **WHEN** a `community_admin` creates or updates a membership
+- **THEN** they can only manage memberships of their own community
+- **THEN** attempts outside their community return status 403
+
+#### Scenario: Community admin cannot escalate role
+- **WHEN** a `community_admin` creates or updates a membership to `org_admin` or
+  `community_admin`
+- **THEN** the response has status 403
+
+#### Scenario: Deactivate membership
+- **WHEN** a membership is patched to `status = 'inactive'`
+- **THEN** the user can no longer obtain a token for that context
+- **THEN** the user record remains active
+

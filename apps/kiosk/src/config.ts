@@ -39,6 +39,8 @@ export const CONFIG = {
   SERVER_URL: resolveServerUrl(),
   BUILDING_ID: import.meta.env.VITE_BUILDING_ID || 'edificio-01',
   BUILDING_NAME: import.meta.env.VITE_BUILDING_NAME || 'EDIFICIO PRINCIPAL',
+  COMMUNITY_ID: import.meta.env.VITE_COMMUNITY_ID || '',
+  KIOSK_TOKEN: import.meta.env.VITE_KIOSK_TOKEN || 'dev-kiosk-token',
   ADDRESS: 'Calle 123 #45-67, Bogotá',
   ICE_SERVERS: [
     { urls: 'stun:stun.l.google.com:19302' },

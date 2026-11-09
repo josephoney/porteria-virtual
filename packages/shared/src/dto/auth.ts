@@ -1,18 +1,44 @@
+import type { MembershipRole } from '../enums/index.js';
+
 export interface LoginRequest {
   email: string;
   password: string;
+  communitySlug?: string;
 }
 
-export interface LoginResponse {
+export interface AuthUserSummary {
+  id: string;
+  email: string;
+  name: string;
+  isPlatformAdmin: boolean;
+}
+
+export interface MembershipSummary {
+  id: string;
+  role: MembershipRole;
+  organizationId: string;
+  communityId: string | null;
+  unitId: string | null;
+}
+
+export interface LoginSuccessResponse {
   accessToken: string;
   refreshToken: string;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-    organizationId: string;
-  };
+  user: AuthUserSummary;
+  activeMembership: MembershipSummary;
+}
+
+export interface LoginContextSelectionResponse {
+  requiresContextSelection: true;
+  memberships: MembershipSummary[];
+  selectionToken: string;
+}
+
+export type LoginResponse = LoginSuccessResponse | LoginContextSelectionResponse;
+
+export interface ContextSwitchRequest {
+  membershipId: string;
+  refreshToken?: string;
 }
 
 export interface RefreshRequest {
@@ -22,4 +48,6 @@ export interface RefreshRequest {
 export interface RefreshResponse {
   accessToken: string;
   refreshToken: string;
+  user: AuthUserSummary;
+  activeMembership: MembershipSummary;
 }

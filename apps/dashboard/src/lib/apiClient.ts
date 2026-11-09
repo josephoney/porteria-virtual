@@ -41,8 +41,13 @@ async function request<T>(
 ): Promise<ApiResponse<T>> {
   const token = getToken();
   const headers: Record<string, string> = {};
+  let requestBody: string | undefined;
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
+    requestBody = JSON.stringify(body);
+  } else if (method === 'POST' || method === 'PATCH') {
+    headers['Content-Type'] = 'application/json';
+    requestBody = '{}';
   }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -52,7 +57,7 @@ async function request<T>(
   const res = await fetch(url, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: requestBody,
   });
 
   if (res.status === 401) {
@@ -92,6 +97,10 @@ async function request<T>(
     );
   }
 
+  if (res.status === 204) {
+    return { data: undefined as T, status: res.status };
+  }
+
   const data = await res.json();
   return { data, status: res.status };
 }
@@ -105,15 +114,20 @@ async function retryRequest<T>(
   const headers: Record<string, string> = {
     Authorization: `Bearer ${newToken}`,
   };
+  let requestBody: string | undefined;
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
+    requestBody = JSON.stringify(body);
+  } else if (method === 'POST' || method === 'PATCH') {
+    headers['Content-Type'] = 'application/json';
+    requestBody = '{}';
   }
 
   const url = `${CONFIG.API_URL}${path}`;
   const res = await fetch(url, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: requestBody,
   });
 
   if (res.status === 401) {
@@ -130,6 +144,10 @@ async function retryRequest<T>(
     );
   }
 
+  if (res.status === 204) {
+    return { data: undefined as T, status: res.status };
+  }
+
   const data = await res.json();
   return { data, status: res.status };
 }
@@ -144,4 +162,44 @@ export function post<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {
 
 export function patch<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {
   return request<T>('PATCH', path, body);
+}
+
+export function del<T>(path: string): Promise<ApiResponse<T>> {
+  return request<T>('DELETE', path);
+}
+
+export async function assetObjectUrl(id: string): Promise<string | null> {
+  const token = getToken();
+  const response = await fetch(`${CONFIG.API_URL}/api/assets/${id}/content`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) return null;
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
+export async function upload<T>(
+  path: string,
+  formData: FormData,
+): Promise<ApiResponse<T>> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${CONFIG.API_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    throw new ApiError(
+      errorBody.message || `HTTP ${res.status}`,
+      res.status,
+      errorBody,
+    );
+  }
+
+  const data = await res.json();
+  return { data, status: res.status };
 }

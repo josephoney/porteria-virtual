@@ -1,17 +1,26 @@
 import { pgTable, uuid, varchar, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 import { users } from './users';
-import { locations } from './locations';
+import { people } from './people';
+import { communities } from './communities';
 
-export const roundStatusEnum = pgEnum('round_status', ['scheduled', 'in_progress', 'completed', 'missed']);
+export const roundStatusEnum = pgEnum('round_status', [
+  'scheduled',
+  'in_progress',
+  'completed',
+  'missed',
+]);
 
 export const guardRounds = pgTable('guard_rounds', {
   id: uuid('id').defaultRandom().primaryKey(),
   guardId: uuid('guard_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  locationId: uuid('location_id')
+  guardPersonId: uuid('guard_person_id').references(() => people.id, {
+    onDelete: 'set null',
+  }),
+  communityId: uuid('community_id')
     .notNull()
-    .references(() => locations.id, { onDelete: 'cascade' }),
+    .references(() => communities.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 255 }).notNull(),
   status: roundStatusEnum('status').notNull().default('scheduled'),
   scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
