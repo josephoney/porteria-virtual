@@ -25,6 +25,10 @@ Variables:
   `http://10.0.2.2:3000`.
 - `EXPO_PUBLIC_ENV`: `development` o `production`.
 
+> El tráfico HTTP local (por ejemplo `http://192.168.1.50:3000`) sirve para desarrollo con
+> Expo Go. En producción usá HTTPS: SDK 58 ya no permite `usesCleartextTraffic` en
+> `app.json`.
+
 ## Desarrollo
 
 ```bash

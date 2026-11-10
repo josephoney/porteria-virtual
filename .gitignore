@@ -17,6 +17,7 @@ docker/nginx/certs/
 /playwright/.auth/
 
 # Local artifacts
+.expo/
 .engram/
 backups/
 __pycache__/
