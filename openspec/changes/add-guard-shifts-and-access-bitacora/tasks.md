@@ -91,7 +91,7 @@
 - [x] 7.6 Rename the current Bitácora page to Auditoría and update its route
 - [x] 7.7 Update sidebar and route guards
 - [x] 7.8 Add active guards per access point for admins
-- [ ] 7.9 Add Playwright coverage for guard panel and bitácora
+- [x] 7.9 Add Playwright coverage for guard panel and bitácora
 
 ## 8. Zima guard mode
 
@@ -106,7 +106,7 @@
 
 ## 9. Tests and documentation
 
-- [ ] 9.1 Unit tests for shift state machine and access point validation
+- [x] 9.1 Integration tests for shift state machine and access point validation
 - [x] 9.2 Integration tests for shifts, access points, bitácora and permissions
 - [x] 9.3 Integration tests for scan with shift, access point, direction and denials
 - [x] 9.4 Integration test for bitácora immutability

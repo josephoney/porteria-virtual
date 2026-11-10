@@ -84,12 +84,7 @@ function parse(response: { body: string }) {
 }
 
 async function startShift(token: string, accessPointId?: string) {
-  return request(
-    'POST',
-    '/api/guard/shifts/start',
-    accessPointId ? { accessPointId } : {},
-    token,
-  );
+  return request('POST', '/api/guard/shifts/start', accessPointId ? { accessPointId } : {}, token);
 }
 
 describe('guard shifts and access bitacora integration', () => {
@@ -703,9 +698,7 @@ describe('guard shifts and access bitacora integration', () => {
     assert.equal(oldPlace.statusCode, 200, oldPlace.body);
     assert.equal(
       (parse(oldPlace).items as Json[]).some(
-        (entry) =>
-          entry.type === 'shift_end' &&
-          (entry.details as Json).reason === 'reassigned',
+        (entry) => entry.type === 'shift_end' && (entry.details as Json).reason === 'reassigned',
       ),
       true,
     );
@@ -719,9 +712,7 @@ describe('guard shifts and access bitacora integration', () => {
     assert.equal(newPlace.statusCode, 200, newPlace.body);
     assert.equal(
       (parse(newPlace).items as Json[]).some(
-        (entry) =>
-          entry.type === 'shift_start' &&
-          (entry.details as Json).reason === 'reassigned',
+        (entry) => entry.type === 'shift_start' && (entry.details as Json).reason === 'reassigned',
       ),
       true,
     );
@@ -794,12 +785,7 @@ describe('guard shifts and access bitacora integration', () => {
     assert.equal(listed.authorName, 'Guardia Turno');
     assert.equal(listed.commentCount, 0);
 
-    const detail = await request(
-      'GET',
-      `/api/bitacora/${entryId}`,
-      undefined,
-      communityAdminToken,
-    );
+    const detail = await request('GET', `/api/bitacora/${entryId}`, undefined, communityAdminToken);
     assert.equal(detail.statusCode, 200, detail.body);
     const detailBody = parse(detail);
     assert.equal(detailBody.details.visitor.document, '12345678');
@@ -896,5 +882,86 @@ describe('guard shifts and access bitacora integration', () => {
       .limit(1);
     assert.ok(membership);
     assert.equal(membership.defaultAccessPointId, accessPointAId);
+  });
+
+  it('validates access point selection when starting or changing a shift', async () => {
+    const missing = await startShift(idleGuardToken);
+    assert.equal(missing.statusCode, 400, missing.body);
+    assert.equal(parse(missing).message, 'invalid');
+
+    const started = await startShift(guardToken, accessPointAId);
+    assert.equal(started.statusCode, 201, started.body);
+    const shiftId = parse(started).shift.id as string;
+
+    const [inactive] = await db
+      .insert(accessPoints)
+      .values({
+        communityId,
+        name: `Portón inactivo ${randomUUID().slice(0, 6)}`,
+        type: 'gate',
+        direction: 'both',
+        active: false,
+      })
+      .returning();
+
+    const inactiveChange = await request(
+      'POST',
+      `/api/guard/shifts/${shiftId}/change-access-point`,
+      { accessPointId: inactive.id },
+      guardToken,
+    );
+    assert.equal(inactiveChange.statusCode, 400, inactiveChange.body);
+    assert.equal(parse(inactiveChange).message, 'invalid');
+
+    const [foreignCommunity] = await db
+      .insert(communities)
+      .values({
+        organizationId,
+        name: `Foreign Shift Community ${randomUUID().slice(0, 6)}`,
+        slug: `foreign-shift-community-${randomUUID().slice(0, 8)}`,
+        address: 'Calle Externa 1',
+        timezone: 'UTC',
+      })
+      .returning();
+    const [foreignAccessPoint] = await db
+      .insert(accessPoints)
+      .values({
+        communityId: foreignCommunity.id,
+        name: 'Portón externo',
+        type: 'gate',
+        direction: 'both',
+        active: true,
+      })
+      .returning();
+
+    const foreignChange = await request(
+      'POST',
+      `/api/guard/shifts/${shiftId}/change-access-point`,
+      { accessPointId: foreignAccessPoint.id },
+      guardToken,
+    );
+    assert.equal(foreignChange.statusCode, 403, foreignChange.body);
+    assert.equal(parse(foreignChange).message, 'forbidden');
+
+    await request('POST', `/api/guard/shifts/${shiftId}/end`, {}, guardToken);
+    await db.delete(accessPoints).where(eq(accessPoints.id, inactive.id));
+    await db.delete(communities).where(eq(communities.id, foreignCommunity.id));
+  });
+
+  it('marks a shift as stale after the configured maximum duration', async () => {
+    const started = await startShift(guardToken, accessPointAId);
+    assert.equal(started.statusCode, 201, started.body);
+    const shiftId = parse(started).shift.id as string;
+
+    await db
+      .update(guardShifts)
+      .set({ startedAt: new Date(Date.now() - 20 * 60 * 60 * 1000) })
+      .where(eq(guardShifts.id, shiftId));
+
+    const current = await request('GET', '/api/guard/shifts/current', undefined, guardToken);
+    assert.equal(current.statusCode, 200, current.body);
+    assert.equal(parse(current).stale, true);
+
+    await request('POST', `/api/guard/shifts/${shiftId}/end`, {}, guardToken);
   });
 });
