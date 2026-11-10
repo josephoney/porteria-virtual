@@ -44,8 +44,9 @@ The shared package SHALL export types and enums for the access bitácora.
 
 - **WHEN** a developer inspects `BitacoraEntry`
 - **THEN** it includes `id`, `communityId`, `accessPointId`, `accessPointName`,
-  `shiftId`, `type`, `source`, `authorPersonId`, `authorAccountId`, `passId`,
-  `passScanId`, `summary`, `details` and `createdAt`
+  `destinationLocationUnitId`, `destinationPath`, `authorizedByPersonId`,
+  `authorizedByName`, `shiftId`, `type`, `source`, `authorPersonId`,
+  `authorAccountId`, `passId`, `passScanId`, `summary`, `details` and `createdAt`
 
 #### Scenario: BitacoraComment type
 

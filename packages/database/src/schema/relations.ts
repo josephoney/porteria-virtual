@@ -458,55 +458,58 @@ export const guardShiftsRelations = relations(guardShifts, ({ one, many }) => ({
   bitacoraEntries: many(bitacoraEntries),
 }));
 
-export const guardShiftSegmentsRelations = relations(
-  guardShiftSegments,
-  ({ one }) => ({
-    shift: one(guardShifts, {
-      fields: [guardShiftSegments.shiftId],
-      references: [guardShifts.id],
-    }),
-    accessPoint: one(accessPoints, {
-      fields: [guardShiftSegments.accessPointId],
-      references: [accessPoints.id],
-    }),
+export const guardShiftSegmentsRelations = relations(guardShiftSegments, ({ one }) => ({
+  shift: one(guardShifts, {
+    fields: [guardShiftSegments.shiftId],
+    references: [guardShifts.id],
   }),
-);
+  accessPoint: one(accessPoints, {
+    fields: [guardShiftSegments.accessPointId],
+    references: [accessPoints.id],
+  }),
+}));
 
-export const bitacoraEntriesRelations = relations(
-  bitacoraEntries,
-  ({ one, many }) => ({
-    community: one(communities, {
-      fields: [bitacoraEntries.communityId],
-      references: [communities.id],
-    }),
-    accessPoint: one(accessPoints, {
-      fields: [bitacoraEntries.accessPointId],
-      references: [accessPoints.id],
-    }),
-    shift: one(guardShifts, {
-      fields: [bitacoraEntries.shiftId],
-      references: [guardShifts.id],
-    }),
-    authorPerson: one(people, {
-      fields: [bitacoraEntries.authorPersonId],
-      references: [people.id],
-      relationName: 'bitacoraAuthorPerson',
-    }),
-    authorAccount: one(accounts, {
-      fields: [bitacoraEntries.authorAccountId],
-      references: [accounts.id],
-    }),
-    pass: one(accessPasses, {
-      fields: [bitacoraEntries.passId],
-      references: [accessPasses.id],
-    }),
-    passScan: one(passScans, {
-      fields: [bitacoraEntries.passScanId],
-      references: [passScans.id],
-    }),
-    comments: many(bitacoraComments),
+export const bitacoraEntriesRelations = relations(bitacoraEntries, ({ one, many }) => ({
+  community: one(communities, {
+    fields: [bitacoraEntries.communityId],
+    references: [communities.id],
   }),
-);
+  accessPoint: one(accessPoints, {
+    fields: [bitacoraEntries.accessPointId],
+    references: [accessPoints.id],
+  }),
+  shift: one(guardShifts, {
+    fields: [bitacoraEntries.shiftId],
+    references: [guardShifts.id],
+  }),
+  authorPerson: one(people, {
+    fields: [bitacoraEntries.authorPersonId],
+    references: [people.id],
+    relationName: 'bitacoraAuthorPerson',
+  }),
+  authorAccount: one(accounts, {
+    fields: [bitacoraEntries.authorAccountId],
+    references: [accounts.id],
+  }),
+  destinationLocationUnit: one(locationUnits, {
+    fields: [bitacoraEntries.destinationLocationUnitId],
+    references: [locationUnits.id],
+  }),
+  authorizedByPerson: one(people, {
+    fields: [bitacoraEntries.authorizedByPersonId],
+    references: [people.id],
+    relationName: 'bitacoraAuthorizedByPerson',
+  }),
+  pass: one(accessPasses, {
+    fields: [bitacoraEntries.passId],
+    references: [accessPasses.id],
+  }),
+  passScan: one(passScans, {
+    fields: [bitacoraEntries.passScanId],
+    references: [passScans.id],
+  }),
+  comments: many(bitacoraComments),
+}));
 
 export const bitacoraCommentsRelations = relations(bitacoraComments, ({ one }) => ({
   entry: one(bitacoraEntries, {

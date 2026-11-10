@@ -887,6 +887,19 @@ describe('dynamic pass integration', () => {
     assert.equal(entryConfirmBody.presenceState, 'inside');
     assert.ok(entryConfirmBody.bitacoraEntryId);
 
+    const entryBitacora = await request(
+      'GET',
+      `/api/bitacora/${entryConfirmBody.bitacoraEntryId}`,
+      undefined,
+      guardToken,
+    );
+    assert.equal(entryBitacora.statusCode, 200);
+    const entryBitacoraBody = parse(entryBitacora);
+    assert.equal(entryBitacoraBody.destinationLocationUnitId, created.pass.locationUnitId);
+    assert.equal(entryBitacoraBody.authorizedByPersonId, created.pass.authorizedByPersonId);
+    assert.ok(entryBitacoraBody.destinationPath);
+    assert.ok(entryBitacoraBody.authorizedByName);
+
     const replay = await scan(entryQr);
     assert.equal(replay.statusCode, 409);
     assert.equal(parse(replay).message, 'token_already_used');
@@ -914,6 +927,18 @@ describe('dynamic pass integration', () => {
     assert.equal(usedBody.authorized, false);
     assert.equal(usedBody.reason, 'pass_used');
     assert.equal(usedBody.scanId, null);
+    assert.ok(usedBody.bitacoraEntryId);
+
+    const deniedBitacora = await request(
+      'GET',
+      `/api/bitacora/${usedBody.bitacoraEntryId as string}`,
+      undefined,
+      guardToken,
+    );
+    assert.equal(deniedBitacora.statusCode, 200);
+    const deniedBitacoraBody = parse(deniedBitacora);
+    assert.ok(deniedBitacoraBody.destinationPath);
+    assert.ok(deniedBitacoraBody.authorizedByName);
   });
 
   it('marks an entry_only pass as used and denies a second scan', async () => {
@@ -967,6 +992,15 @@ describe('dynamic pass integration', () => {
     assert.equal(rejectedBody.passStatus, 'active');
     assert.equal(rejectedBody.presenceState, 'outside');
     assert.ok(rejectedBody.bitacoraEntryId);
+
+    const rejectedBitacora = await request(
+      'GET',
+      `/api/bitacora/${rejectedBody.bitacoraEntryId}`,
+      undefined,
+      guardToken,
+    );
+    assert.equal(rejectedBitacora.statusCode, 200);
+    assert.ok(parse(rejectedBitacora).authorizedByName);
 
     const confirmRejected = await confirm(scanned.scanId as string);
     assert.equal(confirmRejected.statusCode, 409);

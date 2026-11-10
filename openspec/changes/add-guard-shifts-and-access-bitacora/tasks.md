@@ -62,6 +62,12 @@
       `POST /api/bitacora`, `POST /api/bitacora/:id/comments`
 - [x] 5.5 Forbid `PATCH`/`DELETE` and test the DB trigger
 - [x] 5.6 Add `insertBitacoraEntry` helper for use inside transactions
+- [x] 5.7 Add `destination_location_unit_id`, `destination_path`,
+      `authorized_by_person_id` and `authorized_by_name` to the schema, shared types
+      and DTOs
+- [x] 5.8 Populate destination and authorizer in pass entries, denied scans and rejects
+- [x] 5.9 Show destination and authorizer in the dashboard bitácora list and detail
+- [x] 5.10 Assert destination and authorizer in integration tests
 
 ## 6. Scan integration
 

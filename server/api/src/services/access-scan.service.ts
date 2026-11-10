@@ -207,10 +207,16 @@ async function writeDeniedEntry(
   details: Record<string, unknown> = {},
 ): Promise<string | null> {
   try {
+    const destinationPath = pass ? ((await buildLocationPath(pass.locationUnitId)) ?? '') : null;
+    const authorizedByName = pass ? await loadAuthorizerName(pass.authorizedByPersonId) : null;
     const row = await insertBitacoraEntry(db, {
       communityId: context.communityId,
       accessPointId: context.accessPointId,
       accessPointName: context.accessPointName,
+      destinationLocationUnitId: pass?.locationUnitId ?? null,
+      destinationPath,
+      authorizedByPersonId: pass?.authorizedByPersonId ?? null,
+      authorizedByName,
       shiftId: context.shiftId,
       type: 'scan_denied',
       source: 'app',
@@ -482,6 +488,10 @@ export async function confirmScan(
         communityId: context.communityId,
         accessPointId: context.accessPointId,
         accessPointName: context.accessPointName,
+        destinationLocationUnitId: pass.locationUnitId,
+        destinationPath: (await buildLocationPath(pass.locationUnitId)) ?? '',
+        authorizedByPersonId: pass.authorizedByPersonId,
+        authorizedByName: await loadAuthorizerName(pass.authorizedByPersonId),
         shiftId: context.shiftId,
         type: scan.action === 'entry' ? 'pass_entry' : 'pass_exit',
         source: 'app',
@@ -584,6 +594,10 @@ export async function rejectScan(
         communityId: context.communityId,
         accessPointId: context.accessPointId,
         accessPointName: context.accessPointName,
+        destinationLocationUnitId: pass.locationUnitId,
+        destinationPath: (await buildLocationPath(pass.locationUnitId)) ?? '',
+        authorizedByPersonId: pass.authorizedByPersonId,
+        authorizedByName: await loadAuthorizerName(pass.authorizedByPersonId),
         shiftId: context.shiftId,
         type: 'pass_rejected',
         source: 'app',

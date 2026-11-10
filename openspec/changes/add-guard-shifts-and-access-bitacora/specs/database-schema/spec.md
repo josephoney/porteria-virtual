@@ -119,6 +119,21 @@ The system SHALL reject updates to bitácora entries and comments at the databas
 - **WHEN** an `UPDATE` is executed on `bitacora_entries` or `bitacora_comments`
 - **THEN** the database raises an exception
 
+### Requirement: Bitácora destination and authorizer columns
+
+The bitácora entries table SHALL store the visitor destination and the pass authorizer.
+
+#### Scenario: Columns
+
+- **WHEN** `bitacora_entries` is inspected
+- **THEN** it includes `destination_location_unit_id?`, `destination_path?`,
+  `authorized_by_person_id?` and `authorized_by_name?`
+
+#### Scenario: Snapshot
+
+- **WHEN** the destination location is renamed or deleted
+- **THEN** `destination_path` and `authorized_by_name` keep their value
+
 ### Requirement: Pass scans access point and shift
 
 The system SHALL link each QR scan to the shift and access point where it happened.

@@ -99,6 +99,13 @@
       "when": 1794282164263,
       "tag": "0013_icy_amazoness",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794289141538,
+      "tag": "0014_curly_lady_bullseye",
+      "breakpoints": true
     }
   ]
 }

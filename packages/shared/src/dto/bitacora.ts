@@ -5,6 +5,10 @@ export interface BitacoraEntryDto {
   communityId: string;
   accessPointId: string;
   accessPointName: string;
+  destinationLocationUnitId: string | null;
+  destinationPath: string | null;
+  authorizedByPersonId: string | null;
+  authorizedByName: string | null;
   shiftId: string | null;
   type: BitacoraEntryType;
   source: BitacoraSource;

@@ -33,6 +33,10 @@ interface BitacoraEntryRow {
   communityId: string;
   accessPointId: string;
   accessPointName: string;
+  destinationLocationUnitId: string | null;
+  destinationPath: string | null;
+  authorizedByPersonId: string | null;
+  authorizedByName: string | null;
   shiftId: string | null;
   type: string;
   source: string;
@@ -443,6 +447,8 @@ export function AccessBitacoraView({
                 <TableHead>Acceso</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Detalle</TableHead>
+                <TableHead>Destino</TableHead>
+                <TableHead>Autorizó</TableHead>
                 <TableHead>Autor</TableHead>
                 <TableHead>Comentarios</TableHead>
               </TableRow>
@@ -462,6 +468,8 @@ export function AccessBitacoraView({
                     </Badge>
                   </TableCell>
                   <TableCell className="max-w-md whitespace-normal">{entry.summary}</TableCell>
+                  <TableCell>{entry.destinationPath ?? '—'}</TableCell>
+                  <TableCell>{entry.authorizedByName ?? '—'}</TableCell>
                   <TableCell>{entry.authorName ?? 'Sistema'}</TableCell>
                   <TableCell>{entry.commentCount}</TableCell>
                 </TableRow>
@@ -520,6 +528,14 @@ export function AccessBitacoraView({
                 <p>
                   <span className="text-muted-foreground">Autor:</span>{' '}
                   {selected.authorName ?? 'Sistema'}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Destino:</span>{' '}
+                  {selected.destinationPath ?? '—'}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Autorizó:</span>{' '}
+                  {selected.authorizedByName ?? '—'}
                 </p>
                 <p>
                   <span className="text-muted-foreground">Fecha:</span>{' '}

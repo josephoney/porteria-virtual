@@ -44,6 +44,10 @@ export interface InsertBitacoraEntryInput {
   communityId: string;
   accessPointId: string;
   accessPointName: string;
+  destinationLocationUnitId?: string | null;
+  destinationPath?: string | null;
+  authorizedByPersonId?: string | null;
+  authorizedByName?: string | null;
   shiftId?: string | null;
   type: BitacoraEntryType;
   source: BitacoraSource;
@@ -89,6 +93,10 @@ export async function insertBitacoraEntry(
       communityId: input.communityId,
       accessPointId: input.accessPointId,
       accessPointName: input.accessPointName,
+      destinationLocationUnitId: input.destinationLocationUnitId ?? null,
+      destinationPath: input.destinationPath ?? null,
+      authorizedByPersonId: input.authorizedByPersonId ?? null,
+      authorizedByName: input.authorizedByName ?? null,
       shiftId: input.shiftId ?? null,
       type: input.type,
       source: input.source,
@@ -147,6 +155,10 @@ function toEntryDto(
     communityId: row.communityId,
     accessPointId: row.accessPointId,
     accessPointName: row.accessPointName,
+    destinationLocationUnitId: row.destinationLocationUnitId,
+    destinationPath: row.destinationPath,
+    authorizedByPersonId: row.authorizedByPersonId,
+    authorizedByName: row.authorizedByName,
     shiftId: row.shiftId,
     type: row.type,
     source: row.source,

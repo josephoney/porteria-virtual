@@ -1,18 +1,11 @@
-import {
-  index,
-  jsonb,
-  pgEnum,
-  pgTable,
-  timestamp,
-  uuid,
-  varchar,
-} from 'drizzle-orm/pg-core';
+import { index, jsonb, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { accessPasses } from './access-passes';
 import { accessPoints } from './access-points';
 import { accounts } from './accounts';
 import { communities } from './communities';
 import { guardShifts } from './guard-shifts';
+import { locationUnits } from './location-units';
 import { passScans } from './pass-scans';
 import { people } from './people';
 
@@ -26,11 +19,7 @@ export const bitacoraEntryTypeEnum = pgEnum('bitacora_entry_type', [
   'manual',
 ]);
 
-export const bitacoraSourceEnum = pgEnum('bitacora_source', [
-  'app',
-  'dashboard',
-  'system',
-]);
+export const bitacoraSourceEnum = pgEnum('bitacora_source', ['app', 'dashboard', 'system']);
 
 export const bitacoraEntries = pgTable(
   'bitacora_entries',
@@ -43,6 +32,15 @@ export const bitacoraEntries = pgTable(
       .notNull()
       .references(() => accessPoints.id, { onDelete: 'restrict' }),
     accessPointName: varchar('access_point_name', { length: 255 }).notNull(),
+    destinationLocationUnitId: uuid('destination_location_unit_id').references(
+      () => locationUnits.id,
+      { onDelete: 'set null' },
+    ),
+    destinationPath: varchar('destination_path', { length: 500 }),
+    authorizedByPersonId: uuid('authorized_by_person_id').references(() => people.id, {
+      onDelete: 'set null',
+    }),
+    authorizedByName: varchar('authorized_by_name', { length: 255 }),
     shiftId: uuid('shift_id').references(() => guardShifts.id, {
       onDelete: 'set null',
     }),
@@ -61,7 +59,9 @@ export const bitacoraEntries = pgTable(
       onDelete: 'set null',
     }),
     summary: varchar('summary', { length: 500 }).notNull(),
-    details: jsonb('details').default(sql`'{}'::jsonb`).notNull(),
+    details: jsonb('details')
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
@@ -70,11 +70,9 @@ export const bitacoraEntries = pgTable(
       table.accessPointId,
       table.createdAt,
     ),
-    shiftCreatedIdx: index('bitacora_shift_created_idx').on(
-      table.shiftId,
-      table.createdAt,
-    ),
+    shiftCreatedIdx: index('bitacora_shift_created_idx').on(table.shiftId, table.createdAt),
     passIdx: index('bitacora_pass_idx').on(table.passId),
+    destinationIdx: index('bitacora_destination_idx').on(table.destinationLocationUnitId),
     typeCreatedIdx: index('bitacora_type_created_idx').on(table.type, table.createdAt),
   }),
 );

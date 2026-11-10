@@ -151,3 +151,30 @@ The system SHALL protect visitor documents and vehicle plates in list responses.
 
 - **WHEN** an entry is written or logged
 - **THEN** it never contains the raw QR token or link token
+
+### Requirement: Destination and authorizer
+
+The system SHALL record the visitor's destination and the person who authorized the pass for each access entry.
+
+#### Scenario: Pass entries store destination and authorizer
+
+- **WHEN** a `pass_entry`, `pass_exit` or `pass_rejected` entry is written
+- **THEN** it stores `destination_location_unit_id`, `destination_path`,
+  `authorized_by_person_id` and `authorized_by_name`
+- **THEN** `destination_path` is a snapshot of the location path at write time
+
+#### Scenario: Denied scan
+
+- **WHEN** a denied scan references a pass
+- **THEN** the `scan_denied` entry stores the pass destination and authorizer
+- **THEN** an invalid token without a pass leaves those columns `NULL`
+
+#### Scenario: Manual and shift entries
+
+- **WHEN** a manual or shift entry is written
+- **THEN** destination and authorizer may be `NULL`
+
+#### Scenario: List and detail
+
+- **WHEN** the bitácora list or detail is returned
+- **THEN** it exposes `destinationPath` and `authorizedByName`
