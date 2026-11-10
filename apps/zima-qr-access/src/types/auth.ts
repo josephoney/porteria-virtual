@@ -14,6 +14,7 @@ export interface ZimaMembership {
   communityId: string | null;
   unitId: string | null;
   locationUnitId: string | null;
+  defaultAccessPointId: string | null;
 }
 
 export interface ZimaAuthSession {

@@ -10,6 +10,13 @@ export type { AccessPoint } from './types/access-point.js';
 export type { User } from './types/user.js';
 export type { Call } from './types/call.js';
 export type { Event, EventMetadata } from './types/event.js';
+export type { AccessPass, PassScan, PassAlert } from './types/pass.js';
+export type {
+  GuardShift,
+  GuardShiftSegment,
+  GuardShiftWithSegments,
+} from './types/guard-shift.js';
+export type { BitacoraEntry, BitacoraComment } from './types/bitacora.js';
 
 export type {
   LoginRequest,
@@ -48,8 +55,74 @@ export type {
   EventBreakdownQuery,
   CreateEventDto,
 } from './dto/reports.js';
-export type { DailyReport, WeeklyReport, MonthlyReport, CallStats, EventTimeSeries } from './types/reports.js';
+export type {
+  DailyReport,
+  WeeklyReport,
+  MonthlyReport,
+  CallStats,
+  EventTimeSeries,
+} from './types/reports.js';
 export type { EventEnvelope, OutboxStats } from './types/outbox.js';
+
+export type {
+  CreatePassDto,
+  PassLinkResponse,
+  PassQrResponse,
+  BindPassDto,
+  PublicPassPreview,
+  PassStatusResponse,
+  ScanPassResponse,
+  ScanDecisionResponse,
+} from './dto/passes.js';
+
+export type {
+  AccessPointDto,
+  AccessPointListResponse,
+  CreateAccessPointDto,
+  UpdateAccessPointDto,
+} from './dto/access-points.js';
+
+export type {
+  ChangeAccessPointDto,
+  EndShiftDto,
+  ForceCloseShiftDto,
+  GuardShiftCurrentResponse,
+  GuardShiftDto,
+  GuardShiftHistoryItem,
+  GuardShiftListResponse,
+  GuardShiftSegmentDto,
+  GuardShiftSource,
+  StartShiftDto,
+} from './dto/guard-shifts.js';
+
+export type {
+  BitacoraCommentDto,
+  BitacoraEntryDetailDto,
+  BitacoraEntryDto,
+  BitacoraListResponse,
+  CreateBitacoraCommentDto,
+  CreateBitacoraEntryDto,
+} from './dto/bitacora.js';
+
+export { PassType, PassTypeValues } from './enums/index.js';
+export { PassStatus, PassStatusValues } from './enums/index.js';
+export { PresenceState, PresenceStateValues } from './enums/index.js';
+export { ScanAction, ScanActionValues } from './enums/index.js';
+export { ScanStatus, ScanStatusValues } from './enums/index.js';
+export { ScanResult, ScanResultValues } from './enums/index.js';
+export { PassAlertType, PassAlertTypeValues } from './enums/index.js';
+export { PassAlertStatus, PassAlertStatusValues } from './enums/index.js';
+export { AccessPointType, AccessPointTypeValues } from './enums/index.js';
+export {
+  AccessPointDirection,
+  AccessPointDirectionValues,
+} from './enums/index.js';
+export { GuardShiftStatus, GuardShiftStatusValues } from './enums/index.js';
+export {
+  BitacoraEntryType,
+  BitacoraEntryTypeValues,
+} from './enums/index.js';
+export { BitacoraSource, BitacoraSourceValues } from './enums/index.js';
 
 export { MembershipRole, MembershipRoleValues } from './enums/index.js';
 export { MembershipStatus, MembershipStatusValues } from './enums/index.js';

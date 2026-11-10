@@ -22,6 +22,13 @@ import { guardCheckpoints } from './guard-checkpoints';
 import { accessCodes } from './access-codes';
 import { relayOutputs } from './relay-outputs';
 import { invitations } from './invitations';
+import { accessPasses } from './access-passes';
+import { passScans } from './pass-scans';
+import { passAlerts } from './pass-alerts';
+import { guardShifts } from './guard-shifts';
+import { guardShiftSegments } from './guard-shift-segments';
+import { bitacoraEntries } from './bitacora-entries';
+import { bitacoraComments } from './bitacora-comments';
 
 export const peopleRelations = relations(people, ({ one, many }) => ({
   account: one(accounts, {
@@ -74,6 +81,8 @@ export const communitiesRelations = relations(communities, ({ one, many }) => ({
   invitations: many(invitations),
   guardRounds: many(guardRounds),
   assets: many(assets),
+  guardShifts: many(guardShifts),
+  bitacoraEntries: many(bitacoraEntries),
 }));
 
 export const buildingsRelations = relations(buildings, ({ one, many }) => ({
@@ -159,6 +168,10 @@ export const membershipsRelations = relations(memberships, ({ one }) => ({
     fields: [memberships.locationUnitId],
     references: [locationUnits.id],
   }),
+  defaultAccessPoint: one(accessPoints, {
+    fields: [memberships.defaultAccessPointId],
+    references: [accessPoints.id],
+  }),
 }));
 
 export const accessPointsRelations = relations(accessPoints, ({ one, many }) => ({
@@ -174,6 +187,9 @@ export const accessPointsRelations = relations(accessPoints, ({ one, many }) => 
   events: many(events),
   accessCodes: many(accessCodes),
   relayOutputs: many(relayOutputs),
+  segments: many(guardShiftSegments),
+  passScans: many(passScans),
+  bitacoraEntries: many(bitacoraEntries),
 }));
 
 export const kiosksRelations = relations(kiosks, ({ one, many }) => ({
@@ -324,5 +340,186 @@ export const invitationsRelations = relations(invitations, ({ one }) => ({
     fields: [invitations.invitedBy],
     references: [users.id],
     relationName: 'sentInvitations',
+  }),
+}));
+
+export const accessPassesRelations = relations(accessPasses, ({ one, many }) => ({
+  community: one(communities, {
+    fields: [accessPasses.communityId],
+    references: [communities.id],
+  }),
+  locationUnit: one(locationUnits, {
+    fields: [accessPasses.locationUnitId],
+    references: [locationUnits.id],
+  }),
+  structure: one(locationStructures, {
+    fields: [accessPasses.structureId],
+    references: [locationStructures.id],
+  }),
+  createdByPerson: one(people, {
+    fields: [accessPasses.createdByPersonId],
+    references: [people.id],
+    relationName: 'createdPasses',
+  }),
+  authorizedByPerson: one(people, {
+    fields: [accessPasses.authorizedByPersonId],
+    references: [people.id],
+    relationName: 'authorizedPasses',
+  }),
+  scans: many(passScans),
+  alerts: many(passAlerts),
+  bitacoraEntries: many(bitacoraEntries),
+}));
+
+export const passScansRelations = relations(passScans, ({ one, many }) => ({
+  pass: one(accessPasses, {
+    fields: [passScans.passId],
+    references: [accessPasses.id],
+  }),
+  guardPerson: one(people, {
+    fields: [passScans.guardPersonId],
+    references: [people.id],
+    relationName: 'guardScans',
+  }),
+  guardAccount: one(accounts, {
+    fields: [passScans.guardAccountId],
+    references: [accounts.id],
+    relationName: 'guardScanAccount',
+  }),
+  shift: one(guardShifts, {
+    fields: [passScans.shiftId],
+    references: [guardShifts.id],
+  }),
+  accessPoint: one(accessPoints, {
+    fields: [passScans.accessPointId],
+    references: [accessPoints.id],
+  }),
+  confirmedByPerson: one(people, {
+    fields: [passScans.confirmedByPersonId],
+    references: [people.id],
+    relationName: 'confirmedScans',
+  }),
+  confirmedByAccount: one(accounts, {
+    fields: [passScans.confirmedByAccountId],
+    references: [accounts.id],
+    relationName: 'confirmedScanAccount',
+  }),
+  bitacoraEntries: many(bitacoraEntries),
+  community: one(communities, {
+    fields: [passScans.communityId],
+    references: [communities.id],
+  }),
+  locationUnit: one(locationUnits, {
+    fields: [passScans.locationUnitId],
+    references: [locationUnits.id],
+  }),
+  structure: one(locationStructures, {
+    fields: [passScans.structureId],
+    references: [locationStructures.id],
+  }),
+}));
+
+export const passAlertsRelations = relations(passAlerts, ({ one }) => ({
+  pass: one(accessPasses, {
+    fields: [passAlerts.passId],
+    references: [accessPasses.id],
+  }),
+  community: one(communities, {
+    fields: [passAlerts.communityId],
+    references: [communities.id],
+  }),
+  resolvedByPerson: one(people, {
+    fields: [passAlerts.resolvedByPersonId],
+    references: [people.id],
+    relationName: 'resolvedPassAlerts',
+  }),
+}));
+
+export const guardShiftsRelations = relations(guardShifts, ({ one, many }) => ({
+  community: one(communities, {
+    fields: [guardShifts.communityId],
+    references: [communities.id],
+  }),
+  guardPerson: one(people, {
+    fields: [guardShifts.guardPersonId],
+    references: [people.id],
+    relationName: 'guardShiftWorker',
+  }),
+  guardAccount: one(accounts, {
+    fields: [guardShifts.guardAccountId],
+    references: [accounts.id],
+  }),
+  endedByPerson: one(people, {
+    fields: [guardShifts.endedByPersonId],
+    references: [people.id],
+    relationName: 'guardShiftEnder',
+  }),
+  segments: many(guardShiftSegments),
+  bitacoraEntries: many(bitacoraEntries),
+}));
+
+export const guardShiftSegmentsRelations = relations(
+  guardShiftSegments,
+  ({ one }) => ({
+    shift: one(guardShifts, {
+      fields: [guardShiftSegments.shiftId],
+      references: [guardShifts.id],
+    }),
+    accessPoint: one(accessPoints, {
+      fields: [guardShiftSegments.accessPointId],
+      references: [accessPoints.id],
+    }),
+  }),
+);
+
+export const bitacoraEntriesRelations = relations(
+  bitacoraEntries,
+  ({ one, many }) => ({
+    community: one(communities, {
+      fields: [bitacoraEntries.communityId],
+      references: [communities.id],
+    }),
+    accessPoint: one(accessPoints, {
+      fields: [bitacoraEntries.accessPointId],
+      references: [accessPoints.id],
+    }),
+    shift: one(guardShifts, {
+      fields: [bitacoraEntries.shiftId],
+      references: [guardShifts.id],
+    }),
+    authorPerson: one(people, {
+      fields: [bitacoraEntries.authorPersonId],
+      references: [people.id],
+      relationName: 'bitacoraAuthorPerson',
+    }),
+    authorAccount: one(accounts, {
+      fields: [bitacoraEntries.authorAccountId],
+      references: [accounts.id],
+    }),
+    pass: one(accessPasses, {
+      fields: [bitacoraEntries.passId],
+      references: [accessPasses.id],
+    }),
+    passScan: one(passScans, {
+      fields: [bitacoraEntries.passScanId],
+      references: [passScans.id],
+    }),
+    comments: many(bitacoraComments),
+  }),
+);
+
+export const bitacoraCommentsRelations = relations(bitacoraComments, ({ one }) => ({
+  entry: one(bitacoraEntries, {
+    fields: [bitacoraComments.entryId],
+    references: [bitacoraEntries.id],
+  }),
+  authorPerson: one(people, {
+    fields: [bitacoraComments.authorPersonId],
+    references: [people.id],
+    relationName: 'bitacoraCommentAuthorPerson',
+  }),
+  authorAccount: one(accounts, {
+    fields: [bitacoraComments.authorAccountId],
+    references: [accounts.id],
   }),
 }));

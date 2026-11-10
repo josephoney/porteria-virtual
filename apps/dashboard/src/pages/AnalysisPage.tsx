@@ -1,12 +1,17 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '../components/layout/PageHeader';
 import { BitacoraView } from '../components/admin/BitacoraView';
+import { AccessBitacoraView } from '../components/admin/AccessBitacoraView';
 import { ReportsPanel } from '../components/admin/ReportsPanel';
 
 const meta = {
   bitacora: {
-    title: 'Bitácora',
-    description: 'Registro legible de ingresos por portería.',
+    title: 'Auditoría',
+    description: 'Eventos técnicos para diagnóstico de accesos y códigos.',
+  },
+  'bitacora-accesos': {
+    title: 'Bitácora de accesos',
+    description: 'Registro inmutable de ingresos, egresos y novedades por lugar físico.',
   },
   reports: {
     title: 'Reportes',
@@ -34,6 +39,7 @@ export function AnalysisPage({ scope = 'tenant' }: { scope?: 'tenant' | 'platfor
     <div className="p-6 space-y-6 overflow-y-auto">
       <PageHeader title={page.title} description={page.description} />
       {section === 'bitacora' && <BitacoraView />}
+      {section === 'bitacora-accesos' && <AccessBitacoraView compact />}
       {section === 'reports' && <ReportsPanel />}
       {section === 'history' && scope === 'platform' && <BitacoraView />}
     </div>

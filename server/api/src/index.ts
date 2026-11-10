@@ -10,10 +10,25 @@ import { startOutboxWorker, stopOutboxWorker } from './workers/outbox.worker.js'
 import config, { validateConfig } from './config.js';
 import { errorHandler } from './plugins/error-handler.js';
 import { createDb } from '@porteria/database';
+import { redactSensitiveUrl } from './lib/log-redaction.js';
 
 export async function buildApp() {
   const warnings = validateConfig();
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: {
+      level: process.env.LOG_LEVEL || 'info',
+      serializers: {
+        req(request: FastifyRequest) {
+          return {
+            method: request.method,
+            url: redactSensitiveUrl(request.url),
+            host: request.hostname,
+            remoteAddress: request.ip,
+          };
+        },
+      },
+    },
+  });
 
   // Core plugins
   await app.register(cors, { origin: true, credentials: true });
@@ -58,7 +73,10 @@ export async function buildApp() {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   };
@@ -119,9 +137,8 @@ export async function buildApp() {
   await app.register(eventsRoutes, { prefix: '/api/events' });
   await app.register(internalEventsRoutes, { prefix: '/api/internal/events' });
 
-  const { kiosksRoutes, dashboardRoutes, internalKioskRoutes } = await import(
-    './routes/kiosks.routes.js'
-  );
+  const { kiosksRoutes, dashboardRoutes, internalKioskRoutes } =
+    await import('./routes/kiosks.routes.js');
   await app.register(kiosksRoutes, { prefix: '/api/kiosks' });
   await app.register(dashboardRoutes, { prefix: '/api/dashboard' });
   await app.register(internalKioskRoutes, { prefix: '/api/internal/kiosks' });
@@ -135,6 +152,24 @@ export async function buildApp() {
 
   const { internalOutboxRoutes } = await import('./routes/outbox.routes.js');
   await app.register(internalOutboxRoutes, { prefix: '/api/internal/outbox' });
+
+  const { passRoutes } = await import('./routes/pass.routes.js');
+  await app.register(passRoutes, { prefix: '/api/passes' });
+
+  const { publicPassRoutes } = await import('./routes/public-pass.routes.js');
+  await app.register(publicPassRoutes, { prefix: '/api/public/passes' });
+
+  const { accessRoutes } = await import('./routes/access.routes.js');
+  await app.register(accessRoutes, { prefix: '/api/access' });
+
+  const { accessPointRoutes } = await import('./routes/access-point.routes.js');
+  await app.register(accessPointRoutes, { prefix: '/api/communities' });
+
+  const { guardShiftRoutes } = await import('./routes/guard-shift.routes.js');
+  await app.register(guardShiftRoutes, { prefix: '/api/guard' });
+
+  const { bitacoraRoutes } = await import('./routes/bitacora.routes.js');
+  await app.register(bitacoraRoutes, { prefix: '/api/bitacora' });
 
   await startOutboxWorker(app.log);
   app.addHook('onClose', async () => stopOutboxWorker());

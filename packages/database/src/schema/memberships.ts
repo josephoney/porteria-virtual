@@ -12,6 +12,7 @@ import { communities } from './communities';
 import { units } from './units';
 import { people } from './people';
 import { locationUnits } from './location-units';
+import { accessPoints } from './access-points';
 
 export const membershipRoleEnum = pgEnum('membership_role', [
   'org_admin',
@@ -46,6 +47,10 @@ export const memberships = pgTable(
     locationUnitId: uuid('location_unit_id').references(() => locationUnits.id, {
       onDelete: 'cascade',
     }),
+    defaultAccessPointId: uuid('default_access_point_id').references(
+      () => accessPoints.id,
+      { onDelete: 'set null' },
+    ),
     role: membershipRoleEnum('role').notNull(),
     status: membershipStatusEnum('status').notNull().default('active'),
     validFrom: timestamp('valid_from', { withTimezone: true }),
@@ -71,6 +76,9 @@ export const memberships = pgTable(
     communityIdx: index('memberships_community_idx').on(
       table.communityId,
       table.status,
+    ),
+    defaultAccessPointIdx: index('memberships_default_access_point_idx').on(
+      table.defaultAccessPointId,
     ),
   }),
 );

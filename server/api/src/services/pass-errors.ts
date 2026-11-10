@@ -1,0 +1,28 @@
+export type PassErrorCode =
+  | 'not_found'
+  | 'forbidden'
+  | 'conflict'
+  | 'gone'
+  | 'invalid'
+  | 'recurring_not_available'
+  | 'allowed_days_reserved'
+  | 'link_expired'
+  | 'pass_used'
+  | 'not_bound'
+  | 'device_already_bound'
+  | 'invalid_pin'
+  | 'pin_locked'
+  | 'not_valid_now'
+  | 'dynamic_qr_disabled'
+  | 'invalid_or_expired_token'
+  | 'token_already_used'
+  | 'scan_expired'
+  | 'scan_already_processed'
+  | 'pass_expired'
+  | 'daily_limit_reached'
+  | 'rate_limited'
+  | 'no_active_shift'
+  | 'not_on_shift_at_access_point'
+  | 'foreign_community';
+
+export type PassResult<T> = { ok: true; data: T } | { ok: false; code: PassErrorCode };

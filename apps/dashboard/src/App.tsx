@@ -10,6 +10,7 @@ import { AnalysisPage } from './pages/AnalysisPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { OperatorPanel } from './components/operator/OperatorPanel';
 import { AdminPanel } from './components/admin/AdminPanel';
+import { AccessPointsPanel } from './components/admin/AccessPointsPanel';
 import { MyOrganizationPage } from './pages/MyOrganizationPage';
 import { GuardPanel } from './components/guard/GuardPanel';
 import { Button } from './components/ui/button';
@@ -176,6 +177,14 @@ function DashboardApp() {
         />
         <Route path="analysis" element={<Navigate to="/analysis/bitacora" replace />} />
         <Route
+          path="analysis/bitacora-accesos"
+          element={
+            <RequireRole role={['org_admin', 'community_admin']}>
+              <AnalysisPage />
+            </RequireRole>
+          }
+        />
+        <Route
           path="analysis/:section"
           element={
             <RequireRole role={['org_admin', 'community_admin', 'operator', 'guard']}>
@@ -244,6 +253,14 @@ function DashboardApp() {
           element={
             <RequireRole role={['org_admin', 'community_admin']}>
               <AdminPanel />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="admin/access-points"
+          element={
+            <RequireRole role={['org_admin', 'community_admin']}>
+              <AccessPointsPanel />
             </RequireRole>
           }
         />

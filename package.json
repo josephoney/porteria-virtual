@@ -4,15 +4,17 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "pnpm --recursive --parallel dev",
-    "dev:full": "concurrently -n signaling,api,mqtt,apps -c yellow,blue,green,cyan \"pnpm --filter @porteria/signaling dev\" \"pnpm --filter @porteria/api dev\" \"pnpm --filter @porteria/mqtt-bridge dev\" \"pnpm --filter \"@porteria/kiosk\" --filter \"@porteria/dashboard\" --filter \"@porteria/resident\" --parallel dev\"",
-    "dev:clean": "npx kill-port 3001 3000 3002 && concurrently -n signaling,api,mqtt,apps -c yellow,blue,green,cyan \"pnpm --filter @porteria/signaling dev\" \"pnpm --filter @porteria/api dev\" \"pnpm --filter @porteria/mqtt-bridge dev\" \"pnpm --filter \"@porteria/kiosk\" --filter \"@porteria/dashboard\" --filter \"@porteria/resident\" --parallel dev\"",
+    "dev:full": "concurrently -n signaling,api,mqtt,apps -c yellow,blue,green,cyan \"pnpm --filter @porteria/signaling dev\" \"pnpm --filter @porteria/api dev\" \"pnpm --filter @porteria/mqtt-bridge dev\" \"pnpm --filter \"@porteria/kiosk\" --filter \"@porteria/dashboard\" --filter \"@porteria/resident\" --filter \"@porteria/pass-web\" --parallel dev\"",
+    "dev:clean": "npx kill-port 3001 3000 3002 && concurrently -n signaling,api,mqtt,apps -c yellow,blue,green,cyan \"pnpm --filter @porteria/signaling dev\" \"pnpm --filter @porteria/api dev\" \"pnpm --filter @porteria/mqtt-bridge dev\" \"pnpm --filter \"@porteria/kiosk\" --filter \"@porteria/dashboard\" --filter \"@porteria/resident\" --filter \"@porteria/pass-web\" --parallel dev\"",
     "build": "pnpm --recursive build",
     "lint": "pnpm --recursive lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "clean": "pnpm --recursive clean",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:passes": "playwright test -c playwright.passes.config.ts",
+    "dev:pass-web": "pnpm --filter @porteria/pass-web dev"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

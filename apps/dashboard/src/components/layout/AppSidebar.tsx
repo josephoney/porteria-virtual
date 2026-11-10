@@ -21,6 +21,7 @@ import {
   RiBookOpenLine,
   RiBox3Line,
   RiBuilding2Line,
+  RiDoorOpenLine,
   RiFootprintLine,
   RiHistoryLine,
   RiGovernmentLine,
@@ -41,7 +42,6 @@ interface NavItem {
 }
 
 const items: NavItem[] = [
-
   // Operación (tenant)
   {
     to: '/',
@@ -166,11 +166,18 @@ const items: NavItem[] = [
     roles: ['org_admin', 'community_admin'],
     group: 'admin',
   },
+  {
+    to: '/admin/access-points',
+    label: 'Accesos',
+    icon: RiDoorOpenLine,
+    roles: ['org_admin', 'community_admin'],
+    group: 'admin',
+  },
 
   // Análisis
   {
     to: '/platform/bitacora',
-    label: 'Bitácora',
+    label: 'Auditoría',
     icon: RiBookOpenLine,
     roles: [],
     platformOnly: true,
@@ -193,8 +200,15 @@ const items: NavItem[] = [
     group: 'analysis',
   },
   {
+    to: '/analysis/bitacora-accesos',
+    label: 'Bitácora de accesos',
+    icon: RiBookOpenLine,
+    roles: ['org_admin', 'community_admin'],
+    group: 'analysis',
+  },
+  {
     to: '/analysis/bitacora',
-    label: 'Bitácora',
+    label: 'Auditoría',
     icon: RiBookOpenLine,
     roles: ['org_admin', 'community_admin', 'operator', 'guard'],
     group: 'analysis',
@@ -229,9 +243,7 @@ export function AppSidebar() {
         let logoAssetId: string | null = null;
         if (user?.isPlatformAdmin && activeMembership?.id === 'platform') return;
         if (activeMembership?.role === 'org_admin') {
-          const result = await get<{ logoAssetId: string | null }>(
-            '/api/organizations/me',
-          );
+          const result = await get<{ logoAssetId: string | null }>('/api/organizations/me');
           logoAssetId = result.data.logoAssetId;
         } else if (activeMembership?.communityId) {
           const result = await get<{ community: { logoAssetId: string | null } }>(
@@ -254,14 +266,17 @@ export function AppSidebar() {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [user?.isPlatformAdmin, activeMembership?.id, activeMembership?.role, activeMembership?.communityId]);
+  }, [
+    user?.isPlatformAdmin,
+    activeMembership?.id,
+    activeMembership?.role,
+    activeMembership?.communityId,
+  ]);
   const closeMobile = () => {
     if (isMobile) setOpenMobile(false);
   };
   const role = activeMembership?.role ?? '';
-  const isPlatformContext = Boolean(
-    user?.isPlatformAdmin && activeMembership?.id === 'platform',
-  );
+  const isPlatformContext = Boolean(user?.isPlatformAdmin && activeMembership?.id === 'platform');
   const groupOrder: NavItem['group'][] = isPlatformContext
     ? ['admin', 'analysis']
     : ['org_admin', 'community_admin'].includes(role)
@@ -296,9 +311,7 @@ export function AppSidebar() {
                 ) : (
                   <RiBuilding2Line className="size-5" />
                 )}
-                <span className="font-heading text-base font-semibold">
-                  Portería Virtual
-                </span>
+                <span className="font-heading text-base font-semibold">Portería Virtual</span>
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -316,11 +329,7 @@ export function AppSidebar() {
                 <SidebarMenu>
                   {groupItems.map((item) => (
                     <SidebarMenuItem key={item.to}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive(item.to)}
-                        tooltip={item.label}
-                      >
+                      <SidebarMenuButton asChild isActive={isActive(item.to)} tooltip={item.label}>
                         <NavLink to={item.to} end={item.to === '/'} onClick={closeMobile}>
                           <item.icon className="h-4 w-4 shrink-0" />
                           <span>{item.label}</span>

@@ -8,17 +8,13 @@ import {
   pgEnum,
   index,
   uniqueIndex,
+  varchar,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { organizations } from './organizations';
 import { communities } from './communities';
 
-export const outboxStatusEnum = pgEnum('outbox_status', [
-  'pending',
-  'processing',
-  'done',
-  'dead',
-]);
+export const outboxStatusEnum = pgEnum('outbox_status', ['pending', 'processing', 'done', 'dead']);
 
 export const outboxEvents = pgTable(
   'outbox_events',
@@ -34,22 +30,23 @@ export const outboxEvents = pgTable(
     communityId: uuid('community_id').references(() => communities.id, {
       onDelete: 'set null',
     }),
+    topic: varchar('topic', { length: 20 }).notNull().default('events'),
     payload: jsonb('payload')
       .default(sql`'{}'::jsonb`)
       .notNull(),
     envelope: jsonb('envelope').notNull(),
     status: outboxStatusEnum('status').notNull().default('pending'),
     attempts: integer('attempts').notNull().default(0),
-    availableAt: timestamp('available_at', { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    availableAt: timestamp('available_at', { withTimezone: true }).defaultNow().notNull(),
     processedAt: timestamp('processed_at', { withTimezone: true }),
     lastError: text('last_error'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     eventIdIdx: uniqueIndex('outbox_event_id_idx').on(table.eventId),
-    statusAvailableIdx: index('outbox_status_available_idx').on(
+    statusAvailableIdx: index('outbox_status_available_idx').on(table.status, table.availableAt),
+    topicStatusAvailableIdx: index('outbox_topic_status_available_idx').on(
+      table.topic,
       table.status,
       table.availableAt,
     ),

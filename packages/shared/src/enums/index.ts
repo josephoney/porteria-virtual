@@ -125,3 +125,140 @@ export const OutboxStatus = {
 export type OutboxStatus = (typeof OutboxStatus)[keyof typeof OutboxStatus];
 
 export const OutboxStatusValues = Object.values(OutboxStatus) as OutboxStatus[];
+
+export const PassType = {
+  EntryOnly: 'entry_only',
+  EntryExit: 'entry_exit',
+  EntryExitRecurring: 'entry_exit_recurring',
+} as const;
+
+export type PassType = (typeof PassType)[keyof typeof PassType];
+
+export const PassTypeValues = Object.values(PassType) as PassType[];
+
+export const PassStatus = {
+  Active: 'active',
+  Used: 'used',
+  Revoked: 'revoked',
+  Expired: 'expired',
+} as const;
+
+export type PassStatus = (typeof PassStatus)[keyof typeof PassStatus];
+
+export const PassStatusValues = Object.values(PassStatus) as PassStatus[];
+
+export const PresenceState = {
+  Outside: 'outside',
+  Inside: 'inside',
+} as const;
+
+export type PresenceState = (typeof PresenceState)[keyof typeof PresenceState];
+
+export const PresenceStateValues = Object.values(PresenceState) as PresenceState[];
+
+export const ScanAction = {
+  Entry: 'entry',
+  Exit: 'exit',
+} as const;
+
+export type ScanAction = (typeof ScanAction)[keyof typeof ScanAction];
+
+export const ScanActionValues = Object.values(ScanAction) as ScanAction[];
+
+export const ScanStatus = {
+  Pending: 'pending',
+  Confirmed: 'confirmed',
+  Rejected: 'rejected',
+  Expired: 'expired',
+} as const;
+
+export type ScanStatus = (typeof ScanStatus)[keyof typeof ScanStatus];
+
+export const ScanStatusValues = Object.values(ScanStatus) as ScanStatus[];
+
+export const ScanResult = {
+  Authorized: 'authorized',
+  Denied: 'denied',
+} as const;
+
+export type ScanResult = (typeof ScanResult)[keyof typeof ScanResult];
+
+export const ScanResultValues = Object.values(ScanResult) as ScanResult[];
+
+export const PassAlertType = {
+  MissingExit: 'missing_exit',
+} as const;
+
+export type PassAlertType = (typeof PassAlertType)[keyof typeof PassAlertType];
+
+export const PassAlertTypeValues = Object.values(PassAlertType) as PassAlertType[];
+
+export const PassAlertStatus = {
+  Open: 'open',
+  Resolved: 'resolved',
+} as const;
+
+export type PassAlertStatus = (typeof PassAlertStatus)[keyof typeof PassAlertStatus];
+
+export const PassAlertStatusValues = Object.values(PassAlertStatus) as PassAlertStatus[];
+
+export const AccessPointType = {
+  Door: 'door',
+  Gate: 'gate',
+  Turnstile: 'turnstile',
+} as const;
+
+export type AccessPointType = (typeof AccessPointType)[keyof typeof AccessPointType];
+
+export const AccessPointTypeValues = Object.values(AccessPointType) as AccessPointType[];
+
+export const AccessPointDirection = {
+  Entry: 'entry',
+  Exit: 'exit',
+  Both: 'both',
+} as const;
+
+export type AccessPointDirection =
+  (typeof AccessPointDirection)[keyof typeof AccessPointDirection];
+
+export const AccessPointDirectionValues = Object.values(
+  AccessPointDirection,
+) as AccessPointDirection[];
+
+export const GuardShiftStatus = {
+  Open: 'open',
+  Closed: 'closed',
+} as const;
+
+export type GuardShiftStatus = (typeof GuardShiftStatus)[keyof typeof GuardShiftStatus];
+
+export const GuardShiftStatusValues = Object.values(
+  GuardShiftStatus,
+) as GuardShiftStatus[];
+
+export const BitacoraEntryType = {
+  PassEntry: 'pass_entry',
+  PassExit: 'pass_exit',
+  PassRejected: 'pass_rejected',
+  ScanDenied: 'scan_denied',
+  ShiftStart: 'shift_start',
+  ShiftEnd: 'shift_end',
+  Manual: 'manual',
+} as const;
+
+export type BitacoraEntryType =
+  (typeof BitacoraEntryType)[keyof typeof BitacoraEntryType];
+
+export const BitacoraEntryTypeValues = Object.values(
+  BitacoraEntryType,
+) as BitacoraEntryType[];
+
+export const BitacoraSource = {
+  App: 'app',
+  Dashboard: 'dashboard',
+  System: 'system',
+} as const;
+
+export type BitacoraSource = (typeof BitacoraSource)[keyof typeof BitacoraSource];
+
+export const BitacoraSourceValues = Object.values(BitacoraSource) as BitacoraSource[];

@@ -85,6 +85,20 @@
       "when": 1794200000000,
       "tag": "0011_people_accounts_rollback",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794269218140,
+      "tag": "0012_dynamic_qr_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794282164263,
+      "tag": "0013_icy_amazoness",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,8 @@ const API_URL = 'http://localhost:3000';
  */
 export default defineConfig({
   testDir: './tests',
+  /* Pass-web E2E needs a separate API/pass-web pair with the QR flag on. */
+  testIgnore: '**/passes/**',
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */

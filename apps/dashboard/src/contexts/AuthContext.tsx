@@ -25,6 +25,8 @@ export interface ActiveMembership {
   organizationId: string;
   communityId: string | null;
   unitId: string | null;
+  locationUnitId?: string | null;
+  defaultAccessPointId?: string | null;
 }
 
 interface LoginResult {
@@ -198,39 +200,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [applyAuth]);
 
-  const login = useCallback(async (email: string, password: string, communitySlug?: string): Promise<LoginResult> => {
-    const res = await fetch(`${CONFIG.API_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, ...(communitySlug ? { communitySlug } : {}) }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Invalid credentials');
-    }
+  const login = useCallback(
+    async (email: string, password: string, communitySlug?: string): Promise<LoginResult> => {
+      const res = await fetch(`${CONFIG.API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, ...(communitySlug ? { communitySlug } : {}) }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Invalid credentials');
+      }
 
-    const data = await res.json();
-    if (data.requiresContextSelection) {
-      setMemberships(data.memberships ?? []);
-      localStorage.setItem(
-        STORAGE_KEYS.MEMBERSHIPS,
-        JSON.stringify(data.memberships ?? []),
-      );
-      return {
-        requiresContextSelection: true,
-        memberships: data.memberships,
-        selectionToken: data.selectionToken,
-      };
-    }
+      const data = await res.json();
+      if (data.requiresContextSelection) {
+        setMemberships(data.memberships ?? []);
+        localStorage.setItem(STORAGE_KEYS.MEMBERSHIPS, JSON.stringify(data.memberships ?? []));
+        return {
+          requiresContextSelection: true,
+          memberships: data.memberships,
+          selectionToken: data.selectionToken,
+        };
+      }
 
-    setMemberships([data.activeMembership]);
-    localStorage.setItem(
-      STORAGE_KEYS.MEMBERSHIPS,
-      JSON.stringify([data.activeMembership]),
-    );
-    applyAuth(data);
-    return { requiresContextSelection: false };
-  }, [applyAuth]);
+      setMemberships([data.activeMembership]);
+      localStorage.setItem(STORAGE_KEYS.MEMBERSHIPS, JSON.stringify([data.activeMembership]));
+      applyAuth(data);
+      return { requiresContextSelection: false };
+    },
+    [applyAuth],
+  );
 
   const acceptInvitation = useCallback(
     async (token: string, name?: string, password?: string) => {

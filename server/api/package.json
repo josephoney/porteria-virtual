@@ -7,8 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "tsx --test test/role-policy.service.test.ts test/location-tree.service.test.ts test/admin-permissions.service.test.ts",
-    "test:integration": "tsx --test --test-force-exit test/location-nodes.integration.test.ts test/schema-migration.integration.test.ts",
+    "test": "tsx --test test/role-policy.service.test.ts test/location-tree.service.test.ts test/admin-permissions.service.test.ts test/pass-token.service.test.ts",
+    "test:integration": "tsx --test --test-force-exit test/location-nodes.integration.test.ts test/schema-migration.integration.test.ts test/passes.integration.test.ts test/guard-shifts.integration.test.ts",
     "lint": "eslint src/",
     "clean": "rimraf dist"
   },

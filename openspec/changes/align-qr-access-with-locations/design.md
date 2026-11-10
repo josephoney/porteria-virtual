@@ -1,116 +1,125 @@
 ## Context
 
-`add-dynamic-qr-access` fue especificado antes de la jerarquía de ubicaciones y del
-modelo persona/cuenta/subusuarios. El change sigue siendo la fuente de verdad del flujo
-QR, pero sus referencias deben alinearse con las nuevas entidades. No se duplica el flujo:
-se actualiza el change existente y se define el contrato de integración.
+`add-dynamic-qr-access` fue especificado antes de la jerarquía de ubicaciones, del modelo
+persona/cuenta y de los subusuarios. La parte de **ubicaciones y personas** ya se
+implementó en el Slice 0 del MVP dentro de `add-dynamic-qr-access`: el pase usa
+`location_unit_id`, `structure_id`, `created_by_person_id` y
+`authorized_by_person_id`, y la bitácora muestra el camino de ubicación.
+
+Este change queda para la **Phase 2**: integrar subusuarios/delegaciones y resolver
+destinatarios de notificaciones. No se duplica el flujo QR.
 
 ## Goals / Non-Goals
 
-**Goals:**
+**Goals (Phase 2):**
 
-- Que cada pase apunte a una ubicación hoja válida.
-- Que el autorizador quede trazado (principal o subusuario).
-- Que las notificaciones lleguen a los residentes correctos.
-- Migrar pases existentes sin romper el flujo.
-- Documentar impactos antes de implementar.
+- Que un subusuario con `authorize_visitors` pueda crear pases en nombre del residente.
+- Que el autorizador delegado quede trazado en el pase y en la bitácora.
+- Que las notificaciones lleguen al residente principal y al autorizador si es distinto.
 
 **Non-Goals:**
 
 - No se redefine el QR rotativo ni el scanner.
 - No se cambia el modelo de subusuarios.
 - No se crea un change QR nuevo.
+- No se migran datos: no existen pases en el MVP.
 
 ## Decisions
 
-### 1. `location_unit_id` como referencia
+### 1. Parte A absorbida
 
-**Decisión:** `access_passes.unit_id` se reemplaza por `location_unit_id`, que apunta a
-un nodo hoja (`level_position = level_count`). Se conserva `community_id` y se agrega
-`structure_id` denormalizado.
+**Decisión:** `location_unit_id`, `structure_id`, `created_by_person_id`,
+`authorized_by_person_id`, la validación de hoja, el camino de ubicación y el preview con
+`locationPath` ya están en `add-dynamic-qr-access`. Este change no los vuelve a definir.
 
-**Alternativas:** mantener `unit_id` y agregar una tabla puente. Se descarta: duplica la
-referencia.
+**Alternativas:** mantener una copia acá. Se descarta: duplica la fuente de verdad.
 
-### 2. Autorizador explícito
+### 2. Autorizador delegado (Phase 2)
 
-**Decisión:** el pase guarda:
+**Decisión:** cuando exista `subuser_delegations`, el pase guarda:
+
 - `created_by_person_id`: quien creó el pase (principal o subusuario);
-- `authorized_by_person_id`: quien autoriza (puede ser el mismo);
-- `authorized_by_delegation_id`: si es subusuario.
+- `authorized_by_person_id`: el residente principal o el subusuario que autoriza;
+- `authorized_by_delegation_id`: la delegación activa, con FK a
+  `subuser_delegations`.
 
-**Alternativas:** solo `created_by` usuario. Se descarta: no traza subusuarios.
+En el MVP esta columna existe, es nullable y no tiene FK.
 
-### 3. Validación de creación
+### 3. Validación de creación con delegación
 
 **Decisión:** al crear un pase:
+
 - la ubicación debe ser hoja y pertenecer a la comunidad;
 - el creador debe ser residente/ocupante de la ubicación o un subusuario con
   `authorize_visitors` y alcance;
-- la comunidad debe pertenecer a la organización del token;
-- el autorizador debe tener permiso vigente.
+- la delegación debe estar activa;
+- la comunidad debe pertenecer a la organización del token.
+
+Sin delegación, el autorizador es el residente principal.
 
 ### 4. Escaneo y bitácora
 
 **Decisión:** el scan devuelve:
+
 - estructura/niveles y unidad (ruta legible);
 - nombre/apellido del visitante;
-- autorizador (principal/subusuario);
+- autorizador (principal/subusuario) y su relación;
 - placa si hay vehículo.
 
-La bitácora guarda snapshots y IDs.
+La bitácora guarda snapshots y IDs, incluido `authorized_by_delegation_id` cuando
+corresponda.
 
-### 5. Notificaciones
+### 5. Notificaciones (Phase 2)
 
 **Decisión:** destinatarios:
+
 - principal(es) y residentes de la ubicación con cuenta;
-- subusuario autorizador;
-- guardia/community_admin en salida faltante.
+- subusuario autorizador si es distinto;
+- guardia/`community_admin` en salida faltante.
 
 Se resuelven desde `location_residents` + `accounts`.
 
-### 6. Migración
+### 6. Sin migración de datos
 
-**Decisión:** mapear cada `access_passes.unit_id` legacy a `location_unit_id` usando el
-mapa de migración de la propuesta 4. Los pases sin mapeo quedan en cuarentena y se
-reportan.
+**Decisión:** no hay pases legacy que migrar. El MVP crea el schema correcto desde el
+día uno. Si en el futuro aparecen pases con `unit_id`, se resuelven con una migración
+aparte.
 
-### 7. Compatibilidad
+### 7. Sin alias `unitId`
 
-**Decisión:** durante la transición, la API acepta `unitId` y lo normaliza a
-`locationUnitId`; el DTO nuevo expone `locationUnitId`. Se elimina el alias al finalizar
-la migración.
+**Decisión:** el contrato nuevo usa solo `locationUnitId`. No se acepta `unitId` legacy
+porque no hay clientes que lo usen.
 
 ### 8. Actualización del change activo
 
-**Decisión:** este change no crea specs duplicadas del QR; define el contrato de
-integración y las tareas para actualizar `add-dynamic-qr-access` (proposal/design/specs/
-tasks) antes de implementarlo.
+**Decisión:** este change no crea specs duplicadas del QR. Define el contrato de
+integración de Phase 2 y las tareas para actualizar `add-dynamic-qr-access` cuando
+`add-delegated-subusers` y `add-notification-service` estén listos.
 
 ## Impactos por artefacto del QR
 
-| Artefacto | Cambio |
-|---|---|
-| `proposal.md` | referencias a `locationUnitId`, persona/subusuario |
-| `design.md` | modelo, validaciones, notificaciones |
-| `dynamic-pass-creation/spec.md` | ubicación hoja y autorizador |
-| `pass-scan-entry/spec.md` | ruta de ubicación y autorizador |
-| `pass-lifecycle/spec.md` | notificaciones por residentes |
-| `database-schema/spec.md` | columnas/FKs |
-| `shared-types/spec.md` | DTOs |
-| `tasks.md` | migración y tests |
+| Artefacto                       | Cambio en Phase 2                          |
+| ------------------------------- | ------------------------------------------ |
+| `proposal.md`                   | autorizador delegado y dependencias        |
+| `design.md`                     | validación con delegación y notificaciones |
+| `dynamic-pass-creation/spec.md` | creación por subusuario                    |
+| `pass-scan-entry/spec.md`       | autorizador delegado en scan/bitácora      |
+| `pass-lifecycle/spec.md`        | notificaciones por residentes              |
+| `database-schema/spec.md`       | FK de `authorized_by_delegation_id`        |
+| `shared-types/spec.md`          | DTOs con autorizador delegado              |
+| `tasks.md`                      | tareas de Phase 2 y tests                  |
 
 ## Risks / Trade-offs
 
-- **[Riesgo] Pases sin ubicación mapeada** → Mitigación: cuarentena + reporte.
+- **[Riesgo] Delegación revocada** → Mitigación: validar al crear; los pases ya creados
+  quedan con su snapshot.
 - **[Riesgo] Duplicar el change QR** → Mitigación: actualización en sitio.
-- **[Riesgo] Autorizador revocado** → Mitigación: validar al crear; los pases usados
-  quedan.
-- **[Trade-off] Alias temporal `unitId`** → Se elimina al final.
+- **[Trade-off] Dependencia de dos changes en 0%** → Se implementa recién en Phase 2.
 
 ## Open Questions
 
 - ¿Un pase puede autorizar una ubicación con varios residentes? Propuesta: sí; el
   autorizador debe ser uno de ellos o un subusuario con permiso.
-- ¿Se migran pases históricos o solo activos? Propuesta: activos + históricos si el
-  mapeo es posible.
+- ¿Qué pasa si el subusuario pierde el permiso después de crear el pase? Propuesta: el
+  pase sigue válido con el snapshot del autorizador; la revocación afecta solo pases
+  nuevos.

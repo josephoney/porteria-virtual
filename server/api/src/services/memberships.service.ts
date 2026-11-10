@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { memberships, users } from '@porteria/database/schema';
+import { memberships, accessPoints, users } from '@porteria/database/schema';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
 import { canAssignRole } from './role-policy.service.js';
@@ -23,6 +23,7 @@ export interface MembershipResult {
   communityId: string | null;
   unitId: string | null;
   locationUnitId: string | null;
+  defaultAccessPointId: string | null;
   role: string;
   status: string;
 }
@@ -52,6 +53,7 @@ function toMembershipResult(row: typeof memberships.$inferSelect): MembershipRes
     communityId: row.communityId,
     unitId: row.unitId,
     locationUnitId: row.locationUnitId,
+    defaultAccessPointId: row.defaultAccessPointId,
     role: row.role,
     status: row.status,
   };
@@ -65,6 +67,26 @@ function canManage(requester: Requester): boolean {
   );
 }
 
+async function validateDefaultAccessPoint(
+  accessPointId: string,
+  communityId: string | null,
+): Promise<string | null> {
+  if (!communityId) return 'Default access point requires a community';
+  const [accessPoint] = await db
+    .select({
+      id: accessPoints.id,
+      communityId: accessPoints.communityId,
+      active: accessPoints.active,
+    })
+    .from(accessPoints)
+    .where(eq(accessPoints.id, accessPointId))
+    .limit(1);
+  if (!accessPoint) return 'Access point not found';
+  if (accessPoint.communityId !== communityId) return 'Access point out of community';
+  if (!accessPoint.active) return 'Access point is inactive';
+  return null;
+}
+
 export async function createMembership(
   data: {
     userId: string;
@@ -72,6 +94,7 @@ export async function createMembership(
     communityId?: string | null;
     unitId?: string | null;
     locationUnitId?: string | null;
+    defaultAccessPointId?: string | null;
   },
   requester: Requester,
 ): Promise<{ membership?: MembershipResult; error?: string }> {
@@ -86,7 +109,11 @@ export async function createMembership(
   const communityId =
     requester.role === 'community_admin' ? requester.communityId : (data.communityId ?? null);
 
-  if (requester.role === 'community_admin' && data.communityId && data.communityId !== requester.communityId) {
+  if (
+    requester.role === 'community_admin' &&
+    data.communityId &&
+    data.communityId !== requester.communityId
+  ) {
     return { error: 'Community out of scope' };
   }
 
@@ -109,6 +136,14 @@ export async function createMembership(
     }
   }
 
+  if (data.defaultAccessPointId) {
+    const accessPointError = await validateDefaultAccessPoint(
+      data.defaultAccessPointId,
+      communityId,
+    );
+    if (accessPointError) return { error: accessPointError };
+  }
+
   const created = await db.transaction(async (tx) => {
     const [membership] = await tx
       .insert(memberships)
@@ -118,6 +153,7 @@ export async function createMembership(
         communityId,
         unitId: data.unitId ?? null,
         locationUnitId: data.locationUnitId ?? null,
+        defaultAccessPointId: data.defaultAccessPointId ?? null,
         role: data.role as MembershipRole,
         status: 'active',
       })
@@ -153,6 +189,7 @@ export async function updateMembership(
     communityId?: string | null;
     unitId?: string | null;
     locationUnitId?: string | null;
+    defaultAccessPointId?: string | null;
   },
   requester: Requester,
 ): Promise<{ membership?: MembershipResult; error?: string; notFound?: boolean }> {
@@ -173,18 +210,18 @@ export async function updateMembership(
 
   if (!existing) return { notFound: true };
 
-  if (
-    requester.role === 'community_admin' &&
-    existing.communityId !== requester.communityId
-  ) {
+  if (requester.role === 'community_admin' && existing.communityId !== requester.communityId) {
     return { error: 'Community out of scope' };
   }
 
-  const nextCommunityId =
-    data.communityId !== undefined ? data.communityId : existing.communityId;
+  const nextCommunityId = data.communityId !== undefined ? data.communityId : existing.communityId;
   const nextUnitId = data.unitId !== undefined ? data.unitId : existing.unitId;
   const nextLocationUnitId =
     data.locationUnitId !== undefined ? data.locationUnitId : existing.locationUnitId;
+  const nextDefaultAccessPointId =
+    data.defaultAccessPointId !== undefined
+      ? data.defaultAccessPointId
+      : existing.defaultAccessPointId;
   const nextRole = data.role ?? existing.role;
 
   const scopeError = validateMembershipScope(
@@ -206,6 +243,14 @@ export async function updateMembership(
     }
   }
 
+  if (nextDefaultAccessPointId) {
+    const accessPointError = await validateDefaultAccessPoint(
+      nextDefaultAccessPointId,
+      nextCommunityId,
+    );
+    if (accessPointError) return { error: accessPointError };
+  }
+
   const updated = await db.transaction(async (tx) => {
     const [membership] = await tx
       .update(memberships)
@@ -215,6 +260,7 @@ export async function updateMembership(
         communityId: nextCommunityId,
         unitId: nextUnitId,
         locationUnitId: nextLocationUnitId,
+        defaultAccessPointId: nextDefaultAccessPointId,
         updatedAt: new Date(),
       })
       .where(eq(memberships.id, id))

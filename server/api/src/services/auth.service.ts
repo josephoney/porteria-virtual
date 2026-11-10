@@ -81,6 +81,8 @@ function toMembershipSummary(membership: typeof memberships.$inferSelect): Membe
     organizationId: membership.organizationId,
     communityId: membership.communityId,
     unitId: membership.unitId,
+    locationUnitId: membership.locationUnitId,
+    defaultAccessPointId: membership.defaultAccessPointId,
   };
 }
 
@@ -91,6 +93,8 @@ function platformMembership(): MembershipSummary {
     organizationId: '',
     communityId: null,
     unitId: null,
+    locationUnitId: null,
+    defaultAccessPointId: null,
   };
 }
 
@@ -107,17 +111,13 @@ interface AccountIdentity {
   personId?: string;
 }
 
-async function identityForUser(
-  user: typeof users.$inferSelect,
-): Promise<AccountIdentity> {
+async function identityForUser(user: typeof users.$inferSelect): Promise<AccountIdentity> {
   const [account] = await db
     .select({ id: accounts.id, personId: accounts.personId })
     .from(accounts)
     .where(eq(accounts.email, user.email))
     .limit(1);
-  return account
-    ? { accountId: account.id, personId: account.personId }
-    : {};
+  return account ? { accountId: account.id, personId: account.personId } : {};
 }
 
 interface AuthenticatedSubject {
@@ -126,10 +126,7 @@ interface AuthenticatedSubject {
   isPlatformAdmin: boolean;
 }
 
-async function authenticate(
-  email: string,
-  password: string,
-): Promise<AuthenticatedSubject | null> {
+async function authenticate(email: string, password: string): Promise<AuthenticatedSubject | null> {
   const [account] = await db
     .select({
       id: accounts.id,
@@ -158,16 +155,12 @@ async function authenticate(
 
   return {
     user,
-    identity: account
-      ? { accountId: account.id, personId: account.personId }
-      : {},
+    identity: account ? { accountId: account.id, personId: account.personId } : {},
     isPlatformAdmin: user.isPlatformAdmin || Boolean(account?.isPlatformAdmin),
   };
 }
 
-async function isPlatformAdminForUser(
-  user: typeof users.$inferSelect,
-): Promise<boolean> {
+async function isPlatformAdminForUser(user: typeof users.$inferSelect): Promise<boolean> {
   const [account] = await db
     .select({ active: accounts.active, isPlatformAdmin: accounts.isPlatformAdmin })
     .from(accounts)
@@ -288,12 +281,7 @@ export async function refreshToken(token: string): Promise<RefreshResponse | nul
   }
 
   if (!membership) return null;
-  return createTokens(
-    user,
-    membership,
-    await identityForUser(user),
-    isPlatformAdmin,
-  );
+  return createTokens(user, membership, await identityForUser(user), isPlatformAdmin);
 }
 
 export async function switchContext(
@@ -322,12 +310,7 @@ export async function switchContext(
       .where(eq(refreshTokens.tokenHash, hashToken(currentRefreshToken)));
   }
 
-  return createTokens(
-    user,
-    membership,
-    await identityForUser(user),
-    isPlatformAdmin,
-  );
+  return createTokens(user, membership, await identityForUser(user), isPlatformAdmin);
 }
 
 export async function logout(token: string): Promise<boolean> {
@@ -412,7 +395,10 @@ export async function loginScoped(
 
   if (scoped.length === 0) return { ok: false, reason: 'no_community_access' };
   if (scoped.length === 1) {
-    return { ok: true, result: await createTokens(user, scoped[0], identity, subject.isPlatformAdmin) };
+    return {
+      ok: true,
+      result: await createTokens(user, scoped[0], identity, subject.isPlatformAdmin),
+    };
   }
 
   const selectionToken = jwt.sign(
