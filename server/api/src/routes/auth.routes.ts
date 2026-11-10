@@ -1,18 +1,24 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as authService from '../services/auth.service.js';
 import * as eventsService from '../services/events.service.js';
+import config from '../config.js';
+import { clearRateLimit, isRateLimited } from '../lib/rate-limit.js';
 import { loginSchema, refreshSchema, contextSwitchSchema } from '../schemas/index.js';
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/login', async (request: FastifyRequest, reply: FastifyReply) => {
     const body = loginSchema.parse(request.body);
+    const loginKey = `auth-login:${request.ip ?? 'unknown'}:${body.email.toLowerCase()}`;
+    if (isRateLimited(loginKey, config.security.loginPerMinute, 60_000)) {
+      return reply.status(429).send({
+        statusCode: 429,
+        error: 'Too Many Requests',
+        message: 'rate_limited',
+      });
+    }
 
     if (body.communitySlug) {
-      const outcome = await authService.loginScoped(
-        body.email,
-        body.password,
-        body.communitySlug,
-      );
+      const outcome = await authService.loginScoped(body.email, body.password, body.communitySlug);
 
       if (!outcome.ok) {
         const status =
@@ -23,8 +29,7 @@ export async function authRoutes(app: FastifyInstance) {
               : 401;
         return reply.status(status).send({
           statusCode: status,
-          error:
-            status === 404 ? 'Not Found' : status === 403 ? 'Forbidden' : 'Unauthorized',
+          error: status === 404 ? 'Not Found' : status === 403 ? 'Forbidden' : 'Unauthorized',
           message:
             outcome.reason === 'community_not_found'
               ? 'Community not found'
@@ -46,6 +51,7 @@ export async function authRoutes(app: FastifyInstance) {
           .catch(() => {});
       }
 
+      clearRateLimit(loginKey);
       return reply.status(200).send(outcome.result);
     }
 
@@ -71,6 +77,7 @@ export async function authRoutes(app: FastifyInstance) {
         .catch(() => {});
     }
 
+    clearRateLimit(loginKey);
     return reply.status(200).send(result);
   });
 

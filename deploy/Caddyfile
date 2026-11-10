@@ -1,0 +1,59 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# Dashboard: app.example.com
+{$DASHBOARD_HOST} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle /health {
+		reverse_proxy api:3000
+	}
+
+	handle /ready {
+		reverse_proxy api:3000
+	}
+
+	handle /socket.io/* {
+		reverse_proxy signaling:3001
+	}
+
+	handle {
+		root * /srv/dashboard
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+	}
+}
+
+# Public pass page: pases.example.com/p/<token>
+{$PASS_WEB_HOST} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		root * /srv/pass-web
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+	}
+}

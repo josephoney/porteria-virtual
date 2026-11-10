@@ -67,8 +67,12 @@ function toMembershipView(row: typeof memberships.$inferSelect): MembershipView 
 
 async function enrichMembershipViews(views: MembershipView[]): Promise<MembershipView[]> {
   const organizationIds = [...new Set(views.map((view) => view.organizationId).filter(Boolean))];
-  const communityIds = [...new Set(views.map((view) => view.communityId).filter(Boolean))] as string[];
-  const unitIds = [...new Set(views.map((view) => view.locationUnitId).filter(Boolean))] as string[];
+  const communityIds = [
+    ...new Set(views.map((view) => view.communityId).filter(Boolean)),
+  ] as string[];
+  const unitIds = [
+    ...new Set(views.map((view) => view.locationUnitId).filter(Boolean)),
+  ] as string[];
   const [organizationRows, communityRows, unitRows] = await Promise.all([
     organizationIds.length
       ? db
@@ -99,15 +103,11 @@ async function enrichMembershipViews(views: MembershipView[]): Promise<Membershi
   return views.map((view) => ({
     ...view,
     organizationName: view.organizationId
-      ? organizationNames.get(view.organizationId) ?? null
+      ? (organizationNames.get(view.organizationId) ?? null)
       : null,
-    communityName: view.communityId ? communityNames.get(view.communityId) ?? null : null,
-    locationUnitName: view.locationUnitId
-      ? unitMap.get(view.locationUnitId)?.name ?? null
-      : null,
-    locationUnitCode: view.locationUnitId
-      ? unitMap.get(view.locationUnitId)?.code ?? null
-      : null,
+    communityName: view.communityId ? (communityNames.get(view.communityId) ?? null) : null,
+    locationUnitName: view.locationUnitId ? (unitMap.get(view.locationUnitId)?.name ?? null) : null,
+    locationUnitCode: view.locationUnitId ? (unitMap.get(view.locationUnitId)?.code ?? null) : null,
   }));
 }
 
@@ -190,10 +190,7 @@ function scopeConditions(requester: Requester, targetUserId: string) {
   return conditions;
 }
 
-export async function getUserById(
-  id: string,
-  requester: Requester,
-): Promise<UserResult | null> {
+export async function getUserById(id: string, requester: Requester): Promise<UserResult | null> {
   const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
   if (!user) return null;
 
@@ -215,34 +212,60 @@ export async function getUserById(
 
 export async function listUsers(
   requester: Requester,
-  options: { page: number; pageSize: number; communityId?: string; search?: string },
-): Promise<{ data: UserResult[]; total: number; page: number; pageSize: number }> {
-  const { page, pageSize, communityId, search } = options;
+  options: {
+    page: number;
+    pageSize: number;
+    communityId?: string;
+    search?: string;
+    status?: 'active' | 'inactive';
+  },
+): Promise<{
+  data: UserResult[];
+  total: number;
+  scopeTotal: number;
+  page: number;
+  pageSize: number;
+}> {
+  const { page, pageSize, communityId, search, status } = options;
   const offset = (page - 1) * pageSize;
 
-  const conditions: SQL[] = [];
+  const scopeConditions: SQL[] = [];
   if (!requester.isPlatformAdmin) {
-    conditions.push(eq(memberships.organizationId, requester.orgId));
+    scopeConditions.push(eq(memberships.organizationId, requester.orgId));
   }
   if (requester.role === 'community_admin' && requester.communityId) {
-    conditions.push(eq(memberships.communityId, requester.communityId));
+    scopeConditions.push(eq(memberships.communityId, requester.communityId));
   } else if (communityId) {
-    conditions.push(eq(memberships.communityId, communityId));
+    scopeConditions.push(eq(memberships.communityId, communityId));
   }
+
+  const filterConditions: SQL[] = [];
   if (search) {
     const searchCondition = or(
       ilike(users.email, `%${search}%`),
       ilike(users.name, `%${search}%`),
+      ilike(people.firstName, `%${search}%`),
+      ilike(people.lastName, `%${search}%`),
+      ilike(people.documentNumber, `%${search}%`),
     );
-    if (searchCondition) conditions.push(searchCondition);
+    if (searchCondition) filterConditions.push(searchCondition);
+  }
+  if (status) {
+    filterConditions.push(eq(users.active, status === 'active'));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const scopeWhereClause = scopeConditions.length > 0 ? and(...scopeConditions) : undefined;
+  const whereClause =
+    scopeConditions.length > 0 || filterConditions.length > 0
+      ? and(...scopeConditions, ...filterConditions)
+      : undefined;
 
   const userIdRows = await db
     .selectDistinct({ id: users.id, createdAt: users.createdAt })
     .from(users)
     .innerJoin(memberships, eq(memberships.userId, users.id))
+    .leftJoin(accounts, eq(accounts.email, users.email))
+    .leftJoin(people, eq(people.id, accounts.personId))
     .where(whereClause)
     .orderBy(users.createdAt)
     .limit(pageSize)
@@ -252,11 +275,25 @@ export async function listUsers(
     .select({ count: countDistinct(users.id) })
     .from(users)
     .innerJoin(memberships, eq(memberships.userId, users.id))
+    .leftJoin(accounts, eq(accounts.email, users.email))
+    .leftJoin(people, eq(people.id, accounts.personId))
     .where(whereClause);
+
+  const [scopeTotalRow] = await db
+    .select({ count: countDistinct(users.id) })
+    .from(users)
+    .innerJoin(memberships, eq(memberships.userId, users.id))
+    .where(scopeWhereClause);
 
   const ids = userIdRows.map((row) => row.id);
   if (ids.length === 0) {
-    return { data: [], total: totalRow?.count ?? 0, page, pageSize };
+    return {
+      data: [],
+      total: totalRow?.count ?? 0,
+      scopeTotal: scopeTotalRow?.count ?? 0,
+      page,
+      pageSize,
+    };
   }
 
   const userRows = await db.select().from(users).where(inArray(users.id, ids));
@@ -275,6 +312,7 @@ export async function listUsers(
   return {
     data: await enrichUsers(data),
     total: totalRow?.count ?? 0,
+    scopeTotal: scopeTotalRow?.count ?? 0,
     page,
     pageSize,
   };
@@ -301,10 +339,9 @@ export async function createUser(
   const [existing] = await db.select().from(users).where(eq(users.email, data.email)).limit(1);
   if (existing) return null;
 
-  const communityIds =
-    data.communityIds?.length
-      ? [...new Set(data.communityIds)]
-      : [requester.role === 'community_admin' ? requester.communityId : (data.communityId ?? null)];
+  const communityIds = data.communityIds?.length
+    ? [...new Set(data.communityIds)]
+    : [requester.role === 'community_admin' ? requester.communityId : (data.communityId ?? null)];
   const passwordHash = await bcrypt.hash(data.password, 10);
   const displayName =
     data.name?.trim() ||
@@ -353,8 +390,7 @@ export async function createUser(
           organizationId: requester.orgId,
           communityId,
           unitId: communityIds.length === 1 ? (data.unitId ?? null) : null,
-          locationUnitId:
-            communityIds.length === 1 ? (data.locationUnitId ?? null) : null,
+          locationUnitId: communityIds.length === 1 ? (data.locationUnitId ?? null) : null,
           role: data.role as MembershipRole,
           status: 'active',
         })
@@ -431,10 +467,7 @@ export async function changePassword(
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
   await db.transaction(async (tx) => {
-    await tx
-      .update(users)
-      .set({ passwordHash, updatedAt: new Date() })
-      .where(eq(users.id, userId));
+    await tx.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
     await tx
       .update(accounts)
       .set({ passwordHash, updatedAt: new Date() })
@@ -447,10 +480,7 @@ export async function changePassword(
 export async function getMe(userId: string): Promise<UserResult | null> {
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) return null;
-  const membershipRows = await db
-    .select()
-    .from(memberships)
-    .where(eq(memberships.userId, userId));
+  const membershipRows = await db.select().from(memberships).where(eq(memberships.userId, userId));
   return toUserResult(user, membershipRows);
 }
 

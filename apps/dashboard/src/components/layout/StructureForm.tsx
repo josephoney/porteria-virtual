@@ -28,10 +28,8 @@ export function StructureForm({
   onSaved: () => void;
   initial?: StructureInitial;
 }) {
-  const [communityId, setCommunityId] = useState(
-    initial?.communityId ?? communities[0]?.id ?? '',
-  );
-  const [name, setName] = useState(initial?.name ?? 'Estructura principal');
+  const [communityId, setCommunityId] = useState(initial?.communityId ?? communities[0]?.id ?? '');
+  const name = initial?.name ?? 'Estructura principal';
   const [levelCount, setLevelCount] = useState(initial?.levelCount ?? 3);
   const [level1Name, setLevel1Name] = useState(initial?.level1Name ?? 'Sección');
   const [level2Name, setLevel2Name] = useState(initial?.level2Name ?? 'Piso');
@@ -88,15 +86,6 @@ export function StructureForm({
             </option>
           ))}
         </select>
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="structure-name">Nombre</Label>
-        <Input
-          id="structure-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          required
-        />
       </div>
       <div className="space-y-1">
         <Label htmlFor="structure-levels">Cantidad de niveles</Label>

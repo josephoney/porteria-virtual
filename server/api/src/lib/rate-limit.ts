@@ -22,3 +22,7 @@ export function isRateLimited(key: string, limit: number, windowMs: number): boo
 export function rateLimitKey(prefix: string, request: { ip?: string; url?: string }): string {
   return `${prefix}:${request.ip ?? 'unknown'}:${request.url ?? ''}`;
 }
+
+export function clearRateLimit(key: string): void {
+  buckets.delete(key);
+}

@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: porteria
+          POSTGRES_USER: porteria
+          POSTGRES_PASSWORD: porteria_dev
+        ports:
+          - '5432:5432'
+        options: >-
+          --health-cmd "pg_isready -U porteria -d porteria"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: porteria
+      POSTGRES_USER: porteria
+      POSTGRES_PASSWORD: porteria_dev
+      JWT_SECRET: ci-jwt-secret-with-at-least-32-characters
+      JWT_REFRESH_SECRET: ci-refresh-secret-with-at-least-32-characters
+      PASS_QR_SECRET: ci-pass-qr-secret-with-at-least-32-characters
+      INTERNAL_API_KEY: ci-internal-key
+      OUTBOX_WORKER_ENABLED: 'false'
+      DYNAMIC_QR_ENABLED: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm exec tsc -b packages/shared packages/database
+
+      - name: Typecheck apps and API
+        run: >-
+          pnpm
+          --filter @porteria/api
+          --filter @porteria/dashboard
+          --filter @porteria/pass-web
+          --filter @porteria/zima-qr-access
+          exec tsc --noEmit
+
+      - name: Apply migrations
+        run: pnpm --filter @porteria/database db:migrate
+
+      - name: Unit tests
+        run: pnpm --filter @porteria/api test
+
+      - name: Integration tests
+        run: pnpm --filter @porteria/api test:integration
+
+      - name: Lint
+        run: pnpm --recursive lint

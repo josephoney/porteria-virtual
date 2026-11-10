@@ -81,7 +81,10 @@ export async function structureRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   });
@@ -94,9 +97,7 @@ export async function structureRoutes(app: FastifyInstance) {
       const query = request.query as { communityId?: string };
       const pathCommunityId = (request.params as { communityId?: string }).communityId;
       const communityId = query.communityId ?? pathCommunityId;
-      const conditions = user.isPlatformAdmin
-        ? []
-        : [eq(communities.organizationId, user.orgId)];
+      const conditions = user.isPlatformAdmin ? [] : [eq(communities.organizationId, user.orgId)];
 
       if (user.role === 'community_admin' && user.communityId) {
         conditions.push(eq(locationStructures.communityId, user.communityId));
@@ -150,11 +151,11 @@ export async function structureRoutes(app: FastifyInstance) {
           message: 'Insufficient permissions',
         });
       }
-      if (!communityId || !body.name?.trim()) {
+      if (!communityId) {
         return reply.status(400).send({
           statusCode: 400,
           error: 'Bad Request',
-          message: 'communityId and name are required',
+          message: 'communityId is required',
         });
       }
       const levelError = validateLevels(body);
@@ -173,38 +174,62 @@ export async function structureRoutes(app: FastifyInstance) {
         });
       }
 
-      const structureName = body.name.trim();
+      const [existingStructure] = await db
+        .select({ id: locationStructures.id })
+        .from(locationStructures)
+        .where(eq(locationStructures.communityId, communityId))
+        .limit(1);
+      if (existingStructure) {
+        return reply.status(409).send({
+          statusCode: 409,
+          error: 'Conflict',
+          message: 'structure_already_exists',
+        });
+      }
 
-      const created = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .insert(locationStructures)
-          .values({
-            communityId,
-            name: structureName,
-            levelCount: body.levelCount!,
-            level1Name: body.level1Name!.trim(),
-            level2Name: body.levelCount! >= 2 ? body.level2Name!.trim() : null,
-            level3Name: body.levelCount! >= 3 ? body.level3Name!.trim() : null,
-            status: 'active',
-          })
-          .returning();
+      const structureName = body.name?.trim() || 'Estructura principal';
 
-        await auditCommunityEvent({
-          request,
-          communityId: row.communityId,
-          eventType: 'location_structure.created',
-          metadata: {
-            structureId: row.id,
-            name: row.name,
-            levelCount: row.levelCount,
-          },
-          executor: tx,
+      try {
+        const created = await db.transaction(async (tx) => {
+          const [row] = await tx
+            .insert(locationStructures)
+            .values({
+              communityId,
+              name: structureName,
+              levelCount: body.levelCount!,
+              level1Name: body.level1Name!.trim(),
+              level2Name: body.levelCount! >= 2 ? body.level2Name!.trim() : null,
+              level3Name: body.levelCount! >= 3 ? body.level3Name!.trim() : null,
+              status: 'active',
+            })
+            .returning();
+
+          await auditCommunityEvent({
+            request,
+            communityId: row.communityId,
+            eventType: 'location_structure.created',
+            metadata: {
+              structureId: row.id,
+              name: row.name,
+              levelCount: row.levelCount,
+            },
+            executor: tx,
+          });
+
+          return row;
         });
 
-        return row;
-      });
-
-      return reply.status(201).send(created);
+        return reply.status(201).send(created);
+      } catch (err) {
+        if ((err as { code?: string }).code === '23505') {
+          return reply.status(409).send({
+            statusCode: 409,
+            error: 'Conflict',
+            message: 'structure_already_exists',
+          });
+        }
+        throw err;
+      }
     },
   );
 
@@ -267,10 +292,10 @@ export async function structureRoutes(app: FastifyInstance) {
             ),
           );
         if ((tooDeep?.value ?? 0) > 0) {
-          return reply.status(400).send({
-            statusCode: 400,
-            error: 'Bad Request',
-            message: 'Cannot reduce levels while nodes exist at deeper levels',
+          return reply.status(409).send({
+            statusCode: 409,
+            error: 'Conflict',
+            message: 'structure_has_units_at_removed_level',
           });
         }
       }
@@ -282,8 +307,12 @@ export async function structureRoutes(app: FastifyInstance) {
             ...(body.name !== undefined ? { name: body.name.trim() } : {}),
             ...(body.levelCount !== undefined ? { levelCount: body.levelCount } : {}),
             ...(body.level1Name !== undefined ? { level1Name: body.level1Name.trim() } : {}),
-            ...(body.level2Name !== undefined ? { level2Name: body.level2Name?.trim() || null } : {}),
-            ...(body.level3Name !== undefined ? { level3Name: body.level3Name?.trim() || null } : {}),
+            ...(body.level2Name !== undefined
+              ? { level2Name: body.level2Name?.trim() || null }
+              : {}),
+            ...(body.level3Name !== undefined
+              ? { level3Name: body.level3Name?.trim() || null }
+              : {}),
             ...(body.status !== undefined ? { status: body.status } : {}),
             updatedAt: new Date(),
           })
@@ -452,9 +481,8 @@ export async function structureRoutes(app: FastifyInstance) {
               levelPosition,
               name: body.name!.trim(),
               code: body.code?.trim() || null,
-              sectionType: levelPosition === 1 ? ((body.sectionType as SectionType) || null) : null,
-              sectionTypeLabel:
-                levelPosition === 1 ? body.sectionTypeLabel?.trim() || null : null,
+              sectionType: levelPosition === 1 ? (body.sectionType as SectionType) || null : null,
+              sectionTypeLabel: levelPosition === 1 ? body.sectionTypeLabel?.trim() || null : null,
               metadata: body.metadata ?? {},
               status: 'active',
             })
@@ -540,9 +568,7 @@ export async function structureRoutes(app: FastifyInstance) {
       }
       const typeError = validateSectionType(
         body.sectionType === undefined ? existing.sectionType : body.sectionType,
-        body.sectionTypeLabel === undefined
-          ? existing.sectionTypeLabel
-          : body.sectionTypeLabel,
+        body.sectionTypeLabel === undefined ? existing.sectionTypeLabel : body.sectionTypeLabel,
       );
       if (typeError) {
         return reply.status(400).send({
@@ -551,7 +577,10 @@ export async function structureRoutes(app: FastifyInstance) {
           message: typeError,
         });
       }
-      if (existing.levelPosition > 1 && (body.sectionType !== undefined || body.sectionTypeLabel !== undefined)) {
+      if (
+        existing.levelPosition > 1 &&
+        (body.sectionType !== undefined || body.sectionTypeLabel !== undefined)
+      ) {
         return reply.status(400).send({
           statusCode: 400,
           error: 'Bad Request',

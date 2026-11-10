@@ -44,6 +44,8 @@
   --warning: oklch(0.795 0.17 85);
   --warning-foreground: oklch(0.286 0.066 53.813);
   --warning-bg: oklch(0.97 0.05 85);
+  --success: oklch(0.62 0.17 152);
+  --success-foreground: oklch(1 0 0);
   --font-ui: 'Geist Variable', sans-serif;
   --font-heading-font: 'Geist Variable', sans-serif;
   --font-code: 'Geist Mono Variable', monospace;
@@ -98,4 +100,6 @@
   --warning: oklch(0.828 0.189 84.429);
   --warning-foreground: oklch(0.92 0.08 85);
   --warning-bg: oklch(0.286 0.066 53.813 / 0.25);
+  --success: oklch(0.74 0.18 152);
+  --success-foreground: oklch(0.17 0.03 150);
 }

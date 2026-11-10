@@ -9,14 +9,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.porteria.zimaqraccess",
-      "infoPlist": {
-        "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
-        }
-      }
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.porteria.zimaqraccess",
+      "versionCode": 1,
       "permissions": ["CAMERA"]
     },
     "plugins": [

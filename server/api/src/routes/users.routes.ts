@@ -27,7 +27,10 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   });
@@ -68,21 +71,27 @@ export async function userRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const u = getUser(request);
       if (!can(u, 'people.read', { organizationId: u.orgId, communityId: u.communityId })) {
-        return reply.status(403).send({ statusCode: 403, error: 'Forbidden', message: 'Insufficient permissions' });
+        return reply
+          .status(403)
+          .send({ statusCode: 403, error: 'Forbidden', message: 'Insufficient permissions' });
       }
       const query = request.query as {
         page?: string;
         pageSize?: string;
         communityId?: string;
         search?: string;
+        status?: string;
       };
       const page = parseInt(query.page || '1', 10);
       const pageSize = Math.min(parseInt(query.pageSize || '20', 10), 100);
+      const status =
+        query.status === 'active' || query.status === 'inactive' ? query.status : undefined;
       return usersService.listUsers(u, {
         page,
         pageSize,
         communityId: query.communityId,
         search: query.search?.trim() || undefined,
+        status,
       });
     },
   );
@@ -93,12 +102,16 @@ export async function userRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const u = getUser(request);
       if (!can(u, 'people.read', { organizationId: u.orgId, communityId: u.communityId })) {
-        return reply.status(403).send({ statusCode: 403, error: 'Forbidden', message: 'Insufficient permissions' });
+        return reply
+          .status(403)
+          .send({ statusCode: 403, error: 'Forbidden', message: 'Insufficient permissions' });
       }
       const { id } = request.params as { id: string };
       const result = await usersService.getUserById(id, u);
       if (!result) {
-        return reply.status(404).send({ statusCode: 404, error: 'Not Found', message: 'User not found' });
+        return reply
+          .status(404)
+          .send({ statusCode: 404, error: 'Not Found', message: 'User not found' });
       }
       return result;
     },
@@ -110,7 +123,9 @@ export async function userRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const u = getUser(request);
       if (!can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId })) {
-        return reply.status(403).send({ statusCode: 403, error: 'Forbidden', message: 'Insufficient permissions' });
+        return reply
+          .status(403)
+          .send({ statusCode: 403, error: 'Forbidden', message: 'Insufficient permissions' });
       }
       const body = createUserSchema.parse(request.body);
 
@@ -122,8 +137,7 @@ export async function userRoutes(app: FastifyInstance) {
         });
       }
 
-      const communityId =
-        u.role === 'community_admin' ? u.communityId : (body.communityId ?? null);
+      const communityId = u.role === 'community_admin' ? u.communityId : (body.communityId ?? null);
       const requestedCommunityIds = body.communityIds?.length
         ? body.communityIds
         : communityId
@@ -186,7 +200,6 @@ export async function userRoutes(app: FastifyInstance) {
         });
       }
 
-
       return reply.status(201).send(result);
     },
   );
@@ -197,13 +210,17 @@ export async function userRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const u = getUser(request);
       if (!can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId })) {
-        return reply.status(403).send({ statusCode: 403, error: 'Forbidden', message: 'Insufficient permissions' });
+        return reply
+          .status(403)
+          .send({ statusCode: 403, error: 'Forbidden', message: 'Insufficient permissions' });
       }
       const { id } = request.params as { id: string };
       const body = updateUserSchema.parse(request.body);
       const result = await usersService.updateUser(id, body, u);
       if (!result) {
-        return reply.status(404).send({ statusCode: 404, error: 'Not Found', message: 'User not found' });
+        return reply
+          .status(404)
+          .send({ statusCode: 404, error: 'Not Found', message: 'User not found' });
       }
 
       return result;

@@ -10,13 +10,21 @@ import { startOutboxWorker, stopOutboxWorker } from './workers/outbox.worker.js'
 import config, { validateConfig } from './config.js';
 import { errorHandler } from './plugins/error-handler.js';
 import { createDb } from '@porteria/database';
+import { sql } from 'drizzle-orm';
 import { redactSensitiveUrl } from './lib/log-redaction.js';
+import { recordRequest, renderMetrics } from './lib/metrics.js';
 
 export async function buildApp() {
   const warnings = validateConfig();
+  if (config.isProduction && warnings.length > 0) {
+    throw new Error(`Invalid production configuration: ${warnings.join('; ')}`);
+  }
+
   const app = Fastify({
+    trustProxy: config.trustProxy,
+    bodyLimit: config.requestBodyLimit,
     logger: {
-      level: process.env.LOG_LEVEL || 'info',
+      level: config.logLevel,
       serializers: {
         req(request: FastifyRequest) {
           return {
@@ -31,26 +39,50 @@ export async function buildApp() {
   });
 
   // Core plugins
-  await app.register(cors, { origin: true, credentials: true });
+  await app.register(cors, {
+    origin: config.corsOrigins.length > 0 ? config.corsOrigins : false,
+    credentials: true,
+  });
   await app.register(multipart, { limits: { fileSize: 500 * 1024 } });
-  await app.register(errorHandler);
+  await errorHandler(app);
   await app.register(fjwt, { secret: config.jwt.secret });
   registerMembershipGuard(app);
 
-  app.addHook('onRequest', async (_request, reply) => {
+  app.addHook('onRequest', async (request, reply) => {
+    reply.header('X-Request-Id', request.id);
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
+    reply.header('Cross-Origin-Opener-Policy', 'same-origin');
+    reply.header('Cross-Origin-Resource-Policy', 'same-site');
+    if (config.isProduction) {
+      reply.header(
+        'Strict-Transport-Security',
+        `max-age=${config.security.hstsMaxAgeSeconds}; includeSubDomains`,
+      );
+    }
+  });
+
+  app.addHook('onResponse', async (request, reply) => {
+    recordRequest(request.method, reply.statusCode, reply.elapsedTime);
   });
 
   // Database
+  let db: ReturnType<typeof createDb> | null = null;
   try {
-    const db = createDb();
+    db = createDb();
     app.decorate('db', db);
     app.log.info('Database connected');
   } catch (err) {
     app.log.error('Database connection failed');
     throw err;
   }
+
+  if (!db) {
+    throw new Error('Database connection was not created');
+  }
+  const database = db;
 
   if (warnings.length > 0) {
     app.log.warn({ warnings }, 'Configuration warnings');
@@ -60,7 +92,43 @@ export async function buildApp() {
   app.get('/health', async () => ({
     status: 'ok',
     service: 'api',
+    version: config.version,
     timestamp: Date.now(),
+  }));
+
+  app.get('/ready', async (_request, reply) => {
+    try {
+      await database.execute(sql`select 1`);
+      return {
+        status: 'ready',
+        service: 'api',
+        db: 'ok',
+        outboxWorker: config.outbox.workerEnabled ? 'enabled' : 'disabled',
+        timestamp: Date.now(),
+      };
+    } catch {
+      return reply.status(503).send({
+        status: 'not_ready',
+        service: 'api',
+        db: 'error',
+        timestamp: Date.now(),
+      });
+    }
+  });
+
+  if (config.observability.metricsEnabled) {
+    app.get('/metrics', async (_request, reply) => {
+      reply.type('text/plain; version=0.0.4; charset=utf-8');
+      return renderMetrics();
+    });
+  }
+
+  app.get('/api/version', async () => ({
+    service: 'porteria-api',
+    api: config.api.version,
+    contract: config.api.contractVersion,
+    version: config.version,
+    env: config.env,
   }));
 
   app.get('/api/features', async () => config.features);

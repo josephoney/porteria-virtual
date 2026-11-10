@@ -10,6 +10,13 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Skeleton } from '../ui/skeleton';
+import {
+  RiSearchLine,
+  RiUserAddLine,
+  RiUserFollowLine,
+  RiUserUnfollowLine,
+} from '@remixicon/react';
+import { cn } from '../../lib/utils';
 
 interface MembershipView {
   id: string;
@@ -82,6 +89,11 @@ export function UsersTable() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [scopeTotal, setScopeTotal] = useState(0);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [actionError, setActionError] = useState('');
   const [communities, setCommunities] = useState<CommunityOption[]>([]);
   const [units, setUnits] = useState<UnitOption[]>([]);
   const [formOpen, setFormOpen] = useState(false);
@@ -114,11 +126,17 @@ export function UsersTable() {
     setLoading(true);
     setFetchError('');
     try {
-      const { data } = await get<{ data: UserData[]; total: number }>(
-        `/api/users?page=${page}&pageSize=10`,
-      );
+      const params = new URLSearchParams({ page: String(page), pageSize: '10' });
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      const { data } = await get<{
+        data: UserData[];
+        total: number;
+        scopeTotal?: number;
+      }>(`/api/users?${params.toString()}`);
       setUsers(data.data);
       setTotal(data.total);
+      setScopeTotal(data.scopeTotal ?? data.total);
     } catch {
       setUsers([]);
       setTotal(0);
@@ -126,11 +144,19 @@ export function UsersTable() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, debouncedSearch, statusFilter]);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     get<CommunityOption[]>('/api/communities')
@@ -187,11 +213,21 @@ export function UsersTable() {
   }
 
   async function handleToggleActive(user: UserData) {
+    const nextActive = !user.active;
+    setActionError('');
+    setUsers((prev) =>
+      prev.map((item) => (item.id === user.id ? { ...item, active: nextActive } : item)),
+    );
     try {
-      await patch(`/api/users/${user.id}`, { active: !user.active });
-      fetchUsers();
-    } catch {
-      /* ignore */
+      await patch(`/api/users/${user.id}`, { active: nextActive });
+      if (statusFilter !== 'all') fetchUsers();
+    } catch (err: unknown) {
+      setUsers((prev) =>
+        prev.map((item) => (item.id === user.id ? { ...item, active: user.active } : item)),
+      );
+      setActionError(
+        err instanceof ApiError ? err.message : 'No se pudo actualizar el estado del usuario',
+      );
     }
   }
 
@@ -256,183 +292,254 @@ export function UsersTable() {
   }
 
   const totalPages = Math.ceil(total / 10);
+  const hasFilters = Boolean(debouncedSearch) || statusFilter !== 'all';
+  const currentCommunity = activeMembership?.communityId
+    ? communities.find((community) => community.id === activeMembership.communityId)
+    : null;
+  const scopeLabel = user?.isPlatformAdmin
+    ? 'en la plataforma'
+    : activeMembership?.role === 'community_admin'
+      ? `en ${currentCommunity?.name ?? 'la comunidad'}`
+      : 'en la organización';
+  const userWord = scopeTotal === 1 ? 'usuario' : 'usuarios';
+  const countText = hasFilters
+    ? `${total} resultado${total === 1 ? '' : 's'} de ${scopeTotal} ${userWord}`
+    : `${scopeTotal} ${userWord} ${scopeLabel}`;
+  const scopeDescription = hasFilters
+    ? `Filtrado de ${scopeTotal} ${userWord} ${scopeLabel}`
+    : activeMembership?.role === 'community_admin'
+      ? 'Usuarios con membresía en esta comunidad'
+      : 'Usuarios registrados en el nivel actual';
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <Dialog open={formOpen} onOpenChange={setFormOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">+ Nuevo Usuario</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Nuevo Usuario</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="flex flex-col gap-3">
-              <div className="space-y-2 rounded-md border border-border p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Persona
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="new-first-name">Nombre</Label>
-                    <Input
-                      id="new-first-name"
-                      value={form.firstName}
-                      onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="new-last-name">Apellido</Label>
-                    <Input
-                      id="new-last-name"
-                      value={form.lastName}
-                      onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="new-document">Documento</Label>
-                    <Input
-                      id="new-document"
-                      value={form.documentNumber}
-                      onChange={(e) => setForm({ ...form, documentNumber: e.target.value })}
-                      placeholder="Opcional"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="new-phone">Teléfono</Label>
-                    <Input
-                      id="new-phone"
-                      value={form.phone}
-                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                      placeholder="Opcional"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-2 rounded-md border border-border p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Cuenta de acceso
-                </p>
-                <div className="space-y-1">
-                  <Label htmlFor="new-email">Email</Label>
-                  <Input
-                    id="new-email"
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="new-password">Contraseña</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    required
-                    minLength={8}
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="new-role">Rol</Label>
-                <Select
-                  value={form.role}
-                  onValueChange={(v) => setForm({ ...form, role: v })}
-                >
-                  <SelectTrigger id="new-role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {assignableRoles.map((role) => (
-                      <SelectItem key={role} value={role}>
-                        {ROLE_LABELS[role] ?? role}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="new-community">Comunidad</Label>
-                <Select
-                  value={form.communityId || 'none'}
-                  onValueChange={(v) =>
-                    setForm({ ...form, communityId: v === 'none' ? '' : v, unitId: '' })
-                  }
-                >
-                  <SelectTrigger id="new-community">
-                    <SelectValue placeholder="Sin comunidad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin comunidad</SelectItem>
-                    {communities.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {form.role !== 'org_admin' && (
-                <div className="space-y-1">
-                  <Label>Comunidades asignadas</Label>
-                  <div className="grid max-h-32 gap-1 overflow-y-auto rounded border border-border p-2">
-                    {communities.map((c) => (
-                      <label key={c.id} className="flex items-center gap-2 text-xs">
-                        <input
-                          type="checkbox"
-                          checked={communityIds.includes(c.id)}
-                          onChange={(event) =>
-                            setCommunityIds((current) =>
-                              event.target.checked
-                                ? [...current, c.id]
-                                : current.filter((id) => id !== c.id),
-                            )
-                          }
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold">{countText}</p>
+            <p className="text-xs text-muted-foreground">{scopeDescription}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Dialog open={formOpen} onOpenChange={setFormOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">+ Nuevo Usuario</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Nuevo Usuario</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleCreate} className="flex flex-col gap-3">
+                  <div className="space-y-2 rounded-md border border-border p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Persona
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="new-first-name">Nombre</Label>
+                        <Input
+                          id="new-first-name"
+                          value={form.firstName}
+                          onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                          required
                         />
-                        {c.name}
-                      </label>
-                    ))}
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="new-last-name">Apellido</Label>
+                        <Input
+                          id="new-last-name"
+                          value={form.lastName}
+                          onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="new-document">Documento</Label>
+                        <Input
+                          id="new-document"
+                          value={form.documentNumber}
+                          onChange={(e) => setForm({ ...form, documentNumber: e.target.value })}
+                          placeholder="Opcional"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="new-phone">Teléfono</Label>
+                        <Input
+                          id="new-phone"
+                          value={form.phone}
+                          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                          placeholder="Opcional"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Para staff/community admin se puede asignar más de una comunidad.
-                  </p>
-                </div>
-              )}
-              <div className="space-y-1">
-                <Label htmlFor="new-unit">Unidad</Label>
-                <Select
-                  value={form.unitId || 'none'}
-                  onValueChange={(v) => setForm({ ...form, unitId: v === 'none' ? '' : v })}
-                  disabled={!form.communityId || communityIds.length > 1}
-                >
-                  <SelectTrigger id="new-unit">
-                    <SelectValue placeholder="Sin unidad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin unidad</SelectItem>
-                    {units.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.code}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              <Button type="submit" className="mt-2" disabled={creating}>
-                {creating ? 'Creando…' : 'Crear'}
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+                  <div className="space-y-2 rounded-md border border-border p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Cuenta de acceso
+                    </p>
+                    <div className="space-y-1">
+                      <Label htmlFor="new-email">Email</Label>
+                      <Input
+                        id="new-email"
+                        type="email"
+                        value={form.email}
+                        onChange={(e) => setForm({ ...form, email: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="new-password">Contraseña</Label>
+                      <Input
+                        id="new-password"
+                        type="password"
+                        value={form.password}
+                        onChange={(e) => setForm({ ...form, password: e.target.value })}
+                        required
+                        minLength={8}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="new-role">Rol</Label>
+                    <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+                      <SelectTrigger id="new-role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {assignableRoles.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {ROLE_LABELS[role] ?? role}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="new-community">Comunidad</Label>
+                    <Select
+                      value={form.communityId || 'none'}
+                      onValueChange={(v) =>
+                        setForm({ ...form, communityId: v === 'none' ? '' : v, unitId: '' })
+                      }
+                    >
+                      <SelectTrigger id="new-community">
+                        <SelectValue placeholder="Sin comunidad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin comunidad</SelectItem>
+                        {communities.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.role !== 'org_admin' && (
+                    <div className="space-y-1">
+                      <Label>Comunidades asignadas</Label>
+                      <div className="grid max-h-32 gap-1 overflow-y-auto rounded border border-border p-2">
+                        {communities.map((c) => (
+                          <label key={c.id} className="flex items-center gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={communityIds.includes(c.id)}
+                              onChange={(event) =>
+                                setCommunityIds((current) =>
+                                  event.target.checked
+                                    ? [...current, c.id]
+                                    : current.filter((id) => id !== c.id),
+                                )
+                              }
+                            />
+                            {c.name}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Para staff/community admin se puede asignar más de una comunidad.
+                      </p>
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <Label htmlFor="new-unit">Unidad</Label>
+                    <Select
+                      value={form.unitId || 'none'}
+                      onValueChange={(v) => setForm({ ...form, unitId: v === 'none' ? '' : v })}
+                      disabled={!form.communityId || communityIds.length > 1}
+                    >
+                      <SelectTrigger id="new-unit">
+                        <SelectValue placeholder="Sin unidad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin unidad</SelectItem>
+                        {units.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.code}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+                  <Button type="submit" className="mt-2" disabled={creating}>
+                    {creating ? 'Creando…' : 'Crear'}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <RiSearchLine className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar por correo, nombre o documento"
+              className="pl-9"
+              aria-label="Buscar usuarios por correo, nombre o documento"
+            />
+          </div>
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => {
+              setStatusFilter(value as 'all' | 'active' | 'inactive');
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-40" aria-label="Filtrar usuarios por estado">
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="active">Activos</SelectItem>
+              <SelectItem value="inactive">Inactivos</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearch('');
+              setStatusFilter('all');
+              setPage(1);
+            }}
+            disabled={!search && statusFilter === 'all'}
+          >
+            Limpiar
+          </Button>
+        </div>
+
+        {actionError && (
+          <Alert variant="destructive">
+            <AlertDescription>{actionError}</AlertDescription>
+          </Alert>
+        )}
       </div>
 
       <Table>
@@ -441,15 +548,16 @@ export function UsersTable() {
             <TableHead>Cuenta</TableHead>
             <TableHead>Persona</TableHead>
             <TableHead>Documento</TableHead>
-            <TableHead>Membresías</TableHead>
-            <TableHead>Activo</TableHead>
+            <TableHead>Comunidad</TableHead>
+            <TableHead>Membresía</TableHead>
+            <TableHead>Estado</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading &&
             [...Array(5)].map((_, index) => (
               <TableRow key={`loading-${index}`}>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Skeleton className="h-8 w-full" />
                 </TableCell>
               </TableRow>
@@ -457,7 +565,7 @@ export function UsersTable() {
 
           {!loading && fetchError && (
             <TableRow>
-              <TableCell colSpan={5} className="py-8 text-center">
+              <TableCell colSpan={6} className="py-8 text-center">
                 <p className="text-sm text-destructive" role="alert">
                   {fetchError}
                 </p>
@@ -470,100 +578,163 @@ export function UsersTable() {
 
           {!loading && !fetchError && users.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+              <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                 No hay usuarios para mostrar
               </TableCell>
             </TableRow>
           )}
 
-          {!loading && !fetchError && users.map((u) => (
-            <TableRow key={u.id}>
-              <TableCell>{u.email}</TableCell>
-              <TableCell>
-                <div className="flex flex-col">
-                  <span>{u.personName ?? u.name}</span>
-                  {u.personPhone && (
-                    <span className="text-[11px] text-muted-foreground">{u.personPhone}</span>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell>{u.personDocumentNumber ?? '—'}</TableCell>
-              <TableCell>
-                <div className="flex flex-col gap-1">
-                  {u.isPlatformAdmin && (
-                    <Badge variant="secondary" className="w-fit text-[10px]">
-                      platform admin
-                    </Badge>
-                  )}
-                  {u.memberships.map((m) => (
-                    <div key={m.id} className="flex flex-col gap-1">
-                      <Select
-                        value={m.role}
-                        onValueChange={(v) => handleRoleChange(m.id, v)}
-                      >
-                        <SelectTrigger
-                          className="h-7 w-44 text-xs"
-                          aria-label={`Rol de ${u.email}`}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {assignableRoles.map((role) => (
-                            <SelectItem key={role} value={role}>
-                              {ROLE_LABELS[role] ?? role}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <span className="text-[11px] text-muted-foreground">
-                        {[m.communityName, m.locationUnitName ?? m.locationUnitCode]
-                          .filter(Boolean)
-                          .join(' · ') || 'Sin comunidad'}
-                        {m.status !== 'active' ? ' · inactiva' : ''}
-                      </span>
-                      {m.role !== 'org_admin' && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-fit px-2 text-[11px]"
-                          onClick={() =>
-                            handleMembershipStatus(m, m.status === 'active' ? 'inactive' : 'active')
-                          }
-                        >
-                          {m.status === 'active' ? 'Quitar asignación' : 'Reactivar'}
-                        </Button>
+          {!loading &&
+            !fetchError &&
+            users.map((u) => {
+              const memberships: (MembershipView | null)[] =
+                u.memberships.length > 0 ? u.memberships : [null];
+
+              return memberships.map((m, index) => {
+                const rowSpan = memberships.length;
+                const canManageMembership = Boolean(m && assignableRoles.includes(m.role));
+
+                return (
+                  <TableRow key={`${u.id}-${m?.id ?? 'none'}`} className="h-10">
+                    {index === 0 && (
+                      <>
+                        <TableCell rowSpan={rowSpan} className="py-2 align-top font-medium">
+                          {u.email}
+                        </TableCell>
+                        <TableCell rowSpan={rowSpan} className="py-2 align-top">
+                          <div className="flex flex-col">
+                            <span>{u.personName ?? u.name}</span>
+                            {u.personPhone && (
+                              <span className="text-[11px] text-muted-foreground">
+                                {u.personPhone}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell rowSpan={rowSpan} className="py-2 align-top">
+                          {u.personDocumentNumber ?? '—'}
+                        </TableCell>
+                      </>
+                    )}
+
+                    <TableCell className="py-2 align-top">{m?.communityName ?? '—'}</TableCell>
+
+                    <TableCell className="py-2 align-top">
+                      {u.isPlatformAdmin ? (
+                        <Badge variant="secondary" className="text-[10px]">
+                          platform admin
+                        </Badge>
+                      ) : m ? (
+                        <div className="flex items-center gap-1.5">
+                          {canManageMembership ? (
+                            <Select
+                              value={m.role}
+                              onValueChange={(value) => handleRoleChange(m.id, value)}
+                            >
+                              <SelectTrigger
+                                className="h-8 w-36 text-xs"
+                                aria-label={`Rol de ${u.email} en ${m.communityName ?? 'la comunidad'}`}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {assignableRoles.map((role) => (
+                                  <SelectItem key={role} value={role}>
+                                    {ROLE_LABELS[role] ?? role}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge variant="outline">{ROLE_LABELS[m.role] ?? m.role}</Badge>
+                          )}
+                          {m.status !== 'active' && (
+                            <Badge variant="outline" className="text-[10px]">
+                              Inactiva
+                            </Badge>
+                          )}
+                          {canManageMembership && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              title={
+                                m.status === 'active' ? 'Quitar asignación' : 'Reactivar asignación'
+                              }
+                              aria-label={
+                                m.status === 'active'
+                                  ? `Quitar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`
+                                  : `Reactivar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`
+                              }
+                              onClick={() =>
+                                handleMembershipStatus(
+                                  m,
+                                  m.status === 'active' ? 'inactive' : 'active',
+                                )
+                              }
+                            >
+                              {m.status === 'active' ? (
+                                <RiUserUnfollowLine />
+                              ) : (
+                                <RiUserFollowLine />
+                              )}
+                            </Button>
+                          )}
+                          {index === 0 && !u.isPlatformAdmin && assignableRoles.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-xs"
+                              title="Agregar asignación"
+                              aria-label={`Agregar asignación a ${u.email}`}
+                              onClick={() => openAssignment(u)}
+                            >
+                              <RiUserAddLine />
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Sin membresías</span>
+                          {!u.isPlatformAdmin && assignableRoles.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-xs"
+                              title="Agregar asignación"
+                              aria-label={`Agregar asignación a ${u.email}`}
+                              onClick={() => openAssignment(u)}
+                            >
+                              <RiUserAddLine />
+                            </Button>
+                          )}
+                        </div>
                       )}
-                    </div>
-                  ))}
-                  {!u.isPlatformAdmin && u.memberships.length === 0 && (
-                    <span className="text-xs text-muted-foreground">Sin membresías</span>
-                  )}
-                  {!u.isPlatformAdmin && assignableRoles.length > 0 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 w-fit text-xs"
-                      onClick={() => openAssignment(u)}
-                    >
-                      + Asignación
-                    </Button>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
-                  <Badge variant={u.active ? 'default' : 'outline'}>
-                    {u.active ? 'Activo' : 'Inactivo'}
-                  </Badge>
-                  <Button variant="ghost" size="sm" onClick={() => handleToggleActive(u)}>
-                    {u.active ? 'Desactivar' : 'Activar'}
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
+                    </TableCell>
+
+                    {index === 0 && (
+                      <TableCell rowSpan={rowSpan} className="py-2 align-top">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={u.active}
+                          aria-label={`${u.active ? 'Desactivar' : 'Activar'} usuario ${u.email}`}
+                          onClick={() => handleToggleActive(u)}
+                          className={cn(
+                            'inline-flex h-6 items-center rounded-full px-2.5 text-xs font-medium transition-colors',
+                            u.active
+                              ? 'bg-success text-success-foreground'
+                              : 'bg-destructive text-destructive-foreground',
+                          )}
+                        >
+                          {u.active ? 'Activo' : 'Inactivo'}
+                        </button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              });
+            })}
         </TableBody>
       </Table>
 
@@ -654,10 +825,7 @@ export function UsersTable() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            <Button
-              type="submit"
-              disabled={assignmentSaving || !assignmentForm.communityId}
-            >
+            <Button type="submit" disabled={assignmentSaving || !assignmentForm.communityId}>
               {assignmentSaving ? 'Guardando…' : 'Agregar'}
             </Button>
           </form>
@@ -666,7 +834,12 @@ export function UsersTable() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 text-sm font-mono">
-          <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === 1}
+            onClick={() => setPage(page - 1)}
+          >
             ‹
           </Button>
           <span className="text-muted-foreground">

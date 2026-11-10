@@ -52,7 +52,11 @@ export async function publicPassRoutes(app: FastifyInstance) {
       );
       reply.header(
         'Set-Cookie',
-        serializePassDeviceCookie(cookieValue, maxAge, request.protocol === 'https'),
+        serializePassDeviceCookie(
+          cookieValue,
+          maxAge,
+          config.security.cookieSecure || request.protocol === 'https',
+        ),
       );
     }
 

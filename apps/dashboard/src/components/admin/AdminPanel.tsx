@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { RiArrowDownSLine, RiArrowRightSLine } from '@remixicon/react';
 import { assetObjectUrl, get, patch, post, upload } from '../../lib/apiClient';
 import { PageHeader } from '../layout/PageHeader';
 import { ListToolbar } from '../layout/ListToolbar';
@@ -13,24 +14,11 @@ import { StructureForm } from '../layout/StructureForm';
 import { FormDialog } from '../layout/FormDialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { SECTION_TYPE_LABELS, sectionTypeLabel } from '../../lib/section-types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { UsersTable } from './UsersTable';
 import { CallHistoryTable } from './CallHistoryTable';
 
@@ -45,6 +33,77 @@ interface Community {
   logoAssetId: string | null;
   administratorEmail: string | null;
   status: string;
+}
+
+interface StructureSummary {
+  structureId: string;
+  levelCount: number;
+  levelNames: {
+    level1: string;
+    level2: string | null;
+    level3: string | null;
+  };
+  level1Count: number;
+  level2Count: number;
+  leafCount: number;
+  uniform: boolean;
+  perLevel1: Array<{
+    id: string;
+    name: string;
+    code: string | null;
+    level2Count: number;
+    leafCount: number;
+  }>;
+  perLevel2: Array<{
+    level1Id: string;
+    level1Name: string;
+    level2Id: string;
+    level2Name: string;
+    leafCount: number;
+  }>;
+}
+
+interface CommunityOverview {
+  structureSummary: StructureSummary | null;
+}
+
+function pluralize(word: string, count: number): string {
+  return count === 1 ? word.toLowerCase() : `${word.toLowerCase()}s`;
+}
+
+function singularize(word: string): string {
+  const lower = word.toLowerCase();
+  return lower.endsWith('s') ? lower.slice(0, -1) : lower;
+}
+
+function formatStructureSummary(summary: StructureSummary | null): string {
+  if (!summary) return 'Sin estructura definida';
+
+  const level1 = pluralize(summary.levelNames.level1, summary.level1Count);
+  const level2Name = summary.levelNames.level2;
+  const level3Name = summary.levelNames.level3;
+
+  if (summary.levelCount === 1) {
+    return `${summary.level1Count} ${level1}. ${summary.leafCount} unidades en total.`;
+  }
+
+  if (summary.uniform) {
+    const level2PerLevel1 = summary.perLevel1[0]?.level2Count ?? 0;
+    const level2 = level2Name ? pluralize(level2Name, level2PerLevel1) : 'niveles';
+
+    if (summary.levelCount === 2) {
+      return `${summary.level1Count} ${level1} de ${level2PerLevel1} ${level2}. ${summary.leafCount} unidades en total.`;
+    }
+
+    const level3PerLevel2 = summary.perLevel2[0]?.leafCount ?? 0;
+    const level3 = level3Name ? pluralize(level3Name, level3PerLevel2) : 'unidades';
+    const level2Singular = level2Name ? singularize(level2Name) : 'nivel';
+
+    return `${summary.level1Count} ${level1} de ${level2PerLevel1} ${level2}, ${level3PerLevel2} ${level3} por ${level2Singular}. ${summary.leafCount} ${level3} en total.`;
+  }
+
+  const level2 = level2Name ? pluralize(level2Name, summary.level2Count) : 'niveles';
+  return `${summary.level1Count} ${level1} · ${summary.level2Count} ${level2} · ${summary.leafCount} unidades`;
 }
 
 interface Building {
@@ -110,13 +169,7 @@ function AssetThumb({ assetId }: { assetId: string | null }) {
   }, [assetId]);
 
   if (!url) return null;
-  return (
-    <img
-      src={url}
-      alt="Logo de comunidad"
-      className="size-10 rounded-lg object-cover"
-    />
-  );
+  return <img src={url} alt="Logo de comunidad" className="size-10 rounded-lg object-cover" />;
 }
 
 const pageSize = 10;
@@ -170,12 +223,14 @@ export function AdminPanel() {
   const [communityFilter, setCommunityFilter] = useState('all');
   const [sectionFilter, setSectionFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [structureTarget, setStructureTarget] = useState<{ id: string; name: string } | null>(
-    null,
-  );
+  const [structureTarget, setStructureTarget] = useState<{ id: string; name: string } | null>(null);
   const [structureFormOpen, setStructureFormOpen] = useState(false);
   const [communityFormOpen, setCommunityFormOpen] = useState(false);
   const [expandedCommunityId, setExpandedCommunityId] = useState<string | null>(null);
+  const [communityOverviews, setCommunityOverviews] = useState<Record<string, CommunityOverview>>(
+    {},
+  );
+  const [overviewLoadingId, setOverviewLoadingId] = useState<string | null>(null);
   const [communityForm, setCommunityForm] = useState({
     name: '',
     address: '',
@@ -189,8 +244,7 @@ export function AdminPanel() {
     slug: '',
   });
   const [communitySaving, setCommunitySaving] = useState(false);
-  const [adminInviteCommunity, setAdminInviteCommunity] =
-    useState<Community | null>(null);
+  const [adminInviteCommunity, setAdminInviteCommunity] = useState<Community | null>(null);
   const [adminInviteEmail, setAdminInviteEmail] = useState('');
   const [adminInviteLink, setAdminInviteLink] = useState('');
   const [adminInviteSaving, setAdminInviteSaving] = useState(false);
@@ -236,6 +290,28 @@ export function AdminPanel() {
     load();
   }, [load]);
 
+  async function toggleCommunity(community: Community) {
+    if (expandedCommunityId === community.id) {
+      setExpandedCommunityId(null);
+      return;
+    }
+    setExpandedCommunityId(community.id);
+    if (communityOverviews[community.id]) return;
+
+    setOverviewLoadingId(community.id);
+    try {
+      const result = await get<CommunityOverview>(`/api/communities/${community.id}/overview`);
+      setCommunityOverviews((current) => ({
+        ...current,
+        [community.id]: result.data,
+      }));
+    } catch {
+      setError('No se pudo cargar el detalle de la comunidad.');
+    } finally {
+      setOverviewLoadingId(null);
+    }
+  }
+
   useEffect(() => {
     setSearch('');
     setCommunityFilter('all');
@@ -265,8 +341,7 @@ export function AdminPanel() {
           .includes(search.toLowerCase());
         const matchesCommunity =
           communityFilter === 'all' || building.communityId === communityFilter;
-        const matchesType =
-          typeFilter === 'all' || building.sectionType === typeFilter;
+        const matchesType = typeFilter === 'all' || building.sectionType === typeFilter;
         return matchesSearch && matchesCommunity && matchesType;
       }),
     [buildings, search, communityFilter, typeFilter],
@@ -276,10 +351,8 @@ export function AdminPanel() {
     () =>
       units.filter((unit) => {
         const matchesSearch = unit.code.toLowerCase().includes(search.toLowerCase());
-        const matchesCommunity =
-          communityFilter === 'all' || unit.communityId === communityFilter;
-        const matchesSection =
-          sectionFilter === 'all' || unit.sectionId === sectionFilter;
+        const matchesCommunity = communityFilter === 'all' || unit.communityId === communityFilter;
+        const matchesSection = sectionFilter === 'all' || unit.sectionId === sectionFilter;
         return matchesSearch && matchesCommunity && matchesSection;
       }),
     [units, search, communityFilter, sectionFilter],
@@ -296,8 +369,7 @@ export function AdminPanel() {
   );
 
   const sectionOptions = buildings.filter(
-    (building) =>
-      communityFilter === 'all' || building.communityId === communityFilter,
+    (building) => communityFilter === 'all' || building.communityId === communityFilter,
   );
 
   async function revokeInvitation(id: string) {
@@ -352,9 +424,7 @@ export function AdminPanel() {
       setAdminInviteEmail('');
       await load();
     } catch (err) {
-      setAdminInviteError(
-        err instanceof Error ? err.message : 'No se pudo crear la invitación.',
-      );
+      setAdminInviteError(err instanceof Error ? err.message : 'No se pudo crear la invitación.');
     } finally {
       setAdminInviteSaving(false);
     }
@@ -370,8 +440,7 @@ export function AdminPanel() {
         address: communityForm.address,
         phone: communityForm.phone || null,
         type: communityForm.type,
-        typeLabel:
-          communityForm.type === 'otro' ? communityForm.typeLabel || null : null,
+        typeLabel: communityForm.type === 'otro' ? communityForm.typeLabel || null : null,
         latitude: communityForm.latitude ? Number(communityForm.latitude) : null,
         longitude: communityForm.longitude ? Number(communityForm.longitude) : null,
         welcomeMessage: communityForm.welcomeMessage || null,
@@ -393,9 +462,7 @@ export function AdminPanel() {
       setCommunityFormOpen(false);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'No se pudo crear la comunidad.',
-      );
+      setError(err instanceof Error ? err.message : 'No se pudo crear la comunidad.');
     } finally {
       setCommunitySaving(false);
     }
@@ -462,10 +529,22 @@ export function AdminPanel() {
             <div className="space-y-4">
               <SectionCards
                 items={[
-                  { label: 'Comunidades', value: communities.length, description: 'Dentro de tu alcance' },
-                  { label: 'Secciones', value: buildings.length, description: 'Agrupadores de ubicación' },
+                  {
+                    label: 'Comunidades',
+                    value: communities.length,
+                    description: 'Dentro de tu alcance',
+                  },
+                  {
+                    label: 'Secciones',
+                    value: buildings.length,
+                    description: 'Agrupadores de ubicación',
+                  },
                   { label: 'Unidades', value: units.length, description: 'Espacios administrados' },
-                  { label: 'Invitaciones', value: invitations.length, description: 'Enviadas y pendientes' },
+                  {
+                    label: 'Invitaciones',
+                    value: invitations.length,
+                    description: 'Enviadas y pendientes',
+                  },
                   { label: 'Usuarios', value: userTotal, description: 'Membresías activas' },
                 ]}
               />
@@ -628,120 +707,165 @@ export function AdminPanel() {
                 onSearchChange={setSearch}
                 placeholder="Buscar comunidad…"
               />
-              <div className="overflow-x-auto"><Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Dirección</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {communitiesPage.items.length === 0 && (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                        No hay comunidades para mostrar
-                      </TableCell>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Dirección</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Acciones</TableHead>
                     </TableRow>
-                  )}
-                  {communitiesPage.items.map((community) => (
-                    <Fragment key={community.id}>
-                    <TableRow>
-                      <TableCell>{community.name}</TableCell>
-                      <TableCell>{community.address}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{community.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setExpandedCommunityId(
-                                expandedCommunityId === community.id ? null : community.id,
-                              )
-                            }
-                          >
-                            Detalle
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setAdminInviteCommunity(community);
-                              setAdminInviteEmail('');
-                              setAdminInviteLink('');
-                              setAdminInviteError('');
-                            }}
-                          >
-                            Invitar admin
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setStructureTarget({
-                                id: community.id,
-                                name: community.name,
-                              })
-                            }
-                          >
-                            Ver estructura
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    {expandedCommunityId === community.id && (
+                  </TableHeader>
+                  <TableBody>
+                    {communitiesPage.items.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={4} className="bg-muted/30">
-                          <div className="grid gap-3 py-1 text-sm sm:grid-cols-2">
-                            <p>
-                              <span className="text-muted-foreground">Tipo:</span>{' '}
-                              {community.typeLabel || community.type || 'Sin definir'}
-                            </p>
-                            <p>
-                              <span className="text-muted-foreground">Teléfono:</span>{' '}
-                              {community.phone || 'Sin completar'}
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <AssetThumb assetId={community.logoAssetId} />
-                              <p>
-                                <span className="text-muted-foreground">Logo:</span>{' '}
-                                {community.logoAssetId ? 'Cargado' : 'Fallback por defecto'}
-                              </p>
-                            </div>
-                            <p>
-                              <span className="text-muted-foreground">Administrador:</span>{' '}
-                              {community.administratorEmail || 'Sin asignar'}
-                            </p>
-                            <p>
-                              <span className="text-muted-foreground">Bienvenida:</span>{' '}
-                              {community.welcomeMessage || 'Sin mensaje'}
-                            </p>
-                            <div className="space-y-1 sm:col-span-2">
-                              <Label htmlFor={`community-logo-${community.id}`}>
-                                Subir logo
-                              </Label>
-                              <Input
-                                id={`community-logo-${community.id}`}
-                                type="file"
-                                accept="image/png,image/jpeg,image/webp"
-                                onChange={(event) => uploadCommunityLogo(community, event)}
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                PNG, JPG o WEBP. Máximo 500 KB.
-                              </p>
-                            </div>
-                          </div>
+                        <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                          No hay comunidades para mostrar
                         </TableCell>
                       </TableRow>
                     )}
-                    </Fragment>
-                  ))}
-                </TableBody>
-              </Table></div>
+                    {communitiesPage.items.map((community) => (
+                      <Fragment key={community.id}>
+                        <TableRow
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={expandedCommunityId === community.id}
+                          className="cursor-pointer hover:bg-muted/40"
+                          onClick={() => toggleCommunity(community)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              toggleCommunity(community);
+                            }
+                          }}
+                        >
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {expandedCommunityId === community.id ? (
+                                <RiArrowDownSLine className="size-4 text-muted-foreground" />
+                              ) : (
+                                <RiArrowRightSLine className="size-4 text-muted-foreground" />
+                              )}
+                              {community.name}
+                            </div>
+                          </TableCell>
+                          <TableCell>{community.address}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{community.status}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setAdminInviteCommunity(community);
+                                  setAdminInviteEmail('');
+                                  setAdminInviteLink('');
+                                  setAdminInviteError('');
+                                }}
+                              >
+                                Invitar admin
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setStructureTarget({
+                                    id: community.id,
+                                    name: community.name,
+                                  });
+                                }}
+                              >
+                                Ver estructura
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {expandedCommunityId === community.id && (
+                          <TableRow>
+                            <TableCell colSpan={4} className="bg-muted/30">
+                              <div className="grid gap-3 py-1 text-sm sm:grid-cols-2">
+                                <p>
+                                  <span className="text-muted-foreground">Tipo:</span>{' '}
+                                  {community.typeLabel || community.type || 'Sin definir'}
+                                </p>
+                                <p>
+                                  <span className="text-muted-foreground">Teléfono:</span>{' '}
+                                  {community.phone || 'Sin completar'}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <AssetThumb assetId={community.logoAssetId} />
+                                  <p>
+                                    <span className="text-muted-foreground">Logo:</span>{' '}
+                                    {community.logoAssetId ? 'Cargado' : 'Fallback por defecto'}
+                                  </p>
+                                </div>
+                                <p>
+                                  <span className="text-muted-foreground">Administrador:</span>{' '}
+                                  {community.administratorEmail || 'Sin asignar'}
+                                </p>
+                                <p>
+                                  <span className="text-muted-foreground">Bienvenida:</span>{' '}
+                                  {community.welcomeMessage || 'Sin mensaje'}
+                                </p>
+                                <div className="space-y-1 sm:col-span-2">
+                                  <span className="text-muted-foreground">Estructura:</span>{' '}
+                                  {overviewLoadingId === community.id ? (
+                                    <Skeleton className="mt-1 h-4 w-64" />
+                                  ) : (
+                                    <>
+                                      <span>
+                                        {formatStructureSummary(
+                                          communityOverviews[community.id]?.structureSummary ??
+                                            null,
+                                        )}
+                                      </span>
+                                      {!communityOverviews[community.id]?.structureSummary && (
+                                        <Button
+                                          variant="link"
+                                          size="sm"
+                                          className="ml-1 h-auto px-0"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            setStructureTarget({
+                                              id: community.id,
+                                              name: community.name,
+                                            });
+                                          }}
+                                        >
+                                          Definir estructura
+                                        </Button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                                <div className="space-y-1 sm:col-span-2">
+                                  <Label htmlFor={`community-logo-${community.id}`}>
+                                    Subir logo
+                                  </Label>
+                                  <Input
+                                    id={`community-logo-${community.id}`}
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp"
+                                    onChange={(event) => uploadCommunityLogo(community, event)}
+                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    PNG, JPG o WEBP. Máximo 500 KB.
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               <Pagination
                 page={communitiesPage.currentPage}
                 totalPages={communitiesPage.totalPages}
@@ -755,20 +879,16 @@ export function AdminPanel() {
               <FormDialog
                 open={structureFormOpen}
                 onOpenChange={setStructureFormOpen}
-                title="Nueva estructura"
-                description="Definí los niveles de la jerarquía de esta comunidad."
-                triggerLabel="Nueva estructura"
+                title="Definir estructura"
+                description="Definí los niveles y los nombres de la jerarquía de la comunidad."
+                triggerLabel="Definir estructura"
               >
                 <StructureForm
                   communities={communities}
                   onSaved={() => setStructureFormOpen(false)}
                 />
               </FormDialog>
-              <ListToolbar
-                search={search}
-                onSearchChange={setSearch}
-                placeholder="Buscar sección…"
-              >
+              <ListToolbar search={search} onSearchChange={setSearch} placeholder="Buscar sección…">
                 <Select value={communityFilter} onValueChange={setCommunityFilter}>
                   <SelectTrigger className="w-48" aria-label="Filtrar por comunidad">
                     <SelectValue placeholder="Todas las comunidades" />
@@ -789,67 +909,69 @@ export function AdminPanel() {
                   <SelectContent>
                     <SelectItem value="all">Todos los tipos</SelectItem>
                     {Object.entries(SECTION_TYPE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </ListToolbar>
-              <div className="overflow-x-auto"><Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Comunidad</TableHead>
-                    <TableHead>Niveles</TableHead>
-                    <TableHead>Unidades</TableHead>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sectionsPage.items.length === 0 && (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
-                        No hay secciones para mostrar
-                      </TableCell>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Comunidad</TableHead>
+                      <TableHead>Niveles</TableHead>
+                      <TableHead>Unidades</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Acciones</TableHead>
                     </TableRow>
-                  )}
-                  {sectionsPage.items.map((building) => (
-                    <TableRow key={building.id}>
-                      <TableCell>{building.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {sectionTypeLabel(building.sectionType, building.sectionTypeLabel)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{building.communityName}</TableCell>
-                      <TableCell>{building.levelCount}</TableCell>
-                      <TableCell>{building.unitCount ?? 0}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {building.code ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{building.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setStructureTarget({
-                              id: building.communityId,
-                              name: building.communityName,
-                            })
-                          }
-                        >
-                          Ver estructura
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table></div>
+                  </TableHeader>
+                  <TableBody>
+                    {sectionsPage.items.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                          No hay secciones para mostrar
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {sectionsPage.items.map((building) => (
+                      <TableRow key={building.id}>
+                        <TableCell>{building.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {sectionTypeLabel(building.sectionType, building.sectionTypeLabel)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{building.communityName}</TableCell>
+                        <TableCell>{building.levelCount}</TableCell>
+                        <TableCell>{building.unitCount ?? 0}</TableCell>
+                        <TableCell className="font-mono text-xs">{building.code ?? '—'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{building.status}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setStructureTarget({
+                                id: building.communityId,
+                                name: building.communityName,
+                              })
+                            }
+                          >
+                            Ver estructura
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               <Pagination
                 page={sectionsPage.currentPage}
                 totalPages={sectionsPage.totalPages}
@@ -860,11 +982,7 @@ export function AdminPanel() {
 
           {section === 'units' && (
             <>
-              <ListToolbar
-                search={search}
-                onSearchChange={setSearch}
-                placeholder="Buscar unidad…"
-              >
+              <ListToolbar search={search} onSearchChange={setSearch} placeholder="Buscar unidad…">
                 <Select value={communityFilter} onValueChange={setCommunityFilter}>
                   <SelectTrigger className="w-48" aria-label="Filtrar por comunidad">
                     <SelectValue placeholder="Todas las comunidades" />
@@ -892,39 +1010,41 @@ export function AdminPanel() {
                   </SelectContent>
                 </Select>
               </ListToolbar>
-              <div className="overflow-x-auto"><Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Sección</TableHead>
-                    <TableHead>Comunidad</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Piso</TableHead>
-                    <TableHead>Estado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {unitsPage.items.length === 0 && (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                        No hay unidades para mostrar
-                      </TableCell>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Sección</TableHead>
+                      <TableHead>Comunidad</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Piso</TableHead>
+                      <TableHead>Estado</TableHead>
                     </TableRow>
-                  )}
-                  {unitsPage.items.map((unit) => (
-                    <TableRow key={unit.id}>
-                      <TableCell className="font-mono">{unit.code}</TableCell>
-                      <TableCell>{unit.path || unit.sectionName}</TableCell>
-                      <TableCell>{unit.communityName}</TableCell>
-                      <TableCell>{unit.type}</TableCell>
-                      <TableCell>{unit.floor ?? '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{unit.status}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table></div>
+                  </TableHeader>
+                  <TableBody>
+                    {unitsPage.items.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                          No hay unidades para mostrar
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {unitsPage.items.map((unit) => (
+                      <TableRow key={unit.id}>
+                        <TableCell className="font-mono">{unit.code}</TableCell>
+                        <TableCell>{unit.path || unit.sectionName}</TableCell>
+                        <TableCell>{unit.communityName}</TableCell>
+                        <TableCell>{unit.type}</TableCell>
+                        <TableCell>{unit.floor ?? '—'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{unit.status}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               <Pagination
                 page={unitsPage.currentPage}
                 totalPages={unitsPage.totalPages}
@@ -953,49 +1073,51 @@ export function AdminPanel() {
                   </SelectContent>
                 </Select>
               </ListToolbar>
-              <div className="overflow-x-auto"><Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Rol</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Vence</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invitationsPage.items.length === 0 && (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                        No hay invitaciones para mostrar
-                      </TableCell>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Rol</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Vence</TableHead>
+                      <TableHead>Acciones</TableHead>
                     </TableRow>
-                  )}
-                  {invitationsPage.items.map((invitation) => (
-                    <TableRow key={invitation.id}>
-                      <TableCell>{invitation.email}</TableCell>
-                      <TableCell>{invitation.role}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{invitation.status}</Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {new Date(invitation.expiresAt).toLocaleDateString('es-AR')}
-                      </TableCell>
-                      <TableCell>
-                        {invitation.status === 'pending' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => revokeInvitation(invitation.id)}
-                          >
-                            Revocar
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table></div>
+                  </TableHeader>
+                  <TableBody>
+                    {invitationsPage.items.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                          No hay invitaciones para mostrar
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {invitationsPage.items.map((invitation) => (
+                      <TableRow key={invitation.id}>
+                        <TableCell>{invitation.email}</TableCell>
+                        <TableCell>{invitation.role}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{invitation.status}</Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {new Date(invitation.expiresAt).toLocaleDateString('es-AR')}
+                        </TableCell>
+                        <TableCell>
+                          {invitation.status === 'pending' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => revokeInvitation(invitation.id)}
+                            >
+                              Revocar
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               <Pagination
                 page={invitationsPage.currentPage}
                 totalPages={invitationsPage.totalPages}
@@ -1014,9 +1136,7 @@ export function AdminPanel() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              Invitar administrador de comunidad
-            </DialogTitle>
+            <DialogTitle>Invitar administrador de comunidad</DialogTitle>
             <DialogDescription>
               Asigná un community admin a {adminInviteCommunity?.name}.
             </DialogDescription>
@@ -1039,9 +1159,7 @@ export function AdminPanel() {
             )}
             {adminInviteLink && (
               <div className="space-y-1 rounded-lg border border-border bg-muted/40 p-3">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Link de invitación
-                </p>
+                <p className="text-xs font-medium text-muted-foreground">Link de invitación</p>
                 <p className="break-all font-mono text-xs">{adminInviteLink}</p>
               </div>
             )}

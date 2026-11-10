@@ -106,6 +106,13 @@
       "when": 1794289141538,
       "tag": "0014_curly_lady_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794341169459,
+      "tag": "0015_naive_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

@@ -46,8 +46,10 @@ let guardUserId: string;
 let guardToken: string;
 let legalRepresentativePersonId: string;
 let legalRepresentativeDocument: string;
+let otherCommunityId: string;
 let otherStructureId: string;
 let otherSectionId: string;
+let cycleCommunityId: string;
 let cycleFloorId: string;
 let cycleUnitId: string;
 
@@ -67,6 +69,21 @@ async function request(
     headers: { authorization: `Bearer ${authToken}` },
     payload: payload as Record<string, unknown> | undefined,
   });
+}
+
+async function createTestCommunity(label: string): Promise<string> {
+  const suffix = randomUUID().slice(0, 8);
+  const [community] = await db
+    .insert(communities)
+    .values({
+      organizationId,
+      name: `Test ${label} ${suffix}`,
+      slug: `test-${label}-${suffix}`,
+      address: 'Test address',
+      timezone: 'UTC',
+    })
+    .returning();
+  return community.id;
 }
 
 describe('location node integration', () => {
@@ -93,6 +110,30 @@ describe('location node integration', () => {
       })
       .returning();
     communityId = community.id;
+
+    const [otherCommunity] = await db
+      .insert(communities)
+      .values({
+        organizationId,
+        name: `Other Community ${suffix}`,
+        slug: `other-community-${suffix}`,
+        address: 'Other address',
+        timezone: 'UTC',
+      })
+      .returning();
+    otherCommunityId = otherCommunity.id;
+
+    const [cycleCommunity] = await db
+      .insert(communities)
+      .values({
+        organizationId,
+        name: `Cycle Community ${suffix}`,
+        slug: `cycle-community-${suffix}`,
+        address: 'Cycle address',
+        timezone: 'UTC',
+      })
+      .returning();
+    cycleCommunityId = cycleCommunity.id;
 
     const [structure] = await db
       .insert(locationStructures)
@@ -184,7 +225,7 @@ describe('location node integration', () => {
     const [otherStructure] = await db
       .insert(locationStructures)
       .values({
-        communityId,
+        communityId: otherCommunityId,
         name: 'Other Structure',
         levelCount: 3,
         level1Name: 'Section',
@@ -197,7 +238,7 @@ describe('location node integration', () => {
     const [otherSection] = await db
       .insert(locationUnits)
       .values({
-        communityId,
+        communityId: otherCommunityId,
         structureId: otherStructureId,
         parentId: null,
         levelPosition: 1,
@@ -211,7 +252,7 @@ describe('location node integration', () => {
     const [cycleStructure] = await db
       .insert(locationStructures)
       .values({
-        communityId,
+        communityId: cycleCommunityId,
         name: 'Cycle Test Structure',
         levelCount: 5,
         level1Name: 'Section',
@@ -223,7 +264,7 @@ describe('location node integration', () => {
     const [cycleSection] = await db
       .insert(locationUnits)
       .values({
-        communityId,
+        communityId: cycleCommunityId,
         structureId: cycleStructure.id,
         parentId: null,
         levelPosition: 1,
@@ -236,7 +277,7 @@ describe('location node integration', () => {
     const [cycleFloor] = await db
       .insert(locationUnits)
       .values({
-        communityId,
+        communityId: cycleCommunityId,
         structureId: cycleStructure.id,
         parentId: cycleSection.id,
         levelPosition: 2,
@@ -249,7 +290,7 @@ describe('location node integration', () => {
     const [cycleUnit] = await db
       .insert(locationUnits)
       .values({
-        communityId,
+        communityId: cycleCommunityId,
         structureId: cycleStructure.id,
         parentId: cycleFloor.id,
         levelPosition: 3,
@@ -297,7 +338,7 @@ describe('location node integration', () => {
         firstName: 'Legal',
         lastName: 'Representative',
         documentType: 'CC',
-        documentNumber: legalRepresentativeDocument = `LEGAL-${suffix}`,
+        documentNumber: (legalRepresentativeDocument = `LEGAL-${suffix}`),
         contactEmail: `legal-${suffix}@test.local`,
         status: 'active',
       })
@@ -439,13 +480,11 @@ describe('location node integration', () => {
     await db.delete(users).where(eq(users.id, communityAdminUserId));
     await db.delete(users).where(eq(users.id, guardUserId));
     await db.delete(organizations).where(eq(organizations.id, organizationId));
-    await db.delete(people).where(
-      inArray(people.id, [
-        legalRepresentativePersonId,
-        orgAdminPersonId,
-        communityAdminPersonId,
-      ]),
-    );
+    await db
+      .delete(people)
+      .where(
+        inArray(people.id, [legalRepresentativePersonId, orgAdminPersonId, communityAdminPersonId]),
+      );
     await app.close();
   });
 
@@ -471,22 +510,18 @@ describe('location node integration', () => {
   });
 
   it('rejects moving a node inside its own subtree', async () => {
-    const response = await request(
-      'PATCH',
-      `/api/location-units/${cycleFloorId}`,
-      { parentId: cycleUnitId },
-    );
+    const response = await request('PATCH', `/api/location-units/${cycleFloorId}`, {
+      parentId: cycleUnitId,
+    });
 
     assert.equal(response.statusCode, 400);
     assert.match(response.body, /own subtree/i);
   });
 
   it('rejects a parent from another structure', async () => {
-    const response = await request(
-      'PATCH',
-      `/api/location-units/${unitAId}`,
-      { parentId: otherSectionId },
-    );
+    const response = await request('PATCH', `/api/location-units/${unitAId}`, {
+      parentId: otherSectionId,
+    });
 
     assert.equal(response.statusCode, 404);
     assert.match(response.body, /Parent node not found/i);
@@ -540,10 +575,7 @@ describe('location node integration', () => {
     assert.equal(createResponse.statusCode, 201);
     const leaf = JSON.parse(createResponse.body) as { id: string };
 
-    const deleteResponse = await request(
-      'DELETE',
-      `/api/location-units/${leaf.id}`,
-    );
+    const deleteResponse = await request('DELETE', `/api/location-units/${leaf.id}`);
     assert.equal(deleteResponse.statusCode, 204);
 
     const [deleted] = await db
@@ -554,21 +586,15 @@ describe('location node integration', () => {
   });
 
   it('requires parentId on the move endpoint', async () => {
-    const response = await request(
-      'POST',
-      `/api/location-units/${unitChildId}/move`,
-      {},
-    );
+    const response = await request('POST', `/api/location-units/${unitChildId}/move`, {});
     assert.equal(response.statusCode, 400);
     assert.match(response.body, /parentId is required/i);
   });
 
   it('moves an occupied unit without losing its resident', async () => {
-    const response = await request(
-      'POST',
-      `/api/location-units/${unitAId}/move`,
-      { parentId: floorBId },
-    );
+    const response = await request('POST', `/api/location-units/${unitAId}/move`, {
+      parentId: floorBId,
+    });
     assert.equal(response.statusCode, 200);
 
     const [moved] = await db
@@ -586,11 +612,9 @@ describe('location node integration', () => {
   });
 
   it('moves a floor subtree and preserves its child levels', async () => {
-    const response = await request(
-      'PATCH',
-      `/api/location-units/${floorAId}`,
-      { parentId: sectionBId },
-    );
+    const response = await request('PATCH', `/api/location-units/${floorAId}`, {
+      parentId: sectionBId,
+    });
     assert.equal(response.statusCode, 200);
 
     const [movedFloor, child] = await Promise.all([
@@ -616,8 +640,8 @@ describe('location node integration', () => {
       orgAdminToken,
     );
 
-    assert.equal(response.statusCode, 400);
-    assert.match(response.body, /deeper levels/i);
+    assert.equal(response.statusCode, 409);
+    assert.match(response.body, /structure_has_units_at_removed_level/);
 
     const [structure] = await db
       .select({ levelCount: locationStructures.levelCount })
@@ -626,11 +650,43 @@ describe('location node integration', () => {
     assert.equal(structure?.levelCount, 3);
   });
 
-  it('archives and restores a subtree without touching residents', async () => {
-    const archiveResponse = await request(
+  it('requires a name for every configured level', async () => {
+    const levelNameCommunityId = await createTestCommunity('level-names');
+    const response = await request(
       'POST',
-      `/api/location-units/${floorAId}/archive`,
+      '/api/location-structures',
+      {
+        communityId: levelNameCommunityId,
+        levelCount: 2,
+        level1Name: 'Torre',
+      },
+      orgAdminToken,
     );
+
+    assert.equal(response.statusCode, 400);
+    assert.match(response.body, /level2Name is required/);
+  });
+
+  it('rejects a second structure for the same community', async () => {
+    const response = await request(
+      'POST',
+      '/api/location-structures',
+      {
+        communityId,
+        levelCount: 3,
+        level1Name: 'Torre',
+        level2Name: 'Piso',
+        level3Name: 'Apartamento',
+      },
+      orgAdminToken,
+    );
+
+    assert.equal(response.statusCode, 409);
+    assert.match(response.body, /structure_already_exists/);
+  });
+
+  it('archives and restores a subtree without touching residents', async () => {
+    const archiveResponse = await request('POST', `/api/location-units/${floorAId}/archive`);
     assert.equal(archiveResponse.statusCode, 200);
     const archived = JSON.parse(archiveResponse.body) as { affected: number };
     assert.equal(archived.affected, 2);
@@ -650,10 +706,7 @@ describe('location node integration', () => {
       .where(eq(locationResidents.id, residentId));
     assert.equal(residentWhileArchived?.locationUnitId, unitAId);
 
-    const restoreResponse = await request(
-      'POST',
-      `/api/location-units/${floorAId}/restore`,
-    );
+    const restoreResponse = await request('POST', `/api/location-units/${floorAId}/restore`);
     assert.equal(restoreResponse.statusCode, 200);
     const restored = await db
       .select({ status: locationUnits.status })
@@ -674,10 +727,7 @@ describe('location node integration', () => {
         ),
       );
     assert.equal(auditRows.length, 1);
-    assert.equal(
-      (auditRows[0]?.metadata as { affected?: number } | undefined)?.affected,
-      2,
-    );
+    assert.equal((auditRows[0]?.metadata as { affected?: number } | undefined)?.affected, 2);
   });
 
   it('serves structures under the community path and reports section unit counts', async () => {
@@ -687,7 +737,10 @@ describe('location node integration', () => {
     );
     assert.equal(structureResponse.statusCode, 200);
     const structures = JSON.parse(structureResponse.body) as Array<{ id: string }>;
-    assert.equal(structures.some((structure) => structure.id === structureId), true);
+    assert.equal(
+      structures.some((structure) => structure.id === structureId),
+      true,
+    );
 
     const sectionsResponse = await request(
       'GET',
@@ -766,7 +819,10 @@ describe('location node integration', () => {
     );
     assert.equal(listResponse.statusCode, 200);
     const list = JSON.parse(listResponse.body) as Array<{ id: string }>;
-    assert.equal(list.some((community) => community.id === created.id), true);
+    assert.equal(
+      list.some((community) => community.id === created.id),
+      true,
+    );
 
     const platformCreate = await request(
       'POST',
@@ -782,10 +838,7 @@ describe('location node integration', () => {
   });
 
   it('returns community overview with sections and unit counts', async () => {
-    const response = await request(
-      'GET',
-      `/api/communities/${communityId}/overview`,
-    );
+    const response = await request('GET', `/api/communities/${communityId}/overview`);
     assert.equal(response.statusCode, 200);
     const overview = JSON.parse(response.body) as {
       community: { id: string };
@@ -794,6 +847,13 @@ describe('location node integration', () => {
       sectionCount: number;
       unitCount: number;
       sections: Array<{ id: string; unitCount: number }>;
+      structureSummary: {
+        structureId: string;
+        level1Count: number;
+        level2Count: number;
+        leafCount: number;
+        uniform: boolean;
+      } | null;
     };
     assert.equal(overview.community.id, communityId);
     assert.equal(overview.sections.length > 0, true);
@@ -802,11 +862,13 @@ describe('location node integration', () => {
       overview.sections.every((section) => typeof section.unitCount === 'number'),
       true,
     );
-    assert.match(
-      overview.administrator?.email ?? '',
-      /^community-admin-fixture-.*@test\.local$/,
-    );
+    assert.match(overview.administrator?.email ?? '', /^community-admin-fixture-.*@test\.local$/);
     assert.equal(overview.pendingAdministrator, null);
+    assert.equal(overview.structureSummary?.structureId, structureId);
+    assert.equal(overview.structureSummary?.level1Count, 2);
+    assert.equal(overview.structureSummary?.level2Count, 2);
+    assert.equal(overview.structureSummary?.leafCount, 2);
+    assert.equal(overview.structureSummary?.uniform, false);
   });
 
   it('allows guard read-only hierarchy access and rejects writes', async () => {
@@ -1019,12 +1081,7 @@ describe('location node integration', () => {
   });
 
   it('lists people for the legal representative picker', async () => {
-    const response = await request(
-      'GET',
-      '/api/people?pageSize=100',
-      undefined,
-      orgAdminToken,
-    );
+    const response = await request('GET', '/api/people?pageSize=100', undefined, orgAdminToken);
     assert.equal(response.statusCode, 200);
     const people = JSON.parse(response.body) as Array<{ id: string }>;
     const person = people.find((item) => item.id === legalRepresentativePersonId) as
@@ -1049,11 +1106,12 @@ describe('location node integration', () => {
   });
 
   it('creates and lists level-2 units for a two-level structure', async () => {
+    const twoLevelCommunityId = await createTestCommunity('two-level');
     const structureResponse = await request(
       'POST',
       '/api/location-structures',
       {
-        communityId,
+        communityId: twoLevelCommunityId,
         name: `Two Level ${randomUUID().slice(0, 8)}`,
         levelCount: 2,
         level1Name: 'Torre',
@@ -1068,7 +1126,7 @@ describe('location node integration', () => {
       'POST',
       '/api/location-units',
       {
-        communityId,
+        communityId: twoLevelCommunityId,
         structureId: structure.id,
         name: 'Torre 1',
         code: `T1-${randomUUID().slice(0, 8)}`,
@@ -1084,7 +1142,7 @@ describe('location node integration', () => {
       'POST',
       '/api/units',
       {
-        communityId,
+        communityId: twoLevelCommunityId,
         sectionId: root.id,
         code: `T1-101-${randomUUID().slice(0, 8)}`,
         type: 'apartment',
@@ -1097,7 +1155,7 @@ describe('location node integration', () => {
 
     const listResponse = await request(
       'GET',
-      `/api/units?communityId=${communityId}&pageSize=100`,
+      `/api/units?communityId=${twoLevelCommunityId}&pageSize=100`,
       undefined,
       orgAdminToken,
     );
@@ -1112,11 +1170,12 @@ describe('location node integration', () => {
   });
 
   it('rejects child units for a one-level structure', async () => {
+    const oneLevelCommunityId = await createTestCommunity('one-level');
     const structureResponse = await request(
       'POST',
       '/api/location-structures',
       {
-        communityId,
+        communityId: oneLevelCommunityId,
         name: `One Level ${randomUUID().slice(0, 8)}`,
         levelCount: 1,
         level1Name: 'Casa',
@@ -1130,7 +1189,7 @@ describe('location node integration', () => {
       'POST',
       '/api/location-units',
       {
-        communityId,
+        communityId: oneLevelCommunityId,
         structureId: structure.id,
         name: 'Casa 1',
         code: `C1-${randomUUID().slice(0, 8)}`,
@@ -1145,7 +1204,7 @@ describe('location node integration', () => {
       'POST',
       '/api/units',
       {
-        communityId,
+        communityId: oneLevelCommunityId,
         sectionId: root.id,
         code: `C1-CHILD-${randomUUID().slice(0, 8)}`,
         type: 'house',
@@ -1393,7 +1452,10 @@ describe('location node integration', () => {
     };
     assert.equal(user.memberships.length, 2);
     assert.equal(
-      user.memberships.map((membership) => membership.communityId).sort().join(','),
+      user.memberships
+        .map((membership) => membership.communityId)
+        .sort()
+        .join(','),
       [first.id, second.id].sort().join(','),
     );
     const personRows = await db
@@ -1476,22 +1538,12 @@ describe('location node integration', () => {
     assert.equal(updated.welcomeMessage, 'Bienvenidos a la organización');
     assert.ok(updated.profileCompletedAt);
 
-    const readResponse = await request(
-      'GET',
-      '/api/organizations/me',
-      undefined,
-      orgAdminToken,
-    );
+    const readResponse = await request('GET', '/api/organizations/me', undefined, orgAdminToken);
     assert.equal(readResponse.statusCode, 200);
     const read = JSON.parse(readResponse.body) as { nit: string };
     assert.equal(read.nit, '900123456');
 
-    const platformUpdate = await request(
-      'PATCH',
-      '/api/organizations/me',
-      { phone: '000' },
-      token,
-    );
+    const platformUpdate = await request('PATCH', '/api/organizations/me', { phone: '000' }, token);
     assert.equal(platformUpdate.statusCode, 403);
   });
 
@@ -1537,16 +1589,12 @@ describe('location node integration', () => {
     };
     assert.equal(overview.organization.nit, '900123456');
     assert.equal(overview.legalRepresentative?.id, legalRepresentativePersonId);
-    assert.match(
-      overview.administrator?.email ?? '',
-      /^org-admin-.*@test\.local$/,
-    );
+    assert.match(overview.administrator?.email ?? '', /^org-admin-.*@test\.local$/);
     assert.equal(overview.communities.length > 0, true);
     assert.equal(
       overview.communities.every(
         (community) =>
-          typeof community.sectionCount === 'number' &&
-          typeof community.unitCount === 'number',
+          typeof community.sectionCount === 'number' && typeof community.unitCount === 'number',
       ),
       true,
     );
@@ -1652,14 +1700,10 @@ describe('location node integration', () => {
   });
 
   it('audits resident associations', async () => {
-    const response = await request(
-      'POST',
-      `/api/units/${unitChildId}/residents`,
-      {
-        userId: residentUserId,
-        relationship: 'family',
-      },
-    );
+    const response = await request('POST', `/api/units/${unitChildId}/residents`, {
+      userId: residentUserId,
+      relationship: 'family',
+    });
     assert.equal(response.statusCode, 201);
 
     const [event] = await db
@@ -1718,7 +1762,10 @@ describe('location node integration', () => {
       data: Array<{ id: string; levelPosition: number }>;
     };
     assert.ok(body.total >= 2);
-    assert.equal(body.data.some((unit) => unit.id === root.id), true);
+    assert.equal(
+      body.data.some((unit) => unit.id === root.id),
+      true,
+    );
 
     const updated = await request(
       'PATCH',
@@ -1765,7 +1812,10 @@ describe('location node integration', () => {
     );
     assert.equal(history.statusCode, 200);
     const rows = JSON.parse(history.body) as Array<{ id: string; status: string }>;
-    assert.equal(rows.some((row) => row.id === association.id && row.status === 'inactive'), true);
+    assert.equal(
+      rows.some((row) => row.id === association.id && row.status === 'inactive'),
+      true,
+    );
   });
 
   it('shows every community assigned to a community admin', async () => {
@@ -1792,12 +1842,7 @@ describe('location node integration', () => {
       .returning();
 
     try {
-      const response = await request(
-        'GET',
-        '/api/communities',
-        undefined,
-        communityAdminToken,
-      );
+      const response = await request('GET', '/api/communities', undefined, communityAdminToken);
       assert.equal(response.statusCode, 200);
       const ids = (JSON.parse(response.body) as Array<{ id: string }>).map(
         (community) => community.id,

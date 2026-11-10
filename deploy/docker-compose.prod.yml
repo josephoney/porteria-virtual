@@ -1,0 +1,161 @@
+name: porteria
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/node.Dockerfile
+    command: pnpm --filter @porteria/database db:migrate
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+
+  bootstrap:
+    profiles: ['bootstrap']
+    build:
+      context: ..
+      dockerfile: deploy/node.Dockerfile
+    command: pnpm --filter @porteria/database db:bootstrap
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: 'no'
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/node.Dockerfile
+    command: pnpm --filter @porteria/api exec tsx src/index.ts
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      API_PORT: '3000'
+      API_HOST: 0.0.0.0
+      POSTGRES_HOST: db
+      TRUST_PROXY: 'true'
+      COOKIE_SECURE: 'true'
+      SEED_DEMO_DATA: 'false'
+      DYNAMIC_QR_ENABLED: 'true'
+      CORS_ORIGINS: https://${DASHBOARD_HOST},https://${PASS_WEB_HOST}
+      PUBLIC_APP_URL: https://${DASHBOARD_HOST}
+      PASS_WEB_URL: https://${PASS_WEB_HOST}
+      MQTT_BRIDGE_URL: http://mqtt-bridge:3002
+    expose:
+      - '3000'
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  signaling:
+    build:
+      context: ..
+      dockerfile: deploy/node.Dockerfile
+    command: pnpm --filter @porteria/signaling exec tsx src/index.ts
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      SIGNALING_PORT: '3001'
+      SIGNALING_HOST: 0.0.0.0
+      POSTGRES_HOST: db
+      CORS_ORIGIN: https://${DASHBOARD_HOST}
+      API_BASE_URL: http://api:3000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+    expose:
+      - '3001'
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  mqtt-bridge:
+    build:
+      context: ..
+      dockerfile: deploy/node.Dockerfile
+    command: pnpm --filter @porteria/mqtt-bridge exec tsx src/index.ts
+    restart: unless-stopped
+    profiles: ['mqtt']
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      MQTT_BRIDGE_PORT: '3002'
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+    expose:
+      - '3002'
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      DASHBOARD_HOST: ${DASHBOARD_HOST}
+      PASS_WEB_HOST: ${PASS_WEB_HOST}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_started
+      signaling:
+        condition: service_started
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

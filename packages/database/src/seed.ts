@@ -20,6 +20,12 @@ import { locationStructures } from './schema/location-structures.js';
 import { locationUnits } from './schema/location-units.js';
 import { locationResidents } from './schema/location-residents.js';
 
+if (process.env.NODE_ENV === 'production' && process.env.SEED_DEMO_DATA !== 'true') {
+  throw new Error(
+    'Refusing to seed demo data in production. Set SEED_DEMO_DATA=true only for an explicit demo environment.',
+  );
+}
+
 const db = createDb();
 const DEMO_PASSWORD = 'porteria123';
 const DEVICE_TOKEN = 'dev-kiosk-token';
@@ -32,7 +38,10 @@ async function getOrCreateOrganization(name: string) {
     .where(eq(organizations.name, name))
     .limit(1);
   if (existing) return existing;
-  const [created] = await db.insert(organizations).values({ name, slug: slugify(name) }).returning();
+  const [created] = await db
+    .insert(organizations)
+    .values({ name, slug: slugify(name) })
+    .returning();
   return created;
 }
 
@@ -43,12 +52,7 @@ async function getOrCreateCommunity(
   const [existing] = await db
     .select()
     .from(communities)
-    .where(
-      and(
-        eq(communities.organizationId, organizationId),
-        eq(communities.name, data.name),
-      ),
-    )
+    .where(and(eq(communities.organizationId, organizationId), eq(communities.name, data.name)))
     .limit(1);
   if (existing) return existing;
   const [created] = await db
@@ -97,15 +101,8 @@ async function getOrCreateUnit(
   return created;
 }
 
-async function ensurePersonAccount(
-  user: typeof users.$inferSelect,
-  passwordHash: string,
-) {
-  let [person] = await db
-    .select()
-    .from(people)
-    .where(eq(people.contactEmail, user.email))
-    .limit(1);
+async function ensurePersonAccount(user: typeof users.$inferSelect, passwordHash: string) {
+  let [person] = await db.select().from(people).where(eq(people.contactEmail, user.email)).limit(1);
 
   if (!person) {
     const [firstName, ...lastNameParts] = user.name.split(/\s+/);
@@ -120,11 +117,7 @@ async function ensurePersonAccount(
       .returning();
   }
 
-  const [account] = await db
-    .select()
-    .from(accounts)
-    .where(eq(accounts.email, user.email))
-    .limit(1);
+  const [account] = await db.select().from(accounts).where(eq(accounts.email, user.email)).limit(1);
   if (!account) {
     await db.insert(accounts).values({
       personId: person.id,
@@ -142,11 +135,7 @@ async function getOrCreateUser(
   data: { email: string; name: string; isPlatformAdmin?: boolean },
   passwordHash: string,
 ) {
-  const [existing] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, data.email))
-    .limit(1);
+  const [existing] = await db.select().from(users).where(eq(users.email, data.email)).limit(1);
   if (existing) {
     await ensurePersonAccount(existing, passwordHash);
     return existing;
@@ -209,9 +198,7 @@ async function getOrCreateAccessPoint(
   const [existing] = await db
     .select()
     .from(accessPoints)
-    .where(
-      and(eq(accessPoints.communityId, communityId), eq(accessPoints.name, data.name)),
-    )
+    .where(and(eq(accessPoints.communityId, communityId), eq(accessPoints.name, data.name)))
     .limit(1);
   if (existing) return existing;
   const [created] = await db
@@ -414,15 +401,9 @@ async function seed() {
     floor: 1,
     type: 'house',
   });
-  console.log(
-    `  Units: ${unitA101.code}, ${unitA102.code}, ${unitB201.code}, ${unitA201.code}`,
-  );
+  console.log(`  Units: ${unitA101.code}, ${unitA102.code}, ${unitB201.code}, ${unitA201.code}`);
 
-  await seedLocationHierarchy(
-    torreNorte.id,
-    [torreA, torreB],
-    [unitA101, unitA102, unitB201],
-  );
+  await seedLocationHierarchy(torreNorte.id, [torreA, torreB], [unitA101, unitA102, unitB201]);
   await seedLocationHierarchy(losAlamos.id, [bloque1], [unitA201]);
 
   const superAdmin = await getOrCreateUser(
@@ -487,7 +468,11 @@ async function seed() {
   await db.delete(memberships).where(inArray(memberships.userId, demoUserIds));
 
   await addMembership({ userId: orgAdmin.id, organizationId: adminOrg.id, role: 'org_admin' });
-  await addMembership({ userId: orgAdmin2.id, organizationId: independentOrg.id, role: 'org_admin' });
+  await addMembership({
+    userId: orgAdmin2.id,
+    organizationId: independentOrg.id,
+    role: 'org_admin',
+  });
   await addMembership({
     userId: communityAdmin.id,
     organizationId: adminOrg.id,
@@ -546,11 +531,41 @@ async function seed() {
   await db
     .insert(locationResidents)
     .values([
-      { locationUnitId: unitA101.id, userId: resident.id, relationship: 'owner', validFrom: '2026-01-01', status: 'active' },
-      { locationUnitId: unitA101.id, userId: resident2.id, relationship: 'resident', validFrom: '2026-01-01', status: 'active' },
-      { locationUnitId: unitA201.id, userId: resident3.id, relationship: 'tenant', validFrom: '2026-01-01', status: 'active' },
-      { locationUnitId: unitA102.id, userId: multi.id, relationship: 'owner', validFrom: '2026-01-01', status: 'active' },
-      { locationUnitId: unitA201.id, userId: multi.id, relationship: 'resident', validFrom: '2026-01-01', status: 'active' },
+      {
+        locationUnitId: unitA101.id,
+        userId: resident.id,
+        relationship: 'owner',
+        validFrom: '2026-01-01',
+        status: 'active',
+      },
+      {
+        locationUnitId: unitA101.id,
+        userId: resident2.id,
+        relationship: 'resident',
+        validFrom: '2026-01-01',
+        status: 'active',
+      },
+      {
+        locationUnitId: unitA201.id,
+        userId: resident3.id,
+        relationship: 'tenant',
+        validFrom: '2026-01-01',
+        status: 'active',
+      },
+      {
+        locationUnitId: unitA102.id,
+        userId: multi.id,
+        relationship: 'owner',
+        validFrom: '2026-01-01',
+        status: 'active',
+      },
+      {
+        locationUnitId: unitA201.id,
+        userId: multi.id,
+        relationship: 'resident',
+        validFrom: '2026-01-01',
+        status: 'active',
+      },
     ])
     .onConflictDoNothing();
 
@@ -566,10 +581,38 @@ async function seed() {
   console.log(`  Access point: ${accessPoint.name} / Kiosk: ${kiosk.name}`);
 
   const relayData = [
-    { relayIndex: 1, gpioPin: 17, label: 'Puerta', mode: 'momentary' as const, durationMs: 5000, accessPointId: accessPoint.id },
-    { relayIndex: 2, gpioPin: 18, label: 'Portón', mode: 'momentary' as const, durationMs: 3000, accessPointId: null },
-    { relayIndex: 3, gpioPin: 27, label: 'Luz Hall', mode: 'latch' as const, durationMs: null, accessPointId: null },
-    { relayIndex: 4, gpioPin: 22, label: 'Alarma', mode: 'momentary' as const, durationMs: 10000, accessPointId: null },
+    {
+      relayIndex: 1,
+      gpioPin: 17,
+      label: 'Puerta',
+      mode: 'momentary' as const,
+      durationMs: 5000,
+      accessPointId: accessPoint.id,
+    },
+    {
+      relayIndex: 2,
+      gpioPin: 18,
+      label: 'Portón',
+      mode: 'momentary' as const,
+      durationMs: 3000,
+      accessPointId: null,
+    },
+    {
+      relayIndex: 3,
+      gpioPin: 27,
+      label: 'Luz Hall',
+      mode: 'latch' as const,
+      durationMs: null,
+      accessPointId: null,
+    },
+    {
+      relayIndex: 4,
+      gpioPin: 22,
+      label: 'Alarma',
+      mode: 'momentary' as const,
+      durationMs: 10000,
+      accessPointId: null,
+    },
   ];
 
   for (const relay of relayData) {

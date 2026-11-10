@@ -8,13 +8,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Skeleton } from '../ui/skeleton';
 
 interface StructureRow extends StructureInitial {
@@ -85,6 +79,7 @@ export function StructureTreeDialog({
   const [structures, setStructures] = useState<StructureRow[]>([]);
   const [nodes, setNodes] = useState<NodeRow[]>([]);
   const [editingStructure, setEditingStructure] = useState<StructureRow | null>(null);
+  const [creatingStructure, setCreatingStructure] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<NodeRow | null>(null);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [residents, setResidents] = useState<ResidentRow[]>([]);
@@ -100,9 +95,7 @@ export function StructureTreeDialog({
   const [nodeSaving, setNodeSaving] = useState(false);
   const [nodeError, setNodeError] = useState('');
 
-  const isPlatformContext = Boolean(
-    user?.isPlatformAdmin && activeMembership?.id === 'platform',
-  );
+  const isPlatformContext = Boolean(user?.isPlatformAdmin && activeMembership?.id === 'platform');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -138,10 +131,7 @@ export function StructureTreeDialog({
     }
   }, [open, load]);
 
-  const sections = useMemo(
-    () => nodes.filter((node) => node.levelPosition === 1),
-    [nodes],
-  );
+  const sections = useMemo(() => nodes.filter((node) => node.levelPosition === 1), [nodes]);
 
   const structuresById = useMemo(() => {
     const map = new Map<string, StructureRow>();
@@ -171,7 +161,7 @@ export function StructureTreeDialog({
     let current = selectedUnit;
     while (current) {
       path.unshift(current);
-      current = current.parentId ? nodesById.get(current.parentId) ?? null : null;
+      current = current.parentId ? (nodesById.get(current.parentId) ?? null) : null;
     }
     return path;
   }, [selectedUnit, nodesById]);
@@ -290,9 +280,7 @@ export function StructureTreeDialog({
         });
       }
       const touchedNodeId =
-        nodeDialog.mode === 'move' || nodeDialog.mode === 'rename'
-          ? nodeDialog.node.id
-          : null;
+        nodeDialog.mode === 'move' || nodeDialog.mode === 'rename' ? nodeDialog.node.id : null;
       setNodeDialog(null);
       if (touchedNodeId && selectedUnit?.id === touchedNodeId) {
         setSelectedUnit(null);
@@ -324,9 +312,7 @@ export function StructureTreeDialog({
       if (selectedUnit?.id === node.id) setSelectedUnit(null);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'No se pudo eliminar el nodo.',
-      );
+      setError(err instanceof Error ? err.message : 'No se pudo eliminar el nodo.');
     }
   }
 
@@ -349,9 +335,7 @@ export function StructureTreeDialog({
 
   async function deleteSection(section: NodeRow) {
     if (
-      !window.confirm(
-        `¿Eliminar la sección "${section.name}"? Solo se permite si no tiene nodos.`,
-      )
+      !window.confirm(`¿Eliminar la sección "${section.name}"? Solo se permite si no tiene nodos.`)
     ) {
       return;
     }
@@ -361,16 +345,12 @@ export function StructureTreeDialog({
       setSelectedUnit(null);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'No se pudo eliminar la sección.',
-      );
+      setError(err instanceof Error ? err.message : 'No se pudo eliminar la sección.');
     }
   }
 
   const moveTargetStructure =
-    nodeDialog?.mode === 'move'
-      ? structuresById.get(nodeDialog.node.structureId)
-      : undefined;
+    nodeDialog?.mode === 'move' ? structuresById.get(nodeDialog.node.structureId) : undefined;
   const moveTargetName =
     nodeDialog?.mode === 'move'
       ? structureLevelName(moveTargetStructure, moveTargetLevel)
@@ -395,9 +375,7 @@ export function StructureTreeDialog({
       <DialogContent className="max-h-[calc(100dvh-1rem)] overflow-y-auto p-4 sm:max-h-[85vh] sm:max-w-4xl sm:p-6">
         <DialogHeader className="pr-8">
           <DialogTitle>Estructura · {communityName}</DialogTitle>
-          <DialogDescription>
-            Niveles, nodos y residentes de la comunidad.
-          </DialogDescription>
+          <DialogDescription>Niveles, nodos y residentes de la comunidad.</DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -409,15 +387,13 @@ export function StructureTreeDialog({
           </p>
         )}
 
-        {structures.length > 0 && (
-          <div className="space-y-2">
-            {structures.map((structure) => (
-              <div
-                key={structure.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
-              >
+        {structures.length > 0 ? (
+          (() => {
+            const structure = structures[0];
+            return (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2">
                 <div>
-                  <p className="text-sm font-medium">{structure.name}</p>
+                  <p className="text-sm font-medium">Estructura de la comunidad</p>
                   <p className="text-xs text-muted-foreground">
                     {structure.levelCount} niveles · {structure.level1Name}
                     {structure.level2Name ? ` → ${structure.level2Name}` : ''}
@@ -444,7 +420,24 @@ export function StructureTreeDialog({
                   </Button>
                 </div>
               </div>
-            ))}
+            );
+          })()
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border px-3 py-4">
+            <div>
+              <p className="text-sm font-medium">Sin estructura definida</p>
+              <p className="text-xs text-muted-foreground">
+                Definí los niveles y los nombres de la jerarquía de la comunidad.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCreatingStructure(true)}
+            >
+              Definir estructura
+            </Button>
           </div>
         )}
 
@@ -467,9 +460,7 @@ export function StructureTreeDialog({
                 const childLevelName = structureLevelName(structure, 2);
                 const sectionChildren = childrenByParent.get(section.id) ?? [];
                 const unitCount =
-                  levelCount === 1
-                    ? 1
-                    : countLeafDescendants(section.id, levelCount);
+                  levelCount === 1 ? 1 : countLeafDescendants(section.id, levelCount);
 
                 return (
                   <div key={section.id} className="rounded-xl border border-border">
@@ -538,9 +529,7 @@ export function StructureTreeDialog({
                               <Button
                                 key={child.id}
                                 type="button"
-                                variant={
-                                  selectedUnit?.id === child.id ? 'default' : 'outline'
-                                }
+                                variant={selectedUnit?.id === child.id ? 'default' : 'outline'}
                                 size="sm"
                                 className={
                                   child.status === 'inactive'
@@ -582,9 +571,7 @@ export function StructureTreeDialog({
                                       type="button"
                                       size="sm"
                                       variant="ghost"
-                                      onClick={() =>
-                                        setArchived(child, child.status === 'active')
-                                      }
+                                      onClick={() => setArchived(child, child.status === 'active')}
                                     >
                                       {child.status === 'active' ? 'Archivar' : 'Restaurar'}
                                     </Button>
@@ -629,9 +616,7 @@ export function StructureTreeDialog({
                                         key={leaf.id}
                                         type="button"
                                         variant={
-                                          selectedUnit?.id === leaf.id
-                                            ? 'default'
-                                            : 'outline'
+                                          selectedUnit?.id === leaf.id ? 'default' : 'outline'
                                         }
                                         size="sm"
                                         className={
@@ -688,9 +673,7 @@ export function StructureTreeDialog({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        setArchived(selectedUnit, selectedUnit.status === 'active')
-                      }
+                      onClick={() => setArchived(selectedUnit, selectedUnit.status === 'active')}
                     >
                       {selectedUnit.status === 'active' ? 'Archivar' : 'Restaurar'}
                     </Button>
@@ -724,9 +707,7 @@ export function StructureTreeDialog({
                   <div className="space-y-2 border-t border-border pt-3">
                     {residentsLoading && <Skeleton className="h-10 w-full" />}
                     {!residentsLoading && residents.length === 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        No hay residentes asociados.
-                      </p>
+                      <p className="text-xs text-muted-foreground">No hay residentes asociados.</p>
                     )}
                     {residents.map((resident) => (
                       <div key={resident.id} className="rounded-lg bg-muted/40 p-2 text-sm">
@@ -779,24 +760,32 @@ export function StructureTreeDialog({
       </DialogContent>
 
       <Dialog
-        open={Boolean(editingStructure)}
+        open={Boolean(editingStructure) || creatingStructure}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen) setEditingStructure(null);
+          if (!nextOpen) {
+            setEditingStructure(null);
+            setCreatingStructure(false);
+          }
         }}
       >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Editar estructura</DialogTitle>
+            <DialogTitle>
+              {editingStructure ? 'Editar estructura' : 'Definir estructura'}
+            </DialogTitle>
             <DialogDescription>
-              Cambiá el nombre o los niveles de la estructura.
+              {editingStructure
+                ? 'Cambiá los niveles y los nombres de la estructura.'
+                : 'Definí cuántos niveles tiene la comunidad y cómo se llama cada uno.'}
             </DialogDescription>
           </DialogHeader>
-          {editingStructure && (
+          {(editingStructure || creatingStructure) && (
             <StructureForm
               communities={[{ id: communityId, name: communityName }]}
-              initial={editingStructure}
+              initial={editingStructure ?? undefined}
               onSaved={() => {
                 setEditingStructure(null);
+                setCreatingStructure(false);
                 load();
               }}
             />

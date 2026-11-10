@@ -1,5 +1,5 @@
 export type { Organization } from './types/organization.js';
-export type { Community } from './types/community.js';
+export type { Community, CommunityStructureSummary } from './types/community.js';
 export type { Building } from './types/building.js';
 export type { Unit } from './types/unit.js';
 export type { Membership } from './types/membership.js';
@@ -11,11 +11,7 @@ export type { User } from './types/user.js';
 export type { Call } from './types/call.js';
 export type { Event, EventMetadata } from './types/event.js';
 export type { AccessPass, PassScan, PassAlert } from './types/pass.js';
-export type {
-  GuardShift,
-  GuardShiftSegment,
-  GuardShiftWithSegments,
-} from './types/guard-shift.js';
+export type { GuardShift, GuardShiftSegment, GuardShiftWithSegments } from './types/guard-shift.js';
 export type { BitacoraEntry, BitacoraComment } from './types/bitacora.js';
 
 export type {
@@ -113,15 +109,9 @@ export { ScanResult, ScanResultValues } from './enums/index.js';
 export { PassAlertType, PassAlertTypeValues } from './enums/index.js';
 export { PassAlertStatus, PassAlertStatusValues } from './enums/index.js';
 export { AccessPointType, AccessPointTypeValues } from './enums/index.js';
-export {
-  AccessPointDirection,
-  AccessPointDirectionValues,
-} from './enums/index.js';
+export { AccessPointDirection, AccessPointDirectionValues } from './enums/index.js';
 export { GuardShiftStatus, GuardShiftStatusValues } from './enums/index.js';
-export {
-  BitacoraEntryType,
-  BitacoraEntryTypeValues,
-} from './enums/index.js';
+export { BitacoraEntryType, BitacoraEntryTypeValues } from './enums/index.js';
 export { BitacoraSource, BitacoraSourceValues } from './enums/index.js';
 
 export { MembershipRole, MembershipRoleValues } from './enums/index.js';

@@ -1,4 +1,41 @@
+const env = process.env.NODE_ENV ?? 'development';
+const isProduction = env === 'production';
+const isTest = env === 'test';
+
+function parseOrigins(value: string | undefined, fallback: string[]): string[] {
+  if (!value) return fallback;
+  return value
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
 const config = {
+  env,
+  isProduction,
+  isTest,
+  version: process.env.APP_VERSION || '0.1.0',
+  api: {
+    version: 'v1',
+    contractVersion: 1,
+  },
+  logLevel: process.env.LOG_LEVEL || 'info',
+  trustProxy: process.env.TRUST_PROXY === 'true' || isProduction,
+  requestBodyLimit: parseInt(process.env.REQUEST_BODY_LIMIT_BYTES || '1048576', 10),
+  corsOrigins: process.env.CORS_ORIGINS
+    ? parseOrigins(process.env.CORS_ORIGINS, [])
+    : isProduction
+      ? []
+      : ['http://localhost:5174', 'http://localhost:5176', 'http://localhost:5173'],
+  security: {
+    loginPerMinute: parseInt(process.env.AUTH_LOGIN_RATE_LIMIT || '10', 10),
+    cookieSecure: process.env.COOKIE_SECURE === 'true' || isProduction,
+    hstsMaxAgeSeconds: parseInt(process.env.HSTS_MAX_AGE_SECONDS || '15552000', 10),
+  },
+  observability: {
+    metricsEnabled: process.env.METRICS_ENABLED !== 'false',
+    sentryDsn: process.env.SENTRY_DSN || null,
+  },
   port: parseInt(process.env.API_PORT || '3000', 10),
   host: process.env.API_HOST || '0.0.0.0',
 
@@ -55,23 +92,57 @@ const config = {
   },
 } as const;
 
-export function validateConfig() {
+export function validateConfig(): string[] {
   const errors: string[] = [];
+
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret-change-me') {
     errors.push('JWT_SECRET is not set or using default value');
+  } else if (process.env.JWT_SECRET.length < 32) {
+    errors.push('JWT_SECRET must be at least 32 characters');
   }
+
   if (
     !process.env.JWT_REFRESH_SECRET ||
     process.env.JWT_REFRESH_SECRET === 'dev-refresh-secret-change-me'
   ) {
     errors.push('JWT_REFRESH_SECRET is not set or using default value');
+  } else if (process.env.JWT_REFRESH_SECRET.length < 32) {
+    errors.push('JWT_REFRESH_SECRET must be at least 32 characters');
   }
+
   if (
     config.features.dynamicQrEnabled &&
     (!process.env.PASS_QR_SECRET || process.env.PASS_QR_SECRET === 'dev-pass-qr-secret-change-me')
   ) {
     errors.push('PASS_QR_SECRET is not set or using default value');
+  } else if (process.env.PASS_QR_SECRET && process.env.PASS_QR_SECRET.length < 32) {
+    errors.push('PASS_QR_SECRET must be at least 32 characters');
   }
+
+  if (config.isProduction) {
+    if (config.corsOrigins.length === 0) {
+      errors.push('CORS_ORIGINS must be set in production');
+    }
+    if (!process.env.PUBLIC_APP_URL || !process.env.PUBLIC_APP_URL.startsWith('https://')) {
+      errors.push('PUBLIC_APP_URL must be an https URL in production');
+    }
+    if (!process.env.PASS_WEB_URL || !process.env.PASS_WEB_URL.startsWith('https://')) {
+      errors.push('PASS_WEB_URL must be an https URL in production');
+    }
+    if (
+      !process.env.INTERNAL_API_KEY ||
+      process.env.INTERNAL_API_KEY === 'dev-internal-key-change-me'
+    ) {
+      errors.push('INTERNAL_API_KEY is not set or using default value');
+    }
+    if (!process.env.POSTGRES_PASSWORD || process.env.POSTGRES_PASSWORD === 'porteria_dev') {
+      errors.push('POSTGRES_PASSWORD is not set or using default value');
+    }
+    if (process.env.COOKIE_SECURE !== 'true') {
+      errors.push('COOKIE_SECURE must be true in production');
+    }
+  }
+
   return errors;
 }
 

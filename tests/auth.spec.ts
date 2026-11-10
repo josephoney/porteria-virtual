@@ -62,7 +62,7 @@ test.describe('Role-based landing', () => {
     await loginAs(page, DEMO_USERS.guard);
 
     await expect(page).toHaveURL(/\/guard$/);
-    await expect(page.getByRole('heading', { name: 'Rondas de Guardia' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Guardia', exact: true })).toBeVisible();
   });
 
   test('resident is sent to the Zima QR Access page', async ({ page }) => {

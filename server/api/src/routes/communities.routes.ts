@@ -13,27 +13,19 @@ import {
   users,
   invitations,
 } from '@porteria/database/schema';
+import type { CommunityStructureSummary } from '@porteria/shared';
 import { requireRole } from '../middlewares/rbac.js';
 import { auditCommunityEvent } from '../services/audit.service.js';
 import { can } from '../services/admin-permissions.service.js';
 
 const db = createDb();
 
-const COMMUNITY_TYPES = [
-  'conjunto',
-  'condominio',
-  'club',
-  'hotel',
-  'edificio',
-  'otro',
-] as const;
+const COMMUNITY_TYPES = ['conjunto', 'condominio', 'club', 'hotel', 'edificio', 'otro'] as const;
 
 type CommunityType = (typeof COMMUNITY_TYPES)[number];
 
 function parseCommunityType(value: unknown): CommunityType | null {
-  return COMMUNITY_TYPES.includes(value as CommunityType)
-    ? (value as CommunityType)
-    : null;
+  return COMMUNITY_TYPES.includes(value as CommunityType) ? (value as CommunityType) : null;
 }
 
 function parseCoordinates(
@@ -78,7 +70,10 @@ export async function communityRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   });
@@ -179,10 +174,7 @@ export async function communityRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const u = getUser(request);
       const { id } = request.params as { id: string };
-      const [community] = await db
-        .select()
-        .from(communities)
-        .where(eq(communities.id, id));
+      const [community] = await db.select().from(communities).where(eq(communities.id, id));
       if (!community || (!u.isPlatformAdmin && community.organizationId !== u.orgId)) {
         return reply.status(404).send({
           statusCode: 404,
@@ -190,11 +182,7 @@ export async function communityRoutes(app: FastifyInstance) {
           message: 'Community not found',
         });
       }
-      if (
-        !u.isPlatformAdmin &&
-        u.role === 'community_admin' &&
-        u.communityId !== id
-      ) {
+      if (!u.isPlatformAdmin && u.role === 'community_admin' && u.communityId !== id) {
         return reply.status(403).send({
           statusCode: 403,
           error: 'Forbidden',
@@ -219,6 +207,9 @@ export async function communityRoutes(app: FastifyInstance) {
           .select({
             id: locationStructures.id,
             levelCount: locationStructures.levelCount,
+            level1Name: locationStructures.level1Name,
+            level2Name: locationStructures.level2Name,
+            level3Name: locationStructures.level3Name,
           })
           .from(locationStructures)
           .where(eq(locationStructures.communityId, id)),
@@ -252,9 +243,74 @@ export async function communityRoutes(app: FastifyInstance) {
           const levelCount = levelByStructure.get(section.structureId) ?? 3;
           return {
             ...section,
-            unitCount: countLeaves(section.id, levelCount),
+            unitCount: levelCount === 1 ? 1 : countLeaves(section.id, levelCount),
           };
         });
+
+      const structure = structures[0] ?? null;
+      let structureSummary: CommunityStructureSummary | null = null;
+      if (structure) {
+        const levelCount = structure.levelCount;
+        const level1Nodes = nodes.filter((node) => node.levelPosition === 1);
+        const level2Nodes = nodes.filter((node) => node.levelPosition === 2);
+        const perLevel1 = level1Nodes.map((node) => {
+          const level2Children = children.get(node.id) ?? [];
+          return {
+            id: node.id,
+            name: node.name,
+            code: node.code,
+            level2Count: level2Children.length,
+            leafCount: levelCount === 1 ? 1 : countLeaves(node.id, levelCount),
+          };
+        });
+        const perLevel2 =
+          levelCount >= 3
+            ? level2Nodes.map((node) => {
+                const parent = node.parentId
+                  ? nodes.find((candidate) => candidate.id === node.parentId)
+                  : null;
+                return {
+                  level1Id: parent?.id ?? '',
+                  level1Name: parent?.name ?? '',
+                  level2Id: node.id,
+                  level2Name: node.name,
+                  leafCount: countLeaves(node.id, levelCount),
+                };
+              })
+            : [];
+
+        const level1Count = level1Nodes.length;
+        const level2Count = level2Nodes.length;
+        const leafCount =
+          levelCount === 1
+            ? level1Count
+            : nodes.filter((node) => node.levelPosition === levelCount).length;
+        const level1Counts = perLevel1.map((item) => item.level2Count);
+        const level2Counts = perLevel2.map((item) => item.leafCount);
+        const uniform =
+          level1Count > 0 &&
+          leafCount > 0 &&
+          (levelCount === 1 ||
+            (level1Counts.every((value) => value === level1Counts[0] && value > 0) &&
+              (levelCount === 2 ||
+                level2Counts.every((value) => value === level2Counts[0] && value > 0))));
+
+        structureSummary = {
+          structureId: structure.id,
+          levelCount,
+          levelNames: {
+            level1: structure.level1Name,
+            level2: structure.level2Name,
+            level3: structure.level3Name,
+          },
+          level1Count,
+          level2Count,
+          leafCount,
+          uniform,
+          perLevel1,
+          perLevel2,
+        };
+      }
 
       const [administratorRow] = await db
         .select({
@@ -285,9 +341,7 @@ export async function communityRoutes(app: FastifyInstance) {
         ? {
             ...administratorRow,
             email:
-              administratorRow.email ??
-              administratorRow.userEmail ??
-              administratorRow.accountEmail,
+              administratorRow.email ?? administratorRow.userEmail ?? administratorRow.accountEmail,
             name: `${administratorRow.firstName} ${administratorRow.lastName}`.trim(),
           }
         : null;
@@ -316,6 +370,7 @@ export async function communityRoutes(app: FastifyInstance) {
         sections,
         sectionCount: sections.length,
         unitCount: sections.reduce((total, section) => total + section.unitCount, 0),
+        structureSummary,
       };
     },
   );
@@ -334,10 +389,7 @@ export async function communityRoutes(app: FastifyInstance) {
       }
 
       const { id } = request.params as { id: string };
-      const [existing] = await db
-        .select()
-        .from(communities)
-        .where(eq(communities.id, id));
+      const [existing] = await db.select().from(communities).where(eq(communities.id, id));
       if (
         !existing ||
         !can(u, 'community.update', {
@@ -382,9 +434,7 @@ export async function communityRoutes(app: FastifyInstance) {
         });
       }
       const typeLabel =
-        body.typeLabel !== undefined
-          ? body.typeLabel?.trim() || null
-          : existing.typeLabel;
+        body.typeLabel !== undefined ? body.typeLabel?.trim() || null : existing.typeLabel;
       if (type === 'otro' && !typeLabel) {
         return reply.status(400).send({
           statusCode: 400,
@@ -393,8 +443,7 @@ export async function communityRoutes(app: FastifyInstance) {
         });
       }
 
-      let coordinates: { latitude: string | null; longitude: string | null } | null =
-        null;
+      let coordinates: { latitude: string | null; longitude: string | null } | null = null;
       if (body.latitude !== undefined || body.longitude !== undefined) {
         coordinates = parseCoordinates(body.latitude, body.longitude);
         if (!coordinates) {
@@ -418,9 +467,7 @@ export async function communityRoutes(app: FastifyInstance) {
             ? { latitude: coordinates.latitude, longitude: coordinates.longitude }
             : {}),
           ...(body.timezone !== undefined ? { timezone: body.timezone.trim() } : {}),
-          ...(body.logoAssetId !== undefined
-            ? { logoAssetId: body.logoAssetId || null }
-            : {}),
+          ...(body.logoAssetId !== undefined ? { logoAssetId: body.logoAssetId || null } : {}),
           ...(body.welcomeMessage !== undefined
             ? { welcomeMessage: body.welcomeMessage?.trim() || null }
             : {}),
@@ -465,11 +512,7 @@ export async function communityRoutes(app: FastifyInstance) {
         });
       }
 
-      if (
-        (u.role === 'community_admin') &&
-        u.communityId &&
-        u.communityId !== id
-      ) {
+      if (u.role === 'community_admin' && u.communityId && u.communityId !== id) {
         return reply.status(403).send({
           statusCode: 403,
           error: 'Forbidden',
