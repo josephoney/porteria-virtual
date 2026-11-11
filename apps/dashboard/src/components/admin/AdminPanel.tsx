@@ -137,7 +137,7 @@ interface Unit {
   communityId: string;
   sectionId: string | null;
   path: string;
-  code: string;
+  code: string | null;
   floor: number | null;
   type: string;
   status: string;
@@ -395,7 +395,7 @@ export function AdminPanel() {
   const filteredUnits = useMemo(
     () =>
       units.filter((unit) => {
-        const matchesSearch = unit.code.toLowerCase().includes(search.toLowerCase());
+        const matchesSearch = (unit.code ?? '').toLowerCase().includes(search.toLowerCase());
         const matchesCommunity = communityFilter === 'all' || unit.communityId === communityFilter;
         const matchesSection = sectionFilter === 'all' || unit.sectionId === sectionFilter;
         return matchesSearch && matchesCommunity && matchesSection;

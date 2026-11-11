@@ -108,7 +108,7 @@ interface Unit {
   sectionName: string;
   path: string;
   communityName: string;
-  code: string;
+  code: string | null;
   floor: number | null;
   type: string;
   status: string;
@@ -384,7 +384,9 @@ export function PlatformPage() {
     return units.filter((unit) => {
       const matchesSearch = !term
         ? true
-        : `${unit.code} ${unit.sectionName} ${unit.communityName}`.toLowerCase().includes(term);
+        : `${unit.code ?? ''} ${unit.sectionName} ${unit.communityName}`
+            .toLowerCase()
+            .includes(term);
       const matchesCommunity =
         unitCommunityFilter === 'all' || unit.communityId === unitCommunityFilter;
       const matchesSection = unitSectionFilter === 'all' || unit.sectionId === unitSectionFilter;
