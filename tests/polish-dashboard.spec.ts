@@ -66,7 +66,8 @@ test.describe('polished dashboard', () => {
 
     await expect(page.getByRole('button', { name: 'Detalle' })).toHaveCount(0);
     await page.getByText('Torre Norte', { exact: true }).first().click();
-    await expect(page.getByText(/Tipo:/)).toBeVisible();
+    // The detail now renders label/value pairs through DetailGrid (a <dl>).
+    await expect(page.locator('dl dt', { hasText: 'Tipo' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ver estructura', exact: true })).toBeVisible();
   });
 });

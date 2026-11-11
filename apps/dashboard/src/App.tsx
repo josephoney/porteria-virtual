@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { RequireAuth, RequireRole, RequirePlatformAdmin } from './components/RequireAuth';
@@ -13,6 +13,7 @@ import { AdminPanel } from './components/admin/AdminPanel';
 import { AccessPointsPanel } from './components/admin/AccessPointsPanel';
 import { MyOrganizationPage } from './pages/MyOrganizationPage';
 import { GuardPanel } from './components/guard/GuardPanel';
+import { ErrorBoundary } from './components/errors/ErrorBoundary';
 import { Button } from './components/ui/button';
 import './App.css';
 
@@ -71,210 +72,214 @@ function AppRequiredPage() {
 }
 
 function DashboardApp() {
+  const { pathname } = useLocation();
+
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/c/:slug" element={<CommunityEntryPage />} />
-      <Route path="/invite/:token" element={<InvitePage />} />
-      <Route
-        path="/app-required"
-        element={
-          <RequireAuth>
-            <AppRequiredPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <SocketProvider>
-              <DashboardLayout />
-            </SocketProvider>
-          </RequireAuth>
-        }
-      >
-        <Route index element={<HomePage />} />
+    <ErrorBoundary resetKey={pathname} fullPage>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/c/:slug" element={<CommunityEntryPage />} />
+        <Route path="/invite/:token" element={<InvitePage />} />
         <Route
-          path="platform"
+          path="/app-required"
           element={
-            <RequirePlatformAdmin>
-              <PlatformPage />
-            </RequirePlatformAdmin>
+            <RequireAuth>
+              <AppRequiredPage />
+            </RequireAuth>
           }
         />
         <Route
-          path="platform/organizations"
+          path="/"
           element={
-            <RequirePlatformAdmin>
-              <PlatformPage />
-            </RequirePlatformAdmin>
+            <RequireAuth>
+              <SocketProvider>
+                <DashboardLayout />
+              </SocketProvider>
+            </RequireAuth>
           }
-        />
-        <Route
-          path="platform/communities"
-          element={
-            <RequirePlatformAdmin>
-              <PlatformPage />
-            </RequirePlatformAdmin>
-          }
-        />
-        <Route
-          path="platform/sections"
-          element={
-            <RequirePlatformAdmin>
-              <PlatformPage />
-            </RequirePlatformAdmin>
-          }
-        />
-        <Route
-          path="platform/units"
-          element={
-            <RequirePlatformAdmin>
-              <PlatformPage />
-            </RequirePlatformAdmin>
-          }
-        />
-        <Route
-          path="platform/invitations"
-          element={
-            <RequirePlatformAdmin>
-              <PlatformPage />
-            </RequirePlatformAdmin>
-          }
-        />
-        <Route
-          path="platform/users"
-          element={
-            <RequirePlatformAdmin>
-              <PlatformPage />
-            </RequirePlatformAdmin>
-          }
-        />
-        <Route
-          path="platform/bitacora"
-          element={
-            <RequirePlatformAdmin>
-              <AnalysisPage scope="platform" />
-            </RequirePlatformAdmin>
-          }
-        />
-        <Route
-          path="platform/reports"
-          element={
-            <RequirePlatformAdmin>
-              <AnalysisPage scope="platform" />
-            </RequirePlatformAdmin>
-          }
-        />
-        <Route
-          path="platform/history"
-          element={
-            <RequirePlatformAdmin>
-              <AnalysisPage scope="platform" />
-            </RequirePlatformAdmin>
-          }
-        />
-        <Route path="analysis" element={<Navigate to="/analysis/bitacora" replace />} />
-        <Route
-          path="analysis/bitacora-accesos"
-          element={
-            <RequireRole role={['org_admin', 'community_admin']}>
-              <AnalysisPage />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="analysis/:section"
-          element={
-            <RequireRole role={['org_admin', 'community_admin', 'operator', 'guard']}>
-              <AnalysisPage />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="admin"
-          element={
-            <RequireRole role={['org_admin', 'community_admin']}>
-              <AdminPanel />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="admin/organization"
-          element={
-            <RequireRole role={['org_admin']}>
-              <MyOrganizationPage />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="admin/communities"
-          element={
-            <RequireRole role={['org_admin']}>
-              <AdminPanel />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="admin/sections"
-          element={
-            <RequireRole role={['org_admin', 'community_admin']}>
-              <AdminPanel />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="admin/units"
-          element={
-            <RequireRole role={['org_admin', 'community_admin']}>
-              <AdminPanel />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="admin/invitations"
-          element={
-            <RequireRole role={['org_admin', 'community_admin']}>
-              <AdminPanel />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="admin/users"
-          element={
-            <RequireRole role={['org_admin', 'community_admin']}>
-              <AdminPanel />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="admin/calls"
-          element={
-            <RequireRole role={['org_admin', 'community_admin']}>
-              <AdminPanel />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="admin/access-points"
-          element={
-            <RequireRole role={['org_admin', 'community_admin']}>
-              <AccessPointsPanel />
-            </RequireRole>
-          }
-        />
-        <Route
-          path="guard"
-          element={
-            <RequireRole role={['org_admin', 'guard']}>
-              <GuardPanel />
-            </RequireRole>
-          }
-        />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        >
+          <Route index element={<HomePage />} />
+          <Route
+            path="platform"
+            element={
+              <RequirePlatformAdmin>
+                <PlatformPage />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="platform/organizations"
+            element={
+              <RequirePlatformAdmin>
+                <PlatformPage />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="platform/communities"
+            element={
+              <RequirePlatformAdmin>
+                <PlatformPage />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="platform/sections"
+            element={
+              <RequirePlatformAdmin>
+                <PlatformPage />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="platform/units"
+            element={
+              <RequirePlatformAdmin>
+                <PlatformPage />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="platform/invitations"
+            element={
+              <RequirePlatformAdmin>
+                <PlatformPage />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="platform/users"
+            element={
+              <RequirePlatformAdmin>
+                <PlatformPage />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="platform/bitacora"
+            element={
+              <RequirePlatformAdmin>
+                <AnalysisPage scope="platform" />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="platform/reports"
+            element={
+              <RequirePlatformAdmin>
+                <AnalysisPage scope="platform" />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route
+            path="platform/history"
+            element={
+              <RequirePlatformAdmin>
+                <AnalysisPage scope="platform" />
+              </RequirePlatformAdmin>
+            }
+          />
+          <Route path="analysis" element={<Navigate to="/analysis/bitacora" replace />} />
+          <Route
+            path="analysis/bitacora-accesos"
+            element={
+              <RequireRole role={['org_admin', 'community_admin']}>
+                <AnalysisPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="analysis/:section"
+            element={
+              <RequireRole role={['org_admin', 'community_admin', 'operator', 'guard']}>
+                <AnalysisPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="admin"
+            element={
+              <RequireRole role={['org_admin', 'community_admin']}>
+                <AdminPanel />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="admin/organization"
+            element={
+              <RequireRole role={['org_admin']}>
+                <MyOrganizationPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="admin/communities"
+            element={
+              <RequireRole role={['org_admin']}>
+                <AdminPanel />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="admin/sections"
+            element={
+              <RequireRole role={['org_admin', 'community_admin']}>
+                <AdminPanel />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="admin/units"
+            element={
+              <RequireRole role={['org_admin', 'community_admin']}>
+                <AdminPanel />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="admin/invitations"
+            element={
+              <RequireRole role={['org_admin', 'community_admin']}>
+                <AdminPanel />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="admin/users"
+            element={
+              <RequireRole role={['org_admin', 'community_admin']}>
+                <AdminPanel />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="admin/calls"
+            element={
+              <RequireRole role={['org_admin', 'community_admin']}>
+                <AdminPanel />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="admin/access-points"
+            element={
+              <RequireRole role={['org_admin', 'community_admin']}>
+                <AccessPointsPanel />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="guard"
+            element={
+              <RequireRole role={['org_admin', 'guard']}>
+                <GuardPanel />
+              </RequireRole>
+            }
+          />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ErrorBoundary>
   );
 }
 

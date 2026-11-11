@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { SiteHeader } from './SiteHeader';
 import { AppSidebar } from './AppSidebar';
 import { IncomingCallOverlay } from './IncomingCallOverlay';
@@ -6,8 +6,11 @@ import { SidebarProvider, SidebarInset } from '../ui/sidebar';
 import { TooltipProvider } from '../ui/tooltip';
 import { WorkspaceProvider } from '../../contexts/WorkspaceContext';
 import { WorkspaceWelcomeToast } from './WorkspaceWelcomeToast';
+import { ErrorBoundary } from '../errors/ErrorBoundary';
 
 export function DashboardLayout() {
+  const { pathname } = useLocation();
+
   return (
     <TooltipProvider>
       <WorkspaceProvider>
@@ -19,7 +22,9 @@ export function DashboardLayout() {
               <WorkspaceWelcomeToast />
               <SiteHeader />
               <main className="flex-1 overflow-auto">
-                <Outlet />
+                <ErrorBoundary resetKey={pathname}>
+                  <Outlet />
+                </ErrorBoundary>
               </main>
             </SidebarInset>
           </div>
