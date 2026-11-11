@@ -8,7 +8,7 @@
 - [x] 1.4 Resolver el logo dentro del provider con `assetObjectUrl` y revocar el object URL al desmontar o cambiar de workspace. No se creó un hook aparte: `MyOrganizationPage` y el detalle de comunidad resuelven su propio preview porque muestran el asset antes de que el provider revalide.
 - [x] 1.5 Envolver `DashboardLayout` con `WorkspaceProvider`.
 - [x] 1.6 Reemplazar el fetch propio y el texto fijo de `AppSidebar` por `useWorkspace()`; mostrar logo o ícono de fallback (`RiGovernmentLine` para plataforma, `RiBuilding2Line` para tenant) y truncar nombres largos con `title`.
-- [ ] 1.7 Verificar en el navegador que no queden requests duplicados de marca al navegar entre rutas.
+- [x] 1.7 Verificar en el navegador que no queden requests duplicados de marca al navegar entre rutas.
 
 ## 2. Bienvenida
 
@@ -45,12 +45,12 @@
 
 ## 5. Tests y verificación
 
-- [ ] 5.1 Playwright: `org_admin` ve el nombre y logo de su organización en el sidebar; `guard` ve el de su comunidad; plataforma ve "Portería Virtual".
-- [ ] 5.2 Playwright: al entrar al dashboard aparece el toast "Bienvenido, {nombre}" con el workspace, desaparece a los 5 s y no vuelve al navegar; ninguna landing muestra el bloque fijo.
-- [ ] 5.3 Playwright: en Mi Organización el control de logo es un botón, el placeholder está centrado y el nombre de la organización usa `text-base font-bold`.
-- [ ] 5.4 Playwright: click en la fila de una organización expande el detalle; segundo click lo contrae; Enter también lo alterna; solo una fila abierta.
-- [ ] 5.5 Playwright: "Editar" de comunidad abre el formulario precargado sin colapsar la fila y guarda los cambios.
-- [ ] 5.6 Verificar etiqueta y valor del detalle en modo claro y oscuro.
+- [x] 5.1 Playwright: `org_admin` ve el nombre y logo de su organización en el sidebar; `guard` ve el de su comunidad; plataforma ve "Portería Virtual".
+- [x] 5.2 Playwright: al entrar al dashboard aparece el toast "Bienvenido, {nombre}" con el workspace, desaparece a los 5 s y no vuelve al navegar; ninguna landing muestra el bloque fijo.
+- [x] 5.3 Playwright: en Mi Organización el control de logo es un botón, el placeholder está centrado y el nombre de la organización usa `text-base font-bold`.
+- [x] 5.4 Playwright: click en la fila de una organización expande el detalle; segundo click lo contrae; Enter también lo alterna; solo una fila abierta.
+- [x] 5.5 Playwright: "Editar" de comunidad abre el formulario precargado sin colapsar la fila y guarda los cambios.
+- [x] 5.6 Verificar etiqueta y valor del detalle en modo claro y oscuro.
 - [x] 5.7 `pnpm --filter @porteria/dashboard exec tsc --noEmit`, lint, Prettier y `check:theme`.
 - [x] 5.8 `pnpm exec openspec validate polish-admin-workspace --strict`.
 - [x] 5.9 Playwright: estado activo del sidebar (`tests/navigation.spec.ts`). Las rutas raíz (`/`, `/guard`, `/platform`, `/admin`) solo se subrayan con match exacto; las de sección usan prefijo por segmento. Cubre "Resumen" pegado en subrutas y la colisión `/analysis/bitacora` vs `/analysis/bitacora-accesos`. Verifica que `data-active` y `aria-current="page"` coincidan y haya un solo ítem activo. Verificado que los tres casos fallan con la lógica anterior.

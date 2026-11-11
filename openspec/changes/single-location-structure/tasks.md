@@ -43,6 +43,6 @@
 
 - [x] 5.1 Tests de integración: `POST` duplicado → 409, `PATCH` de niveles válido, nombre faltante → 400, reducción con unidades → 409.
 - [x] 5.2 Test de migración: dos estructuras, unidades y pases/escaneos quedan apuntando a la primaria. Verificado en Torre Norte.
-- [ ] 5.3 Playwright: un solo encabezado y un solo botón `Editar estructura` en `Ver estructura`.
-- [ ] 5.4 Playwright: detalle de comunidad muestra el resumen de estructura correcto.
+- [x] 5.3 Playwright: un solo encabezado y un solo botón `Editar estructura` en `Ver estructura`.
+- [x] 5.4 Playwright: detalle de comunidad muestra el resumen de estructura correcto.
 - [x] 5.5 `pnpm --filter @porteria/dashboard exec tsc --noEmit`, `pnpm --filter @porteria/api exec tsc --noEmit`, Prettier y `openspec validate single-location-structure --strict`.

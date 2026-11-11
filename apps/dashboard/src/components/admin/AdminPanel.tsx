@@ -520,6 +520,7 @@ export function AdminPanel() {
     event.preventDefault();
     setError('');
     setCommunitySaving(true);
+    const editedCommunityId = editingCommunityId;
     const payload = {
       name: communityForm.name,
       address: communityForm.address,
@@ -546,6 +547,27 @@ export function AdminPanel() {
       setCommunityFormOpen(false);
       await load();
       refreshWorkspace();
+
+      // The expanded detail reads from a cached overview; drop it so the row
+      // does not keep showing the values from before the edit.
+      if (editedCommunityId) {
+        setCommunityOverviews((current) => {
+          const next = { ...current };
+          delete next[editedCommunityId];
+          return next;
+        });
+        if (communityRow.isExpanded(editedCommunityId)) {
+          setOverviewLoadingId(editedCommunityId);
+          try {
+            const result = await get<CommunityOverview>(
+              `/api/communities/${editedCommunityId}/overview`,
+            );
+            setCommunityOverviews((current) => ({ ...current, [editedCommunityId]: result.data }));
+          } finally {
+            setOverviewLoadingId(null);
+          }
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo guardar la comunidad.');
     } finally {
