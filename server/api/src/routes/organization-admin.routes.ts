@@ -7,17 +7,11 @@ import * as slugService from '../services/slug.service.js';
 import { auditCommunityEvent } from '../services/audit.service.js';
 import { insertEvent } from '../services/events.service.js';
 import { can } from '../services/admin-permissions.service.js';
+import { parseGeographyCreate, parseGeographyPatch } from '../lib/geography.js';
 
 const db = createDb();
 
-const COMMUNITY_TYPES = [
-  'conjunto',
-  'condominio',
-  'club',
-  'hotel',
-  'edificio',
-  'otro',
-] as const;
+const COMMUNITY_TYPES = ['conjunto', 'condominio', 'club', 'hotel', 'edificio', 'otro'] as const;
 
 type CommunityType = (typeof COMMUNITY_TYPES)[number];
 
@@ -64,9 +58,7 @@ function parseCoordinates(
 }
 
 function parseCommunityType(value: unknown): CommunityType | null {
-  return COMMUNITY_TYPES.includes(value as CommunityType)
-    ? (value as CommunityType)
-    : null;
+  return COMMUNITY_TYPES.includes(value as CommunityType) ? (value as CommunityType) : null;
 }
 
 export async function organizationAdminRoutes(app: FastifyInstance) {
@@ -143,10 +135,22 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         nit?: string | null;
         phone?: string | null;
         address?: string | null;
+        municipality?: string | null;
+        department?: string | null;
+        country?: string | null;
         legalRepresentativePersonId?: string | null;
         logoAssetId?: string | null;
         welcomeMessage?: string | null;
       };
+
+      const geography = parseGeographyPatch(body);
+      if (!geography) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'Invalid geography fields',
+        });
+      }
 
       if (body.legalRepresentativePersonId) {
         const [person] = await db
@@ -168,14 +172,11 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         .from(organizations)
         .where(eq(organizations.id, user.orgId))
         .limit(1);
-      const nextNit =
-        body.nit !== undefined ? normalizeNit(body.nit) : existingOrganization?.nit;
+      const nextNit = body.nit !== undefined ? normalizeNit(body.nit) : existingOrganization?.nit;
       const nextPhone =
         body.phone !== undefined ? body.phone?.trim() || null : existingOrganization?.phone;
       const nextAddress =
-        body.address !== undefined
-          ? body.address?.trim() || null
-          : existingOrganization?.address;
+        body.address !== undefined ? body.address?.trim() || null : existingOrganization?.address;
       const nextLegalRepresentative =
         body.legalRepresentativePersonId !== undefined
           ? body.legalRepresentativePersonId || null
@@ -188,20 +189,19 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         const [updated] = await db
           .update(organizations)
           .set({
+            ...geography,
             ...(body.nit !== undefined ? { nit: normalizeNit(body.nit) } : {}),
             ...(body.phone !== undefined ? { phone: body.phone?.trim() || null } : {}),
             ...(body.address !== undefined ? { address: body.address?.trim() || null } : {}),
             ...(body.legalRepresentativePersonId !== undefined
               ? { legalRepresentativePersonId: body.legalRepresentativePersonId || null }
               : {}),
-            ...(body.logoAssetId !== undefined
-              ? { logoAssetId: body.logoAssetId || null }
-              : {}),
+            ...(body.logoAssetId !== undefined ? { logoAssetId: body.logoAssetId || null } : {}),
             ...(body.welcomeMessage !== undefined
               ? { welcomeMessage: body.welcomeMessage?.trim() || null }
               : {}),
             profileCompletedAt: profileComplete
-              ? existingOrganization?.profileCompletedAt ?? new Date()
+              ? (existingOrganization?.profileCompletedAt ?? new Date())
               : null,
             updatedAt: new Date(),
           })
@@ -287,6 +287,9 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         name?: string;
         address?: string;
         phone?: string | null;
+        municipality?: string | null;
+        department?: string | null;
+        country?: string | null;
         type?: string;
         typeLabel?: string | null;
         latitude?: number | string | null;
@@ -300,6 +303,15 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
           statusCode: 400,
           error: 'Bad Request',
           message: 'name, address and timezone are required',
+        });
+      }
+
+      const geography = parseGeographyCreate(body);
+      if (!geography) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'Invalid geography fields',
         });
       }
 
@@ -336,6 +348,7 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
             slug,
             address: body.address.trim(),
             phone: body.phone?.trim() || null,
+            ...geography,
             type,
             typeLabel: type === 'otro' ? body.typeLabel?.trim() || null : null,
             latitude: coordinates.latitude,

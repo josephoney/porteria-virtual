@@ -1,5 +1,21 @@
-import { test, expect } from '@playwright/test';
-import { DEMO_USERS, loginAs } from './helpers/auth';
+import { test, expect, type Page } from '@playwright/test';
+import { DEMO_USERS, loginAs, logoutFromUserMenu } from './helpers/auth';
+
+/**
+ * Asserts that exactly one sidebar item is highlighted and that it is `label`.
+ *
+ * The active anchor carries two independent signals:
+ * - `data-active` comes from our own `isActive()` in `AppSidebar`.
+ * - `aria-current="page"` comes from React Router's `NavLink`.
+ * If those two disagree, the sidebar underline lies. Keeping both in the same
+ * assertion is what makes this test catch prefix-matching regressions.
+ */
+async function expectOnlyActive(page: Page, label: string) {
+  const active = page.locator('[data-sidebar="menu-button"][data-active="true"]');
+  await expect(active).toHaveCount(1);
+  await expect(active).toHaveText(label);
+  await expect(active).toHaveAttribute('aria-current', 'page');
+}
 
 test.describe('Platform navigation', () => {
   test.beforeEach(async ({ page }) => {
@@ -96,5 +112,67 @@ test.describe('Role isolation', () => {
 
     await page.goto('/platform');
     await expect(page).toHaveURL(/\/$/);
+  });
+});
+
+test.describe('Sidebar active state', () => {
+  test('tenant root "Resumen" does not stay highlighted on subroutes', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.orgAdmin);
+    await expect(page).toHaveURL(/\/admin$/);
+    await expectOnlyActive(page, 'Resumen');
+
+    await page.goto('/admin/users');
+    await expect(page.getByRole('heading', { level: 1, name: 'Usuarios' })).toBeVisible();
+    await expectOnlyActive(page, 'Usuarios');
+  });
+
+  test('platform root "Resumen" does not stay highlighted on subroutes', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.platformAdmin);
+    await expect(page).toHaveURL(/\/platform$/);
+    await expectOnlyActive(page, 'Resumen');
+
+    await page.goto('/platform/organizations');
+    await expect(page.getByRole('heading', { level: 1, name: 'Organizaciones' })).toBeVisible();
+    await expectOnlyActive(page, 'Organizaciones');
+  });
+
+  test('prefix collision: /analysis/bitacora-accesos does not highlight Auditoría', async ({
+    page,
+  }) => {
+    await loginAs(page, DEMO_USERS.orgAdmin);
+    await expect(page).toHaveURL(/\/admin$/);
+
+    await page.goto('/analysis/bitacora-accesos');
+    await expect(page).toHaveURL(/\/analysis\/bitacora-accesos$/);
+    await expectOnlyActive(page, 'Bitácora de accesos');
+
+    await page.goto('/analysis/bitacora');
+    await expect(page).toHaveURL(/\/analysis\/bitacora$/);
+    await expectOnlyActive(page, 'Auditoría');
+  });
+
+  test('highlight follows sidebar clicks', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.orgAdmin);
+    await expect(page).toHaveURL(/\/admin$/);
+
+    await page.getByRole('link', { name: 'Comunidades', exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/communities$/);
+    await expectOnlyActive(page, 'Comunidades');
+
+    await page.getByRole('link', { name: 'Resumen', exact: true }).click();
+    await expect(page).toHaveURL(/\/admin$/);
+    await expectOnlyActive(page, 'Resumen');
+  });
+
+  test('operator and guard roots highlight only their own item', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.operator);
+    await expect(page).toHaveURL(/\/$/);
+    await expectOnlyActive(page, 'Operador');
+
+    await logoutFromUserMenu(page, DEMO_USERS.operator);
+
+    await loginAs(page, DEMO_USERS.guard);
+    await expect(page).toHaveURL(/\/guard$/);
+    await expectOnlyActive(page, 'Guardia');
   });
 });

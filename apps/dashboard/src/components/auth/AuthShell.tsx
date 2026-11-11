@@ -13,7 +13,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="relative flex h-full flex-col items-start justify-center gap-6 p-10 text-left text-primary-foreground">
-          <img src="/brand/LogoZima_W.svg" alt="Zima Seguridad" className="h-24 w-auto" />
+          <img src="/brand/logo-zima-w.svg" alt="Zima Seguridad" className="h-24 w-auto" />
           <p className="text-lg text-primary-foreground/80">Sistema Portería virtual y accesos</p>
         </div>
       </section>
@@ -27,7 +27,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="relative flex flex-col items-start gap-2 text-left text-primary-foreground">
-            <img src="/brand/LogoZima_W.svg" alt="Zima Seguridad" className="h-12 w-auto" />
+            <img src="/brand/logo-zima-w.svg" alt="Zima Seguridad" className="h-12 w-auto" />
             <p className="text-xs text-primary-foreground/80">Sistema Portería virtual y accesos</p>
           </div>
         </div>

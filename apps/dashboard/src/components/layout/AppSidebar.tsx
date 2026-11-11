@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { assetObjectUrl, get } from '../../lib/apiClient';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { NavUser } from './NavUser';
 import {
   Sidebar,
@@ -39,6 +38,8 @@ interface NavItem {
   roles: string[];
   platformOnly?: boolean;
   group: 'operation' | 'admin' | 'analysis';
+  /** Landing route: active only on an exact path match, never on its subroutes. */
+  end?: boolean;
 }
 
 const items: NavItem[] = [
@@ -49,6 +50,7 @@ const items: NavItem[] = [
     icon: RiDashboardLine,
     roles: ['org_admin', 'community_admin', 'operator'],
     group: 'operation',
+    end: true,
   },
   {
     to: '/guard',
@@ -56,6 +58,7 @@ const items: NavItem[] = [
     icon: RiFootprintLine,
     roles: ['org_admin', 'guard'],
     group: 'operation',
+    end: true,
   },
 
   // Administración de plataforma
@@ -66,6 +69,7 @@ const items: NavItem[] = [
     roles: [],
     platformOnly: true,
     group: 'admin',
+    end: true,
   },
   {
     to: '/platform/organizations',
@@ -123,6 +127,7 @@ const items: NavItem[] = [
     icon: RiDashboardLine,
     roles: ['org_admin', 'community_admin'],
     group: 'admin',
+    end: true,
   },
   {
     to: '/admin/organization',
@@ -230,48 +235,10 @@ const groupLabels: Record<NavItem['group'], string> = {
 
 export function AppSidebar() {
   const { user, activeMembership } = useAuth();
+  const workspace = useWorkspace();
   const { isMobile, setOpenMobile } = useSidebar();
   const location = useLocation();
-  const [brandLogo, setBrandLogo] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | null = null;
-
-    async function loadBrand() {
-      try {
-        let logoAssetId: string | null = null;
-        if (user?.isPlatformAdmin && activeMembership?.id === 'platform') return;
-        if (activeMembership?.role === 'org_admin') {
-          const result = await get<{ logoAssetId: string | null }>('/api/organizations/me');
-          logoAssetId = result.data.logoAssetId;
-        } else if (activeMembership?.communityId) {
-          const result = await get<{ community: { logoAssetId: string | null } }>(
-            `/api/communities/${activeMembership.communityId}/overview`,
-          );
-          logoAssetId = result.data.community.logoAssetId;
-        }
-
-        if (!logoAssetId || cancelled) return;
-        objectUrl = await assetObjectUrl(logoAssetId);
-        if (!cancelled) setBrandLogo(objectUrl);
-      } catch {
-        // Keep the default platform icon.
-      }
-    }
-
-    setBrandLogo(null);
-    loadBrand();
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [
-    user?.isPlatformAdmin,
-    activeMembership?.id,
-    activeMembership?.role,
-    activeMembership?.communityId,
-  ]);
   const closeMobile = () => {
     if (isMobile) setOpenMobile(false);
   };
@@ -290,10 +257,10 @@ export function AppSidebar() {
     return item.roles.includes(role);
   });
 
-  const isActive = (to: string) =>
-    to === '/' || to === '/platform' || to === '/admin'
+  const isActive = (to: string, end?: boolean) =>
+    end
       ? location.pathname === to
-      : location.pathname.startsWith(to);
+      : location.pathname === to || location.pathname.startsWith(`${to}/`);
 
   return (
     <Sidebar>
@@ -302,16 +269,23 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg">
               <NavLink to="/" onClick={closeMobile}>
-                {brandLogo ? (
+                {workspace.logoUrl ? (
                   <img
-                    src={brandLogo}
-                    alt="Logo de la organización"
-                    className="size-7 rounded-md object-cover"
+                    src={workspace.logoUrl}
+                    alt={`Logo de ${workspace.name}`}
+                    className="size-7 rounded-md object-contain"
                   />
+                ) : workspace.kind === 'platform' ? (
+                  <RiGovernmentLine className="size-5" />
                 ) : (
                   <RiBuilding2Line className="size-5" />
                 )}
-                <span className="font-heading text-base font-semibold">Portería Virtual</span>
+                <span
+                  className="truncate font-heading text-base font-semibold"
+                  title={workspace.name}
+                >
+                  {workspace.name}
+                </span>
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -329,8 +303,12 @@ export function AppSidebar() {
                 <SidebarMenu>
                   {groupItems.map((item) => (
                     <SidebarMenuItem key={item.to}>
-                      <SidebarMenuButton asChild isActive={isActive(item.to)} tooltip={item.label}>
-                        <NavLink to={item.to} end={item.to === '/'} onClick={closeMobile}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive(item.to, item.end)}
+                        tooltip={item.label}
+                      >
+                        <NavLink to={item.to} end={item.end} onClick={closeMobile}>
                           <item.icon className="h-4 w-4 shrink-0" />
                           <span>{item.label}</span>
                         </NavLink>

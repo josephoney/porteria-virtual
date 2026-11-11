@@ -17,6 +17,7 @@ import type { CommunityStructureSummary } from '@porteria/shared';
 import { requireRole } from '../middlewares/rbac.js';
 import { auditCommunityEvent } from '../services/audit.service.js';
 import { can } from '../services/admin-permissions.service.js';
+import { parseGeographyPatch } from '../lib/geography.js';
 
 const db = createDb();
 
@@ -415,6 +416,9 @@ export async function communityRoutes(app: FastifyInstance) {
         name?: string;
         address?: string;
         phone?: string | null;
+        municipality?: string | null;
+        department?: string | null;
+        country?: string | null;
         type?: string;
         typeLabel?: string | null;
         latitude?: number | string | null;
@@ -424,6 +428,15 @@ export async function communityRoutes(app: FastifyInstance) {
         welcomeMessage?: string | null;
         status?: 'active' | 'inactive';
       };
+
+      const geography = parseGeographyPatch(body);
+      if (!geography) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'Invalid geography fields',
+        });
+      }
 
       const type = body.type === undefined ? existing.type : parseCommunityType(body.type);
       if (!type) {
@@ -461,6 +474,7 @@ export async function communityRoutes(app: FastifyInstance) {
           ...(body.name !== undefined ? { name: body.name.trim() } : {}),
           ...(body.address !== undefined ? { address: body.address.trim() } : {}),
           ...(body.phone !== undefined ? { phone: body.phone?.trim() || null } : {}),
+          ...geography,
           type,
           typeLabel: type === 'otro' ? typeLabel : null,
           ...(coordinates

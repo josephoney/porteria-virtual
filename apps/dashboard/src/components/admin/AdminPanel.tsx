@@ -21,6 +21,11 @@ import { Skeleton } from '../ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { UsersTable } from './UsersTable';
 import { CallHistoryTable } from './CallHistoryTable';
+import { DetailField, DetailGrid } from '../ui/detail-field';
+import { LogoUpload } from '../ui/logo-upload';
+import { expandableRowProps, useExpandedRow } from '../../lib/use-expanded-row';
+import { COUNTRIES, DEFAULT_COUNTRY } from '../../lib/countries';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
 
 interface Community {
   id: string;
@@ -64,6 +69,14 @@ interface StructureSummary {
 }
 
 interface CommunityOverview {
+  community: {
+    latitude: string | null;
+    longitude: string | null;
+    timezone: string | null;
+    municipality: string | null;
+    department: string | null;
+    country: string | null;
+  };
   structureSummary: StructureSummary | null;
 }
 
@@ -147,18 +160,25 @@ interface Invitation {
   expiresAt: string;
 }
 
-function AssetThumb({ assetId }: { assetId: string | null }) {
+function CommunityLogoField({
+  community,
+  onSelect,
+}: {
+  community: Community;
+  onSelect: (file: File) => Promise<void>;
+}) {
   const [url, setUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl: string | null = null;
     async function load() {
-      if (!assetId) {
+      if (!community.logoAssetId) {
         setUrl(null);
         return;
       }
-      objectUrl = await assetObjectUrl(assetId);
+      objectUrl = await assetObjectUrl(community.logoAssetId);
       if (!cancelled) setUrl(objectUrl);
     }
     load();
@@ -166,13 +186,47 @@ function AssetThumb({ assetId }: { assetId: string | null }) {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [assetId]);
+  }, [community.logoAssetId]);
 
-  if (!url) return null;
-  return <img src={url} alt="Logo de comunidad" className="size-10 rounded-lg object-cover" />;
+  async function handleSelect(file: File) {
+    setUploading(true);
+    try {
+      await onSelect(file);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <LogoUpload
+      id={`community-logo-${community.id}`}
+      label="Logo de la comunidad"
+      previewUrl={url}
+      hasLogo={Boolean(community.logoAssetId)}
+      onSelect={handleSelect}
+      disabled={uploading}
+      hint="PNG, JPG o WEBP. Máximo 500 KB."
+    />
+  );
 }
 
 const pageSize = 10;
+
+const emptyCommunityForm = {
+  name: '',
+  address: '',
+  municipality: '',
+  department: '',
+  country: DEFAULT_COUNTRY,
+  phone: '',
+  type: 'conjunto',
+  typeLabel: '',
+  latitude: '',
+  longitude: '',
+  welcomeMessage: '',
+  timezone: 'America/Bogota',
+  slug: '',
+};
 
 const sectionMeta: Record<string, { title: string; description: string }> = {
   dashboard: {
@@ -207,6 +261,7 @@ const sectionMeta: Record<string, { title: string; description: string }> = {
 
 export function AdminPanel() {
   const location = useLocation();
+  const { refresh: refreshWorkspace } = useWorkspace();
   const rawSection = location.pathname.split('/').pop() ?? 'dashboard';
   const section = rawSection === 'admin' ? 'dashboard' : rawSection;
   const meta = sectionMeta[section] ?? sectionMeta.dashboard;
@@ -226,23 +281,13 @@ export function AdminPanel() {
   const [structureTarget, setStructureTarget] = useState<{ id: string; name: string } | null>(null);
   const [structureFormOpen, setStructureFormOpen] = useState(false);
   const [communityFormOpen, setCommunityFormOpen] = useState(false);
-  const [expandedCommunityId, setExpandedCommunityId] = useState<string | null>(null);
+  const communityRow = useExpandedRow();
+  const [editingCommunityId, setEditingCommunityId] = useState<string | null>(null);
   const [communityOverviews, setCommunityOverviews] = useState<Record<string, CommunityOverview>>(
     {},
   );
   const [overviewLoadingId, setOverviewLoadingId] = useState<string | null>(null);
-  const [communityForm, setCommunityForm] = useState({
-    name: '',
-    address: '',
-    phone: '',
-    type: 'conjunto',
-    typeLabel: '',
-    latitude: '',
-    longitude: '',
-    welcomeMessage: '',
-    timezone: 'America/Bogota',
-    slug: '',
-  });
+  const [communityForm, setCommunityForm] = useState({ ...emptyCommunityForm });
   const [communitySaving, setCommunitySaving] = useState(false);
   const [adminInviteCommunity, setAdminInviteCommunity] = useState<Community | null>(null);
   const [adminInviteEmail, setAdminInviteEmail] = useState('');
@@ -291,11 +336,11 @@ export function AdminPanel() {
   }, [load]);
 
   async function toggleCommunity(community: Community) {
-    if (expandedCommunityId === community.id) {
-      setExpandedCommunityId(null);
+    if (communityRow.isExpanded(community.id)) {
+      communityRow.collapse();
       return;
     }
-    setExpandedCommunityId(community.id);
+    communityRow.toggle(community.id);
     if (communityOverviews[community.id]) return;
 
     setOverviewLoadingId(community.id);
@@ -386,12 +431,7 @@ export function AdminPanel() {
     }
   }
 
-  async function uploadCommunityLogo(
-    community: Community,
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function uploadCommunityLogo(community: Community, file: File) {
     setError('');
     try {
       const formData = new FormData();
@@ -403,6 +443,7 @@ export function AdminPanel() {
         logoAssetId: asset.data.id,
       });
       await load();
+      refreshWorkspace();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo subir el logo.');
     }
@@ -430,39 +471,83 @@ export function AdminPanel() {
     }
   }
 
-  async function createCommunity(event: React.FormEvent) {
+  function openCommunityCreate() {
+    setEditingCommunityId(null);
+    setCommunityForm({ ...emptyCommunityForm });
+    setCommunityFormOpen(true);
+  }
+
+  async function openCommunityEdit(community: Community) {
+    setEditingCommunityId(community.id);
+    setCommunityForm({
+      name: community.name,
+      address: community.address,
+      municipality: '',
+      department: '',
+      country: DEFAULT_COUNTRY,
+      phone: community.phone ?? '',
+      type: community.type ?? 'conjunto',
+      typeLabel: community.typeLabel ?? '',
+      latitude: '',
+      longitude: '',
+      welcomeMessage: community.welcomeMessage ?? '',
+      timezone: '',
+      slug: '',
+    });
+    setCommunityFormOpen(true);
+
+    try {
+      const result = await get<CommunityOverview>(`/api/communities/${community.id}/overview`);
+      setCommunityOverviews((current) => ({
+        ...current,
+        [community.id]: result.data,
+      }));
+      setCommunityForm((current) => ({
+        ...current,
+        latitude: result.data.community.latitude ?? '',
+        longitude: result.data.community.longitude ?? '',
+        timezone: result.data.community.timezone ?? '',
+        municipality: result.data.community.municipality ?? '',
+        department: result.data.community.department ?? '',
+        country: result.data.community.country ?? '',
+      }));
+    } catch {
+      setError('No se pudieron cargar los datos de la comunidad.');
+    }
+  }
+
+  async function saveCommunity(event: React.FormEvent) {
     event.preventDefault();
     setError('');
     setCommunitySaving(true);
+    const payload = {
+      name: communityForm.name,
+      address: communityForm.address,
+      municipality: communityForm.municipality || null,
+      department: communityForm.department || null,
+      country: communityForm.country || null,
+      phone: communityForm.phone || null,
+      type: communityForm.type,
+      typeLabel: communityForm.type === 'otro' ? communityForm.typeLabel || null : null,
+      latitude: communityForm.latitude ? Number(communityForm.latitude) : null,
+      longitude: communityForm.longitude ? Number(communityForm.longitude) : null,
+      welcomeMessage: communityForm.welcomeMessage || null,
+      ...(communityForm.timezone ? { timezone: communityForm.timezone } : {}),
+      ...(communityForm.slug ? { slug: communityForm.slug } : {}),
+    };
     try {
-      await post('/api/organizations/me/communities', {
-        name: communityForm.name,
-        address: communityForm.address,
-        phone: communityForm.phone || null,
-        type: communityForm.type,
-        typeLabel: communityForm.type === 'otro' ? communityForm.typeLabel || null : null,
-        latitude: communityForm.latitude ? Number(communityForm.latitude) : null,
-        longitude: communityForm.longitude ? Number(communityForm.longitude) : null,
-        welcomeMessage: communityForm.welcomeMessage || null,
-        timezone: communityForm.timezone,
-        ...(communityForm.slug ? { slug: communityForm.slug } : {}),
-      });
-      setCommunityForm({
-        name: '',
-        address: '',
-        phone: '',
-        type: 'conjunto',
-        typeLabel: '',
-        latitude: '',
-        longitude: '',
-        welcomeMessage: '',
-        timezone: communityForm.timezone,
-        slug: '',
-      });
+      if (editingCommunityId) {
+        await patch(`/api/communities/${editingCommunityId}`, payload);
+      } else {
+        await post('/api/organizations/me/communities', payload);
+      }
+      setCommunityForm({ ...emptyCommunityForm });
+      setEditingCommunityId(null);
       setCommunityFormOpen(false);
       await load();
+      refreshWorkspace();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo crear la comunidad.');
+      setError(err instanceof Error ? err.message : 'No se pudo guardar la comunidad.');
     } finally {
       setCommunitySaving(false);
     }
@@ -556,12 +641,19 @@ export function AdminPanel() {
             <>
               <FormDialog
                 open={communityFormOpen}
-                onOpenChange={setCommunityFormOpen}
-                title="Nueva comunidad"
-                description="Creá una comunidad dentro de tu organización."
-                triggerLabel="Crear comunidad"
+                onOpenChange={(open) => {
+                  setCommunityFormOpen(open);
+                  if (!open) setEditingCommunityId(null);
+                }}
+                title={editingCommunityId ? 'Editar comunidad' : 'Nueva comunidad'}
+                description={
+                  editingCommunityId
+                    ? 'Actualizá los datos de la comunidad.'
+                    : 'Creá una comunidad dentro de tu organización.'
+                }
+                hideTrigger
               >
-                <form onSubmit={createCommunity} className="space-y-4">
+                <form onSubmit={saveCommunity} className="space-y-4">
                   <div className="space-y-1">
                     <Label htmlFor="admin-community-name">Nombre</Label>
                     <Input
@@ -583,6 +675,46 @@ export function AdminPanel() {
                       }
                       required
                     />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="admin-community-municipality">Municipio</Label>
+                      <Input
+                        id="admin-community-municipality"
+                        value={communityForm.municipality}
+                        onChange={(event) =>
+                          setCommunityForm({ ...communityForm, municipality: event.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="admin-community-department">Departamento</Label>
+                      <Input
+                        id="admin-community-department"
+                        value={communityForm.department}
+                        onChange={(event) =>
+                          setCommunityForm({ ...communityForm, department: event.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="admin-community-country">País</Label>
+                      <select
+                        id="admin-community-country"
+                        className="h-9 w-full rounded border border-border bg-card px-2 text-sm"
+                        value={communityForm.country}
+                        onChange={(event) =>
+                          setCommunityForm({ ...communityForm, country: event.target.value })
+                        }
+                      >
+                        <option value="">Sin especificar</option>
+                        {COUNTRIES.map((country) => (
+                          <option key={country} value={country}>
+                            {country}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="admin-community-phone">Teléfono</Label>
@@ -698,7 +830,11 @@ export function AdminPanel() {
                     />
                   </div>
                   <Button type="submit" disabled={communitySaving}>
-                    {communitySaving ? 'Creando…' : 'Crear comunidad'}
+                    {communitySaving
+                      ? 'Guardando…'
+                      : editingCommunityId
+                        ? 'Guardar cambios'
+                        : 'Crear comunidad'}
                   </Button>
                 </form>
               </FormDialog>
@@ -706,6 +842,7 @@ export function AdminPanel() {
                 search={search}
                 onSearchChange={setSearch}
                 placeholder="Buscar comunidad…"
+                actions={<Button onClick={openCommunityCreate}>Crear comunidad</Button>}
               />
               <div className="overflow-x-auto">
                 <Table>
@@ -725,144 +862,160 @@ export function AdminPanel() {
                         </TableCell>
                       </TableRow>
                     )}
-                    {communitiesPage.items.map((community) => (
-                      <Fragment key={community.id}>
-                        <TableRow
-                          role="button"
-                          tabIndex={0}
-                          aria-expanded={expandedCommunityId === community.id}
-                          className="cursor-pointer hover:bg-muted/40"
-                          onClick={() => toggleCommunity(community)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              toggleCommunity(community);
-                            }
-                          }}
-                        >
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {expandedCommunityId === community.id ? (
-                                <RiArrowDownSLine className="size-4 text-muted-foreground" />
-                              ) : (
-                                <RiArrowRightSLine className="size-4 text-muted-foreground" />
-                              )}
-                              {community.name}
-                            </div>
-                          </TableCell>
-                          <TableCell>{community.address}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{community.status}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setAdminInviteCommunity(community);
-                                  setAdminInviteEmail('');
-                                  setAdminInviteLink('');
-                                  setAdminInviteError('');
-                                }}
-                              >
-                                Invitar admin
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setStructureTarget({
-                                    id: community.id,
-                                    name: community.name,
-                                  });
-                                }}
-                              >
-                                Ver estructura
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                        {expandedCommunityId === community.id && (
-                          <TableRow>
-                            <TableCell colSpan={4} className="bg-muted/30">
-                              <div className="grid gap-3 py-1 text-sm sm:grid-cols-2">
-                                <p>
-                                  <span className="text-muted-foreground">Tipo:</span>{' '}
-                                  {community.typeLabel || community.type || 'Sin definir'}
-                                </p>
-                                <p>
-                                  <span className="text-muted-foreground">Teléfono:</span>{' '}
-                                  {community.phone || 'Sin completar'}
-                                </p>
-                                <div className="flex items-center gap-2">
-                                  <AssetThumb assetId={community.logoAssetId} />
-                                  <p>
-                                    <span className="text-muted-foreground">Logo:</span>{' '}
-                                    {community.logoAssetId ? 'Cargado' : 'Fallback por defecto'}
-                                  </p>
-                                </div>
-                                <p>
-                                  <span className="text-muted-foreground">Administrador:</span>{' '}
-                                  {community.administratorEmail || 'Sin asignar'}
-                                </p>
-                                <p>
-                                  <span className="text-muted-foreground">Bienvenida:</span>{' '}
-                                  {community.welcomeMessage || 'Sin mensaje'}
-                                </p>
-                                <div className="space-y-1 sm:col-span-2">
-                                  <span className="text-muted-foreground">Estructura:</span>{' '}
-                                  {overviewLoadingId === community.id ? (
-                                    <Skeleton className="mt-1 h-4 w-64" />
-                                  ) : (
-                                    <>
-                                      <span>
-                                        {formatStructureSummary(
-                                          communityOverviews[community.id]?.structureSummary ??
-                                            null,
-                                        )}
-                                      </span>
-                                      {!communityOverviews[community.id]?.structureSummary && (
-                                        <Button
-                                          variant="link"
-                                          size="sm"
-                                          className="ml-1 h-auto px-0"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            setStructureTarget({
-                                              id: community.id,
-                                              name: community.name,
-                                            });
-                                          }}
-                                        >
-                                          Definir estructura
-                                        </Button>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                                <div className="space-y-1 sm:col-span-2">
-                                  <Label htmlFor={`community-logo-${community.id}`}>
-                                    Subir logo
-                                  </Label>
-                                  <Input
-                                    id={`community-logo-${community.id}`}
-                                    type="file"
-                                    accept="image/png,image/jpeg,image/webp"
-                                    onChange={(event) => uploadCommunityLogo(community, event)}
-                                  />
-                                  <p className="text-xs text-muted-foreground">
-                                    PNG, JPG o WEBP. Máximo 500 KB.
-                                  </p>
-                                </div>
+                    {communitiesPage.items.map((community) => {
+                      const isExpanded = communityRow.isExpanded(community.id);
+                      return (
+                        <Fragment key={community.id}>
+                          <TableRow
+                            className="cursor-pointer hover:bg-muted/40"
+                            {...expandableRowProps(
+                              community.id,
+                              isExpanded,
+                              () => void toggleCommunity(community),
+                            )}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {isExpanded ? (
+                                  <RiArrowDownSLine className="size-4 text-muted-foreground" />
+                                ) : (
+                                  <RiArrowRightSLine className="size-4 text-muted-foreground" />
+                                )}
+                                {community.name}
+                              </div>
+                            </TableCell>
+                            <TableCell>{community.address}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{community.status}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void openCommunityEdit(community);
+                                  }}
+                                >
+                                  Editar
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setAdminInviteCommunity(community);
+                                    setAdminInviteEmail('');
+                                    setAdminInviteLink('');
+                                    setAdminInviteError('');
+                                  }}
+                                >
+                                  Invitar admin
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setStructureTarget({
+                                      id: community.id,
+                                      name: community.name,
+                                    });
+                                  }}
+                                >
+                                  Ver estructura
+                                </Button>
                               </div>
                             </TableCell>
                           </TableRow>
-                        )}
-                      </Fragment>
-                    ))}
+                          {isExpanded && (
+                            <TableRow>
+                              <TableCell colSpan={4} className="bg-muted/30">
+                                <div className="space-y-4 py-2">
+                                  <DetailGrid>
+                                    <DetailField
+                                      label="Nombre"
+                                      value={community.name}
+                                      valueClassName="text-base font-bold"
+                                    />
+                                    <DetailField
+                                      label="Tipo"
+                                      value={community.typeLabel || community.type}
+                                    />
+                                    <DetailField label="Teléfono" value={community.phone} />
+                                    <DetailField
+                                      label="Administrador"
+                                      value={community.administratorEmail}
+                                    />
+                                    <DetailField
+                                      label="Dirección"
+                                      value={community.address}
+                                      span="full"
+                                    />
+                                    <DetailField
+                                      label="Municipio"
+                                      value={
+                                        communityOverviews[community.id]?.community.municipality
+                                      }
+                                    />
+                                    <DetailField
+                                      label="Departamento"
+                                      value={communityOverviews[community.id]?.community.department}
+                                    />
+                                    <DetailField
+                                      label="País"
+                                      value={communityOverviews[community.id]?.community.country}
+                                    />
+                                    <DetailField
+                                      label="Mensaje de bienvenida"
+                                      value={community.welcomeMessage}
+                                      span="full"
+                                      valueClassName="font-normal"
+                                    />
+                                  </DetailGrid>
+                                  <section className="space-y-1">
+                                    <h3 className="text-sm font-semibold">Estructura</h3>
+                                    {overviewLoadingId === community.id ? (
+                                      <Skeleton className="h-4 w-64" />
+                                    ) : (
+                                      <div className="flex flex-wrap items-center gap-1">
+                                        <p className="text-sm text-muted-foreground">
+                                          {formatStructureSummary(
+                                            communityOverviews[community.id]?.structureSummary ??
+                                              null,
+                                          )}
+                                        </p>
+                                        {!communityOverviews[community.id]?.structureSummary && (
+                                          <Button
+                                            variant="link"
+                                            size="sm"
+                                            className="h-auto px-0"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              setStructureTarget({
+                                                id: community.id,
+                                                name: community.name,
+                                              });
+                                            }}
+                                          >
+                                            Definir estructura
+                                          </Button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </section>
+                                  <CommunityLogoField
+                                    community={community}
+                                    onSelect={(file) => uploadCommunityLogo(community, file)}
+                                  />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

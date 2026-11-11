@@ -17,6 +17,9 @@ export const organizations = pgTable(
     nit: varchar('nit', { length: 30 }),
     phone: varchar('phone', { length: 30 }),
     address: varchar('address', { length: 500 }),
+    municipality: varchar('municipality', { length: 120 }),
+    department: varchar('department', { length: 120 }),
+    country: varchar('country', { length: 120 }),
     legalRepresentativePersonId: uuid('legal_representative_person_id').references(
       () => people.id,
       { onDelete: 'set null' },

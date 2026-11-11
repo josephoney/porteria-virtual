@@ -119,14 +119,23 @@ export const createInvitationSchema = z.object({
   expiresInDays: z.coerce.number().int().min(1).max(30).optional(),
 });
 
+export const geographySchema = z.object({
+  municipality: z.string().max(120).nullable().optional(),
+  department: z.string().max(120).nullable().optional(),
+  country: z.string().max(120).nullable().optional(),
+});
+
 export const createOrganizationSchema = z.object({
   name: z.string().min(1).max(255),
   slug: z.string().min(3).max(60).optional(),
+  ...geographySchema.shape,
 });
 
 export const updateOrganizationSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   slug: z.string().min(3).max(60).optional(),
+  administratorEmail: z.string().email().optional(),
+  ...geographySchema.shape,
 });
 
 export const createCommunitySchema = z.object({
@@ -135,6 +144,7 @@ export const createCommunitySchema = z.object({
   address: z.string().min(1).max(500),
   timezone: z.string().min(1).max(50),
   slug: z.string().min(3).max(60).optional(),
+  ...geographySchema.shape,
 });
 
 export const updateCommunitySchema = z.object({
@@ -143,6 +153,7 @@ export const updateCommunitySchema = z.object({
   timezone: z.string().min(1).max(50).optional(),
   slug: z.string().min(3).max(60).optional(),
   status: z.enum(['active', 'inactive']).optional(),
+  ...geographySchema.shape,
 });
 
 export const createPlatformBuildingSchema = z.object({

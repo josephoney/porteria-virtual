@@ -1,4 +1,4 @@
-import { and, eq, isNull, desc } from 'drizzle-orm';
+import { and, eq, isNull, desc, ne } from 'drizzle-orm';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { createDb } from '@porteria/database';
@@ -19,6 +19,15 @@ import { validateLocationUnit } from './location-unit.service.js';
 import * as authService from './auth.service.js';
 
 const db = createDb();
+
+function otherOrgAdminsCondition(organizationId: string, keepMembershipId: string) {
+  return and(
+    eq(memberships.organizationId, organizationId),
+    eq(memberships.role, 'org_admin'),
+    eq(memberships.status, 'active'),
+    ne(memberships.id, keepMembershipId),
+  );
+}
 
 export interface InvitationRequester {
   sub: string;
@@ -74,24 +83,28 @@ function expiryDate(days?: number): Date {
 }
 
 function resolveScope(data: CreateInvitationInput, requester: InvitationRequester) {
-  const organizationId = requester.isPlatformAdmin
-    ? data.organizationId
-    : requester.orgId;
+  const organizationId = requester.isPlatformAdmin ? data.organizationId : requester.orgId;
 
   if (!organizationId) {
     return { error: 'organizationId is required' as const };
   }
 
-  if (!requester.isPlatformAdmin && data.organizationId && data.organizationId !== requester.orgId) {
+  if (
+    !requester.isPlatformAdmin &&
+    data.organizationId &&
+    data.organizationId !== requester.orgId
+  ) {
     return { error: 'organization out of scope' as const };
   }
 
   const communityId =
-    requester.role === 'community_admin'
-      ? requester.communityId
-      : (data.communityId ?? null);
+    requester.role === 'community_admin' ? requester.communityId : (data.communityId ?? null);
 
-  if (requester.role === 'community_admin' && data.communityId && data.communityId !== requester.communityId) {
+  if (
+    requester.role === 'community_admin' &&
+    data.communityId &&
+    data.communityId !== requester.communityId
+  ) {
     return { error: 'community out of scope' as const };
   }
 
@@ -132,7 +145,9 @@ async function findMembership(
     eq(memberships.role, role as MembershipRole),
     eq(memberships.status, 'active'),
   ];
-  conditions.push(communityId ? eq(memberships.communityId, communityId) : isNull(memberships.communityId));
+  conditions.push(
+    communityId ? eq(memberships.communityId, communityId) : isNull(memberships.communityId),
+  );
   conditions.push(unitId ? eq(memberships.unitId, unitId) : isNull(memberships.unitId));
 
   const [membership] = await db
@@ -147,7 +162,11 @@ export async function createInvitation(
   data: CreateInvitationInput,
   requester: InvitationRequester,
 ): Promise<InvitationResult<{ invitation: typeof invitations.$inferSelect; acceptUrl: string }>> {
-  if (!requester.isPlatformAdmin && requester.role !== 'org_admin' && requester.role !== 'community_admin') {
+  if (
+    !requester.isPlatformAdmin &&
+    requester.role !== 'org_admin' &&
+    requester.role !== 'community_admin'
+  ) {
     return { ok: false, code: 'forbidden' };
   }
 
@@ -157,10 +176,7 @@ export async function createInvitation(
   }
 
   if (scope.locationUnitId && scope.communityId) {
-    const location = await validateLocationUnit(
-      scope.locationUnitId,
-      scope.communityId,
-    );
+    const location = await validateLocationUnit(scope.locationUnitId, scope.communityId);
     if (!location.ok) {
       return { ok: false, code: 'invalid_payload' };
     }
@@ -388,10 +404,19 @@ export async function acceptInvitation(
     );
     if (!membership) return { ok: false, code: 'conflict' };
 
-    await db
-      .update(invitations)
-      .set({ status: 'accepted', acceptedAt: new Date(), updatedAt: new Date() })
-      .where(eq(invitations.id, invitation.id));
+    await db.transaction(async (tx) => {
+      if (invitation.role === 'org_admin') {
+        await tx
+          .update(memberships)
+          .set({ status: 'inactive', updatedAt: new Date() })
+          .where(otherOrgAdminsCondition(invitation.organizationId, membership.id));
+      }
+
+      await tx
+        .update(invitations)
+        .set({ status: 'accepted', acceptedAt: new Date(), updatedAt: new Date() })
+        .where(eq(invitations.id, invitation.id));
+    });
 
     const tokens = await authService.switchContext(existingUser.id, membership.id);
     if (!tokens) return { ok: false, code: 'conflict' };
@@ -454,6 +479,13 @@ export async function acceptInvitation(
         .update(invitations)
         .set({ status: 'accepted', acceptedAt: new Date(), updatedAt: new Date() })
         .where(eq(invitations.id, invitation.id));
+
+      if (invitation.role === 'org_admin') {
+        await tx
+          .update(memberships)
+          .set({ status: 'inactive', updatedAt: new Date() })
+          .where(otherOrgAdminsCondition(invitation.organizationId, membership.id));
+      }
 
       return { userId: user.id, membershipId: membership.id };
     });

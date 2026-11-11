@@ -41,7 +41,10 @@ export function OperatorPanel() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
-        if (!res.ok) return res.text().then((t) => { throw new Error(`HTTP ${res.status}: ${t}`); });
+        if (!res.ok)
+          return res.text().then((t) => {
+            throw new Error(`HTTP ${res.status}: ${t}`);
+          });
         return res.json();
       })
       .then((data: RelayConfig[]) => {
@@ -60,11 +63,14 @@ export function OperatorPanel() {
     const mqttSocket = io(mqttUrl, { transports: ['websocket'] });
     mqttSocketRef.current = mqttSocket;
 
-    mqttSocket.on('relay:status', (data: { buildingId: string; relayIndex: number; state: 'ON' | 'OFF' }) => {
-      if (data.buildingId === activeCall.kioskRpiId) {
-        setRelayStates((prev) => ({ ...prev, [data.relayIndex]: data.state }));
-      }
-    });
+    mqttSocket.on(
+      'relay:status',
+      (data: { buildingId: string; relayIndex: number; state: 'ON' | 'OFF' }) => {
+        if (data.buildingId === activeCall.kioskRpiId) {
+          setRelayStates((prev) => ({ ...prev, [data.relayIndex]: data.state }));
+        }
+      },
+    );
 
     return () => {
       mqttSocket.disconnect();
@@ -120,7 +126,8 @@ export function OperatorPanel() {
               🟢 {activeCall.kioskName}
             </div>
             <p className="font-mono text-xs text-muted-foreground mb-4">
-              La videollamada se muestra en la ventana flotante. Usá los controles de la ventana para colgar, silenciar o abrir la puerta.
+              La videollamada se muestra en la ventana flotante. Usá los controles de la ventana
+              para colgar, silenciar o abrir la puerta.
             </p>
             {relayConfigs.length > 0 && (
               <div className="flex gap-2 flex-wrap">

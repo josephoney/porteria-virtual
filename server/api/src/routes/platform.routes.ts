@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { and, count, eq, ilike, inArray } from 'drizzle-orm';
+import { and, count, eq, ilike, inArray, isNull, ne } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import {
   organizations,
@@ -15,6 +15,7 @@ import {
   locationUnits,
 } from '@porteria/database/schema';
 import { requirePlatformAdmin } from '../middlewares/rbac.js';
+import { parseGeographyPatch } from '../lib/geography.js';
 import * as slugService from '../services/slug.service.js';
 import * as invitationService from '../services/invitation.service.js';
 import * as eventsService from '../services/events.service.js';
@@ -68,6 +69,174 @@ function audit(
     .catch(() => {});
 }
 
+interface ActiveOrganizationAdministrator {
+  status: 'active';
+  userId: string;
+  email: string;
+  name: string;
+}
+
+type OrganizationAdministrator =
+  | ActiveOrganizationAdministrator
+  | {
+      status: 'pending';
+      email: string;
+      invitationId: string;
+      acceptUrl: string;
+    }
+  | null;
+
+async function getActiveOrganizationAdministrator(
+  organizationId: string,
+): Promise<ActiveOrganizationAdministrator | null> {
+  const [row] = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      name: users.name,
+    })
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
+    .where(
+      and(
+        eq(memberships.organizationId, organizationId),
+        eq(memberships.role, 'org_admin'),
+        eq(memberships.status, 'active'),
+      ),
+    )
+    .limit(1);
+
+  return row ? { status: 'active', ...row } : null;
+}
+
+async function transferOrganizationAdministrator(
+  request: FastifyRequest,
+  organization: typeof organizations.$inferSelect,
+  email: string,
+  previousEmail: string | null,
+): Promise<{ administrator: OrganizationAdministrator } | { error: string; status: number }> {
+  const [targetUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+
+  if (targetUser) {
+    const [person] = await db
+      .select({ id: people.id })
+      .from(people)
+      .where(eq(people.contactEmail, targetUser.email))
+      .limit(1);
+
+    await db.transaction(async (tx) => {
+      const [existingMembership] = await tx
+        .select({ id: memberships.id })
+        .from(memberships)
+        .where(
+          and(
+            eq(memberships.userId, targetUser.id),
+            eq(memberships.organizationId, organization.id),
+            eq(memberships.role, 'org_admin'),
+            isNull(memberships.communityId),
+            isNull(memberships.unitId),
+            isNull(memberships.locationUnitId),
+          ),
+        )
+        .limit(1);
+
+      let membershipId: string;
+      if (existingMembership) {
+        await tx
+          .update(memberships)
+          .set({ status: 'active', updatedAt: new Date() })
+          .where(eq(memberships.id, existingMembership.id));
+        membershipId = existingMembership.id;
+      } else {
+        const [created] = await tx
+          .insert(memberships)
+          .values({
+            userId: targetUser.id,
+            personId: person?.id ?? null,
+            organizationId: organization.id,
+            role: 'org_admin',
+            status: 'active',
+          })
+          .returning({ id: memberships.id });
+        membershipId = created.id;
+      }
+
+      await tx
+        .update(memberships)
+        .set({ status: 'inactive', updatedAt: new Date() })
+        .where(
+          and(
+            eq(memberships.organizationId, organization.id),
+            eq(memberships.role, 'org_admin'),
+            eq(memberships.status, 'active'),
+            ne(memberships.id, membershipId),
+          ),
+        );
+
+      await tx
+        .update(invitations)
+        .set({ status: 'revoked', updatedAt: new Date() })
+        .where(
+          and(
+            eq(invitations.organizationId, organization.id),
+            eq(invitations.role, 'org_admin'),
+            eq(invitations.status, 'pending'),
+          ),
+        );
+    });
+
+    audit(request, 'organization.administrator_changed', organization.id, null, {
+      from: previousEmail,
+      to: email,
+      pending: false,
+    });
+
+    return {
+      administrator: {
+        status: 'active',
+        userId: targetUser.id,
+        email: targetUser.email,
+        name: targetUser.name,
+      },
+    };
+  }
+
+  const result = await invitationService.createInvitation(
+    { email, role: 'org_admin', organizationId: organization.id },
+    getRequester(request),
+  );
+  if (!result.ok) {
+    return { error: result.code, status: 409 };
+  }
+
+  await db
+    .update(invitations)
+    .set({ status: 'revoked', updatedAt: new Date() })
+    .where(
+      and(
+        eq(invitations.organizationId, organization.id),
+        eq(invitations.role, 'org_admin'),
+        eq(invitations.status, 'pending'),
+        ne(invitations.id, result.data.invitation.id),
+      ),
+    );
+
+  audit(request, 'organization.administrator_changed', organization.id, null, {
+    from: previousEmail,
+    to: email,
+    pending: true,
+  });
+
+  return {
+    administrator: {
+      status: 'pending',
+      email,
+      invitationId: result.data.invitation.id,
+      acceptUrl: result.data.acceptUrl,
+    },
+  };
+}
+
 function errorInfo(err: unknown): { status: number; message: string } {
   if (err instanceof slugService.InvalidSlugError) {
     return { status: 400, message: err.message };
@@ -86,7 +255,10 @@ export async function platformRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   });
@@ -104,7 +276,13 @@ export async function platformRoutes(app: FastifyInstance) {
     const { page, pageSize } = pagination(request);
     const query = request.query as { search?: string };
     return usersService.listUsers(
-      { sub: request.user.sub, role: 'platform_admin', orgId: '', communityId: null, isPlatformAdmin: true },
+      {
+        sub: request.user.sub,
+        role: 'platform_admin',
+        orgId: '',
+        communityId: null,
+        isPlatformAdmin: true,
+      },
       { page, pageSize, search: query.search },
     );
   });
@@ -117,7 +295,12 @@ export async function platformRoutes(app: FastifyInstance) {
 
     const [data, totalRow] = await Promise.all([
       db
-        .select({ id: organizations.id, name: organizations.name, slug: organizations.slug, createdAt: organizations.createdAt })
+        .select({
+          id: organizations.id,
+          name: organizations.name,
+          slug: organizations.slug,
+          createdAt: organizations.createdAt,
+        })
         .from(organizations)
         .where(where)
         .orderBy(organizations.name)
@@ -140,6 +323,9 @@ export async function platformRoutes(app: FastifyInstance) {
         nit: organizations.nit,
         phone: organizations.phone,
         address: organizations.address,
+        municipality: organizations.municipality,
+        department: organizations.department,
+        country: organizations.country,
         logoAssetId: organizations.logoAssetId,
         welcomeMessage: organizations.welcomeMessage,
         profileCompletedAt: organizations.profileCompletedAt,
@@ -199,9 +385,7 @@ export async function platformRoutes(app: FastifyInstance) {
       ? {
           ...administratorRow,
           email:
-            administratorRow.email ??
-            administratorRow.userEmail ??
-            administratorRow.accountEmail,
+            administratorRow.email ?? administratorRow.userEmail ?? administratorRow.accountEmail,
           name: `${administratorRow.firstName} ${administratorRow.lastName}`.trim(),
         }
       : null;
@@ -272,16 +456,11 @@ export async function platformRoutes(app: FastifyInstance) {
       nodesByCommunity.set(node.communityId, list);
     }
 
-    const countsByCommunity = new Map<
-      string,
-      { sectionCount: number; unitCount: number }
-    >();
+    const countsByCommunity = new Map<string, { sectionCount: number; unitCount: number }>();
     for (const communityId of communityIds) {
       const nodes = nodesByCommunity.get(communityId) ?? [];
       const structure = structureByCommunity.get(communityId);
-      const levelCount = structure
-        ? (levelByStructure.get(structure.id) ?? 3)
-        : 3;
+      const levelCount = structure ? (levelByStructure.get(structure.id) ?? 3) : 3;
       const sections = nodes.filter((node) => node.levelPosition === 1);
       const unitCount = nodes.filter((node) => node.levelPosition === levelCount).length;
       countsByCommunity.set(communityId, {
@@ -311,7 +490,13 @@ export async function platformRoutes(app: FastifyInstance) {
       const slug = await slugService.uniqueOrganizationSlug(body.slug, body.name);
       const [created] = await db
         .insert(organizations)
-        .values({ name: body.name, slug })
+        .values({
+          name: body.name,
+          slug,
+          municipality: body.municipality?.trim() || null,
+          department: body.department?.trim() || null,
+          country: body.country?.trim() || null,
+        })
         .returning();
       audit(request, 'organization.created', created.id, null, { slug: created.slug });
       return reply.status(201).send(created);
@@ -324,8 +509,15 @@ export async function platformRoutes(app: FastifyInstance) {
   app.patch('/organizations/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const body = updateOrganizationSchema.parse(request.body);
-    const [existing] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
+    const [existing] = await db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, id))
+      .limit(1);
     if (!existing) return reply.status(404).send({ error: 'Organization not found' });
+
+    const geography = parseGeographyPatch(body);
+    if (!geography) return reply.status(400).send({ error: 'Invalid geography fields' });
 
     try {
       const slug = body.slug
@@ -333,12 +525,45 @@ export async function platformRoutes(app: FastifyInstance) {
         : existing.slug;
       const [updated] = await db
         .update(organizations)
-        .set({ name: body.name ?? existing.name, slug, updatedAt: new Date() })
+        .set({
+          name: body.name ?? existing.name,
+          slug,
+          ...geography,
+          updatedAt: new Date(),
+        })
         .where(eq(organizations.id, id))
         .returning();
-      audit(request, 'organization.updated', updated.id, null, { slug: updated.slug });
-      return updated;
+
+      let administrator: OrganizationAdministrator = await getActiveOrganizationAdministrator(id);
+      const changedFields = [
+        ...(body.name !== undefined ? ['name'] : []),
+        ...(body.slug !== undefined ? ['slug'] : []),
+        ...Object.keys(geography),
+      ];
+      audit(request, 'organization.updated', updated.id, null, {
+        slug: updated.slug,
+        changedFields,
+      });
+
+      const nextEmail = body.administratorEmail?.trim().toLowerCase();
+      if (nextEmail && nextEmail !== administrator?.email.toLowerCase()) {
+        const transfer = await transferOrganizationAdministrator(
+          request,
+          updated,
+          nextEmail,
+          administrator?.email ?? null,
+        );
+        if ('error' in transfer) {
+          return reply.status(transfer.status).send({ error: transfer.error });
+        }
+        administrator = transfer.administrator;
+      }
+
+      return { organization: updated, administrator };
     } catch (err) {
+      if ((err as { code?: string }).code === '23505') {
+        return reply.status(409).send({ error: 'organization_name_taken' });
+      }
       const info = errorInfo(err);
       return reply.status(info.status).send({ error: info.message });
     }
@@ -348,7 +573,9 @@ export async function platformRoutes(app: FastifyInstance) {
   app.get('/communities', async (request: FastifyRequest) => {
     const { page, pageSize, offset } = pagination(request);
     const query = request.query as { organizationId?: string };
-    const where = query.organizationId ? eq(communities.organizationId, query.organizationId) : undefined;
+    const where = query.organizationId
+      ? eq(communities.organizationId, query.organizationId)
+      : undefined;
 
     const [data, totalRow] = await Promise.all([
       db
@@ -374,60 +601,76 @@ export async function platformRoutes(app: FastifyInstance) {
     return { data, total: totalRow[0]?.count ?? 0, page, pageSize };
   });
 
-  app.post('/communities', { preHandler: [readOnlyTenant] }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = createCommunitySchema.parse(request.body);
-    const [org] = await db.select().from(organizations).where(eq(organizations.id, body.organizationId)).limit(1);
-    if (!org) return reply.status(400).send({ error: 'Organization not found' });
+  app.post(
+    '/communities',
+    { preHandler: [readOnlyTenant] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = createCommunitySchema.parse(request.body);
+      const [org] = await db
+        .select()
+        .from(organizations)
+        .where(eq(organizations.id, body.organizationId))
+        .limit(1);
+      if (!org) return reply.status(400).send({ error: 'Organization not found' });
 
-    try {
-      const slug = await slugService.uniqueCommunitySlug(body.slug, body.name);
-      const [created] = await db
-        .insert(communities)
-        .values({
-          name: body.name,
-          slug,
-          address: body.address,
-          timezone: body.timezone,
-          organizationId: body.organizationId,
-        })
-        .returning();
-      audit(request, 'community.created', created.organizationId, created.id, { slug: created.slug });
-      return reply.status(201).send(created);
-    } catch (err) {
-      const info = errorInfo(err);
-      return reply.status(info.status).send({ error: info.message });
-    }
-  });
+      try {
+        const slug = await slugService.uniqueCommunitySlug(body.slug, body.name);
+        const [created] = await db
+          .insert(communities)
+          .values({
+            name: body.name,
+            slug,
+            address: body.address,
+            timezone: body.timezone,
+            organizationId: body.organizationId,
+          })
+          .returning();
+        audit(request, 'community.created', created.organizationId, created.id, {
+          slug: created.slug,
+        });
+        return reply.status(201).send(created);
+      } catch (err) {
+        const info = errorInfo(err);
+        return reply.status(info.status).send({ error: info.message });
+      }
+    },
+  );
 
-  app.patch('/communities/:id', { preHandler: [readOnlyTenant] }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-    const body = updateCommunitySchema.parse(request.body);
-    const [existing] = await db.select().from(communities).where(eq(communities.id, id)).limit(1);
-    if (!existing) return reply.status(404).send({ error: 'Community not found' });
+  app.patch(
+    '/communities/:id',
+    { preHandler: [readOnlyTenant] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const body = updateCommunitySchema.parse(request.body);
+      const [existing] = await db.select().from(communities).where(eq(communities.id, id)).limit(1);
+      if (!existing) return reply.status(404).send({ error: 'Community not found' });
 
-    try {
-      const slug = body.slug
-        ? await slugService.uniqueCommunitySlug(body.slug, existing.name, id)
-        : existing.slug;
-      const [updated] = await db
-        .update(communities)
-        .set({
-          name: body.name ?? existing.name,
-          address: body.address ?? existing.address,
-          timezone: body.timezone ?? existing.timezone,
-          status: body.status ?? existing.status,
-          slug,
-          updatedAt: new Date(),
-        })
-        .where(eq(communities.id, id))
-        .returning();
-      audit(request, 'community.updated', updated.organizationId, updated.id, { slug: updated.slug });
-      return updated;
-    } catch (err) {
-      const info = errorInfo(err);
-      return reply.status(info.status).send({ error: info.message });
-    }
-  });
+      try {
+        const slug = body.slug
+          ? await slugService.uniqueCommunitySlug(body.slug, existing.name, id)
+          : existing.slug;
+        const [updated] = await db
+          .update(communities)
+          .set({
+            name: body.name ?? existing.name,
+            address: body.address ?? existing.address,
+            timezone: body.timezone ?? existing.timezone,
+            status: body.status ?? existing.status,
+            slug,
+            updatedAt: new Date(),
+          })
+          .where(eq(communities.id, id))
+          .returning();
+        audit(request, 'community.updated', updated.organizationId, updated.id, {
+          slug: updated.slug,
+        });
+        return updated;
+      } catch (err) {
+        const info = errorInfo(err);
+        return reply.status(info.status).send({ error: info.message });
+      }
+    },
+  );
 
   // Buildings
   app.get('/buildings', async (request: FastifyRequest) => {
@@ -436,64 +679,86 @@ export async function platformRoutes(app: FastifyInstance) {
     const where = query.communityId ? eq(buildings.communityId, query.communityId) : undefined;
 
     const [data, totalRow] = await Promise.all([
-      db.select().from(buildings).where(where).orderBy(buildings.name).limit(pageSize).offset(offset),
+      db
+        .select()
+        .from(buildings)
+        .where(where)
+        .orderBy(buildings.name)
+        .limit(pageSize)
+        .offset(offset),
       db.select({ count: count() }).from(buildings).where(where),
     ]);
 
     return { data, total: totalRow[0]?.count ?? 0, page, pageSize };
   });
 
-  app.post('/buildings', { preHandler: [readOnlyTenant] }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = createPlatformBuildingSchema.parse(request.body);
-    const [community] = await db.select().from(communities).where(eq(communities.id, body.communityId)).limit(1);
-    if (!community) return reply.status(400).send({ error: 'Community not found' });
+  app.post(
+    '/buildings',
+    { preHandler: [readOnlyTenant] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = createPlatformBuildingSchema.parse(request.body);
+      const [community] = await db
+        .select()
+        .from(communities)
+        .where(eq(communities.id, body.communityId))
+        .limit(1);
+      if (!community) return reply.status(400).send({ error: 'Community not found' });
 
-    try {
-      const [created] = await db
-        .insert(buildings)
-        .values({
-          communityId: body.communityId,
-          name: body.name,
-          code: body.code ?? null,
-          floors: body.floors ?? null,
+      try {
+        const [created] = await db
+          .insert(buildings)
+          .values({
+            communityId: body.communityId,
+            name: body.name,
+            code: body.code ?? null,
+            floors: body.floors ?? null,
+          })
+          .returning();
+        audit(request, 'building.created', community.organizationId, community.id, {
+          buildingId: created.id,
+        });
+        return reply.status(201).send(created);
+      } catch (err) {
+        const info = errorInfo(err);
+        return reply.status(info.status).send({ error: info.message });
+      }
+    },
+  );
+
+  app.patch(
+    '/buildings/:id',
+    { preHandler: [readOnlyTenant] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const body = createPlatformBuildingSchema.partial().parse(request.body);
+      const [existing] = await db.select().from(buildings).where(eq(buildings.id, id)).limit(1);
+      if (!existing) return reply.status(404).send({ error: 'Building not found' });
+
+      const [community] = await db
+        .select()
+        .from(communities)
+        .where(eq(communities.id, existing.communityId))
+        .limit(1);
+
+      const [updated] = await db
+        .update(buildings)
+        .set({
+          name: body.name ?? existing.name,
+          code: body.code !== undefined ? body.code : existing.code,
+          floors: body.floors !== undefined ? body.floors : existing.floors,
+          updatedAt: new Date(),
         })
+        .where(eq(buildings.id, id))
         .returning();
-      audit(request, 'building.created', community.organizationId, community.id, { buildingId: created.id });
-      return reply.status(201).send(created);
-    } catch (err) {
-      const info = errorInfo(err);
-      return reply.status(info.status).send({ error: info.message });
-    }
-  });
 
-  app.patch('/buildings/:id', { preHandler: [readOnlyTenant] }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-    const body = createPlatformBuildingSchema.partial().parse(request.body);
-    const [existing] = await db.select().from(buildings).where(eq(buildings.id, id)).limit(1);
-    if (!existing) return reply.status(404).send({ error: 'Building not found' });
-
-    const [community] = await db
-      .select()
-      .from(communities)
-      .where(eq(communities.id, existing.communityId))
-      .limit(1);
-
-    const [updated] = await db
-      .update(buildings)
-      .set({
-        name: body.name ?? existing.name,
-        code: body.code !== undefined ? body.code : existing.code,
-        floors: body.floors !== undefined ? body.floors : existing.floors,
-        updatedAt: new Date(),
-      })
-      .where(eq(buildings.id, id))
-      .returning();
-
-    if (community) {
-      audit(request, 'building.updated', community.organizationId, community.id, { buildingId: id });
-    }
-    return updated;
-  });
+      if (community) {
+        audit(request, 'building.updated', community.organizationId, community.id, {
+          buildingId: id,
+        });
+      }
+      return updated;
+    },
+  );
 
   // Units
   app.get('/units', async (request: FastifyRequest) => {
@@ -512,87 +777,109 @@ export async function platformRoutes(app: FastifyInstance) {
     return { data, total: totalRow[0]?.count ?? 0, page, pageSize };
   });
 
-  app.post('/units', { preHandler: [readOnlyTenant] }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = createPlatformUnitSchema.parse(request.body);
-    const [community] = await db.select().from(communities).where(eq(communities.id, body.communityId)).limit(1);
-    if (!community) return reply.status(400).send({ error: 'Community not found' });
+  app.post(
+    '/units',
+    { preHandler: [readOnlyTenant] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = createPlatformUnitSchema.parse(request.body);
+      const [community] = await db
+        .select()
+        .from(communities)
+        .where(eq(communities.id, body.communityId))
+        .limit(1);
+      if (!community) return reply.status(400).send({ error: 'Community not found' });
 
-    if (body.buildingId) {
-      const [building] = await db.select().from(buildings).where(eq(buildings.id, body.buildingId)).limit(1);
-      if (!building || building.communityId !== body.communityId) {
-        return reply.status(400).send({ error: 'Building does not belong to the community' });
+      if (body.buildingId) {
+        const [building] = await db
+          .select()
+          .from(buildings)
+          .where(eq(buildings.id, body.buildingId))
+          .limit(1);
+        if (!building || building.communityId !== body.communityId) {
+          return reply.status(400).send({ error: 'Building does not belong to the community' });
+        }
       }
-    }
 
-    try {
-      const [created] = await db
-        .insert(units)
-        .values({
-          communityId: body.communityId,
-          buildingId: body.buildingId ?? null,
-          code: body.code,
-          floor: body.floor ?? null,
-          type: body.type,
+      try {
+        const [created] = await db
+          .insert(units)
+          .values({
+            communityId: body.communityId,
+            buildingId: body.buildingId ?? null,
+            code: body.code,
+            floor: body.floor ?? null,
+            type: body.type,
+          })
+          .returning();
+        audit(request, 'unit.created', community.organizationId, community.id, {
+          unitId: created.id,
+          code: created.code,
+        });
+        return reply.status(201).send(created);
+      } catch (err) {
+        const info = errorInfo(err);
+        return reply.status(info.status).send({ error: info.message });
+      }
+    },
+  );
+
+  app.patch(
+    '/units/:id',
+    { preHandler: [readOnlyTenant] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const body = createPlatformUnitSchema.partial().parse(request.body);
+      const [existing] = await db.select().from(units).where(eq(units.id, id)).limit(1);
+      if (!existing) return reply.status(404).send({ error: 'Unit not found' });
+
+      const [community] = await db
+        .select()
+        .from(communities)
+        .where(eq(communities.id, existing.communityId))
+        .limit(1);
+
+      const [updated] = await db
+        .update(units)
+        .set({
+          code: body.code ?? existing.code,
+          floor: body.floor !== undefined ? body.floor : existing.floor,
+          type: body.type ?? existing.type,
+          buildingId: body.buildingId !== undefined ? body.buildingId : existing.buildingId,
+          updatedAt: new Date(),
         })
+        .where(eq(units.id, id))
         .returning();
-      audit(request, 'unit.created', community.organizationId, community.id, { unitId: created.id, code: created.code });
-      return reply.status(201).send(created);
-    } catch (err) {
-      const info = errorInfo(err);
-      return reply.status(info.status).send({ error: info.message });
-    }
-  });
 
-  app.patch('/units/:id', { preHandler: [readOnlyTenant] }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-    const body = createPlatformUnitSchema.partial().parse(request.body);
-    const [existing] = await db.select().from(units).where(eq(units.id, id)).limit(1);
-    if (!existing) return reply.status(404).send({ error: 'Unit not found' });
-
-    const [community] = await db
-      .select()
-      .from(communities)
-      .where(eq(communities.id, existing.communityId))
-      .limit(1);
-
-    const [updated] = await db
-      .update(units)
-      .set({
-        code: body.code ?? existing.code,
-        floor: body.floor !== undefined ? body.floor : existing.floor,
-        type: body.type ?? existing.type,
-        buildingId: body.buildingId !== undefined ? body.buildingId : existing.buildingId,
-        updatedAt: new Date(),
-      })
-      .where(eq(units.id, id))
-      .returning();
-
-    if (community) {
-      audit(request, 'unit.updated', community.organizationId, community.id, { unitId: id });
-    }
-    return updated;
-  });
+      if (community) {
+        audit(request, 'unit.updated', community.organizationId, community.id, { unitId: id });
+      }
+      return updated;
+    },
+  );
 
   // Invite the first org_admin
-  app.post('/organizations/:id/invitations', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-    const body = inviteOrgAdminSchema.parse(request.body);
-    const [org] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
-    if (!org) return reply.status(404).send({ error: 'Organization not found' });
+  app.post(
+    '/organizations/:id/invitations',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const body = inviteOrgAdminSchema.parse(request.body);
+      const [org] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
+      if (!org) return reply.status(404).send({ error: 'Organization not found' });
 
-    const result = await invitationService.createInvitation(
-      { email: body.email, role: 'org_admin', organizationId: id },
-      getRequester(request),
-    );
+      const result = await invitationService.createInvitation(
+        { email: body.email, role: 'org_admin', organizationId: id },
+        getRequester(request),
+      );
 
-    if (!result.ok) {
-      return reply.status(400).send({ error: result.code });
-    }
+      if (!result.ok) {
+        return reply.status(400).send({ error: result.code });
+      }
 
-    audit(request, 'invitation.created', org.id, null, {
-      invitationId: result.data.invitation.id,
-      role: 'org_admin',
-    });
-    return reply.status(201).send(result.data);
-  });
+      audit(request, 'invitation.created', org.id, null, {
+        invitationId: result.data.invitation.id,
+        role: 'org_admin',
+      });
+      return reply.status(201).send(result.data);
+    },
+  );
 }

@@ -4,6 +4,9 @@ export interface Community {
   id: string;
   name: string;
   address: string;
+  municipality: string | null;
+  department: string | null;
+  country: string | null;
   timezone: string;
   organizationId: string;
   status: CommunityStatus;

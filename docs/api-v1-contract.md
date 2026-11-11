@@ -184,6 +184,10 @@ La bitácora es inmutable: no hay `PATCH` ni `DELETE`.
 
 Cada comunidad tiene como máximo una estructura de ubicación. `location_structures.community_id` es único; `POST /api/location-structures` responde `409 structure_already_exists` si ya existe una, y `PATCH /api/location-structures/:id` responde `409 structure_has_units_at_removed_level` al intentar reducir niveles con unidades. `GET /api/communities/:id/overview` incluye `structureSummary` (o `null`).
 
+`organizations` y `communities` agregan `municipality`, `department` y `country` (`varchar(120)`, nullable). Las altas nuevas usan `Colombia` por defecto; los registros históricos quedan en `null` y la UI los muestra como `—`. Los tres campos viajan en `GET/PATCH /api/organizations/me`, `POST /api/organizations/me/communities`, `PATCH /api/communities/:id` y `GET /api/platform/organizations/:id/overview`.
+
+`PATCH /api/platform/organizations/:id` acepta `{ name?, slug?, administratorEmail? }` (solo platform admin) y responde `{ organization, administrator }`. Cambiar el administrador a un correo con cuenta transfiere el rol en el acto y desactiva los `org_admin` anteriores; a un correo sin cuenta crea una invitación `org_admin`, mantiene activo al administrador actual y devuelve `acceptUrl` una única vez. Nombre duplicado responde `409 organization_name_taken`; organización inexistente, `404`.
+
 ### 5.10 Internos
 
 `/api/internal/*` es para signaling, MQTT bridge y workers. Requiere `X-Internal-Api-Key`; no es parte del contrato de clientes.
@@ -208,6 +212,10 @@ Cada comunidad tiene como máximo una estructura de ubicación. `location_struct
   }
 }
 ```
+
+### `OrganizationAdministrator`
+
+`{ status: "active", userId, email, name } | { status: "pending", email, invitationId, acceptUrl } | null`.
 
 ### `AccessPass`
 

@@ -17,24 +17,28 @@ export function FormDialog({
   triggerLabel,
   children,
   hidden = false,
+  hideTrigger = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
-  triggerLabel: string;
+  triggerLabel?: string;
   children: ReactNode;
   hidden?: boolean;
+  hideTrigger?: boolean;
 }) {
   if (hidden) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <div className="flex justify-end">
-        <DialogTrigger asChild>
-          <Button>{triggerLabel}</Button>
-        </DialogTrigger>
-      </div>
+      {!hideTrigger && triggerLabel && (
+        <div className="flex justify-end">
+          <DialogTrigger asChild>
+            <Button>{triggerLabel}</Button>
+          </DialogTrigger>
+        </div>
+      )}
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
