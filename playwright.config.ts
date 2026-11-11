@@ -55,6 +55,9 @@ export default defineConfig({
       timeout: 120_000,
       stdout: 'ignore',
       stderr: 'pipe',
+      /* The suite logs in many times from one IP, which trips the 10/min limiter.
+         This only applies to servers started by Playwright. */
+      env: { AUTH_LOGIN_RATE_LIMIT: '200' },
     },
     {
       command: 'pnpm --filter @porteria/dashboard dev',

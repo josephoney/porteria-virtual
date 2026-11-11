@@ -11,7 +11,7 @@
 - [x] 2.1 Refactor `LoginPage` to render `AuthShell` and move the existing login card into the right column without changing authentication behavior.
 - [x] 2.2 Add “Iniciar sesión” / “Crear cuenta” tabs inside the right card, keeping the context-selection state inside the same shell.
 - [x] 2.3 Implement the signup tab using the existing invitation flow: invitation token or community slug + email, token prefilled from `/invite/:token`, email locked when the token is present, and “Pedí una invitación a tu administrador” when no invitation is available.
-- [ ] 2.4 Add responsive, light/dark and context-selection Playwright coverage for the auth shell. Desktop branded login + signup tab is covered; mobile/light-dark/context-selection coverage is still pending.
+- [x] 2.4 Add responsive, light/dark and context-selection Playwright coverage for the auth shell. Cubre login de escritorio, tab de alta, mobile 390x844 sin overflow, tema oscuro por preferencia persistida y selección de contexto con `multi@porteria.local`.
 
 ## 3. Users API
 

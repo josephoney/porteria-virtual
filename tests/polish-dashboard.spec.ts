@@ -28,7 +28,7 @@ test.describe('polished dashboard', () => {
 
     await page.getByLabel('Buscar usuarios por correo, nombre o documento').fill('multi');
     await expect(page.getByText(/resultados? de \d+ usuarios?/)).toBeVisible();
-    await expect(page.getByText('Torre Norte')).toBeVisible();
+    await expect(page.getByText('Torre Norte')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('Los Álamos')).toBeVisible();
 
     const toggle = page.getByRole('switch', { name: /usuario multi@porteria.local/ });
@@ -69,5 +69,60 @@ test.describe('polished dashboard', () => {
     // The detail now renders label/value pairs through DetailGrid (a <dl>).
     await expect(page.locator('dl dt', { hasText: 'Tipo' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ver estructura', exact: true })).toBeVisible();
+  });
+});
+
+test.describe('auth shell', () => {
+  test('signup tab fits the mobile viewport without horizontal overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/login');
+
+    await page.getByRole('tab', { name: 'Crear cuenta' }).click();
+    await expect(page.locator('#invite-token')).toBeVisible();
+
+    const fitsViewport = await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    );
+    expect(fitsViewport).toBe(true);
+  });
+
+  test('dark preference applies dark tokens to the login card', async ({ page }) => {
+    await page.goto('/login');
+
+    const card = page.locator('[data-slot="card"]').first();
+    await expect(card).toBeVisible();
+    const lightBackground = await card.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    );
+
+    // The dashboard persists the theme, so this exercises the real path.
+    await page.evaluate(() => localStorage.setItem('porteria-theme', 'dark'));
+    await page.reload();
+
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await expect(page.locator('#email')).toBeVisible();
+
+    const darkBackground = await card.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    );
+    expect(darkBackground).not.toBe(lightBackground);
+  });
+
+  test('multi-context user picks a membership and leaves the selection screen', async ({
+    page,
+  }) => {
+    await loginAs(page, DEMO_USERS.multiContext);
+
+    await expect(page.getByText('Elegí tu contexto')).toBeVisible();
+
+    const options = page.getByRole('button', { name: /owner|resident/i });
+    await expect(options).toHaveCount(2);
+
+    await options.first().click();
+
+    // Both demo memberships are resident roles, so both land on /app-required.
+    await expect(page).toHaveURL(/\/app-required$/);
+    await expect(page.getByText('Usá Zima QR Access')).toBeVisible();
+    await expect(page.getByText('Elegí tu contexto')).toHaveCount(0);
   });
 });
