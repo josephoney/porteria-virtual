@@ -517,7 +517,7 @@ export function AccessBitacoraView({
       ) : (
         <div className="max-h-[55vh] overflow-auto rounded-4xl border border-border bg-card">
           <Table>
-            <TableHeader>
+            <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
               <TableRow>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Acceso</TableHead>
