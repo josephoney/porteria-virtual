@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { RiAddLine, RiArrowRightLine, RiFileList3Line, RiHistoryLine, RiQrCodeLine } from '@remixicon/react';
+import {
+  RiAddLine,
+  RiArrowRightLine,
+  RiFileList3Line,
+  RiHistoryLine,
+  RiQrCodeLine,
+} from '@remixicon/react';
 import { ApiError, get } from '../lib/apiClient';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -24,6 +30,28 @@ const dateFormat = new Intl.DateTimeFormat('es-CO', {
 
 function formatRange(from: string, until: string) {
   return `${dateFormat.format(new Date(from))} — ${dateFormat.format(new Date(until))}`;
+}
+
+interface QuickActionProps {
+  to: string;
+  icon: ReactNode;
+  title: string;
+  description: string;
+}
+
+function QuickAction({ to, icon, title, description }: QuickActionProps) {
+  return (
+    <Link
+      to={to}
+      className="rounded-4xl border border-border bg-card p-5 transition-colors hover:bg-muted/40"
+    >
+      <span className="inline-flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        {icon}
+      </span>
+      <p className="mt-3 text-sm font-medium">{title}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+    </Link>
+  );
 }
 
 export function ResidentHomePage() {
@@ -61,7 +89,7 @@ export function ResidentHomePage() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <PageHeader
         title="Mis autorizaciones"
         description="Autorizá visitas a tu vivienda o a las zonas comunes de la comunidad."
@@ -75,7 +103,7 @@ export function ResidentHomePage() {
       />
 
       {disabled && (
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-4xl border border-border bg-card p-6">
           <p className="text-sm font-medium">Las autorizaciones con QR están desactivadas</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu administrador todavía no habilitó este módulo en la comunidad. Cuando lo haga, vas a
@@ -91,40 +119,30 @@ export function ResidentHomePage() {
       )}
 
       {!disabled && !error && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Link
+        <div className="grid gap-4 sm:grid-cols-3">
+          <QuickAction
             to="/resident/authorizations/new"
-            className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40"
-          >
-            <RiQrCodeLine className="size-5 text-muted-foreground" />
-            <p className="mt-2 text-sm font-medium">Autorizar una visita</p>
-            <p className="text-xs text-muted-foreground">Elegí el destino y generá el QR.</p>
-          </Link>
-          <Link
+            icon={<RiQrCodeLine className="size-5" />}
+            title="Autorizar una visita"
+            description="Elegí el destino y generá el QR."
+          />
+          <QuickAction
             to="/resident/authorizations"
-            className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40"
-          >
-            <RiHistoryLine className="size-5 text-muted-foreground" />
-            <p className="mt-2 text-sm font-medium">Historial</p>
-            <p className="text-xs text-muted-foreground">
-              Revisá, compartí o revocá lo autorizado.
-            </p>
-          </Link>
-          <Link
+            icon={<RiHistoryLine className="size-5" />}
+            title="Historial"
+            description="Revisá, compartí o revocá lo autorizado."
+          />
+          <QuickAction
             to="/resident/authorizations/bulk"
-            className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40"
-          >
-            <RiFileList3Line className="size-5 text-muted-foreground" />
-            <p className="mt-2 text-sm font-medium">Carga masiva</p>
-            <p className="text-xs text-muted-foreground">
-              Autorizá un grupo de visitas con un CSV.
-            </p>
-          </Link>
+            icon={<RiFileList3Line className="size-5" />}
+            title="Carga masiva"
+            description="Autorizá un grupo de visitas con un CSV."
+          />
         </div>
       )}
 
       {!disabled && (
-        <section className="space-y-2">
+        <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Vigentes ahora</h2>
             <Button asChild variant="link" size="sm" className="h-auto px-0">
@@ -140,7 +158,7 @@ export function ResidentHomePage() {
               <Skeleton className="h-14 w-full" />
             </div>
           ) : passes.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border p-6 text-center">
+            <div className="rounded-4xl border border-dashed border-border p-8 text-center">
               <p className="text-sm font-medium">Todavía no autorizaste a nadie</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Cuando autorices una visita, va a aparecer acá con su QR.
@@ -150,9 +168,9 @@ export function ResidentHomePage() {
               </Button>
             </div>
           ) : (
-            <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+            <ul className="divide-y divide-border overflow-hidden rounded-4xl border border-border bg-card">
               {passes.map((pass) => (
-                <li key={pass.id} className="flex flex-wrap items-center gap-3 p-3">
+                <li key={pass.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
                       {pass.visitorFirstName} {pass.visitorLastName}

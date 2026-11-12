@@ -190,9 +190,9 @@ export function ResidentAuthorizationNewPage() {
 
   if (disabled) {
     return (
-      <div className="space-y-3">
+      <div className="p-6 space-y-3">
         <PageHeader title="Autorizar visita" />
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-4xl border border-border bg-card p-6">
           <p className="text-sm font-medium">Las autorizaciones con QR están desactivadas</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu administrador todavía no habilitó este módulo en la comunidad.
@@ -203,7 +203,7 @@ export function ResidentAuthorizationNewPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <PageHeader
         title="Autorizar visita"
         description="Elegí el destino, cargá los datos del visitante y definí la ventana de validez."
@@ -227,7 +227,7 @@ export function ResidentAuthorizationNewPage() {
 
       {step === 'review' ? (
         <section className="max-w-2xl space-y-4">
-          <div className="rounded-xl border border-border bg-card p-4">
+          <div className="rounded-4xl border border-border bg-card p-6">
             <h2 className="text-base font-semibold">Revisá la autorización</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Si está todo bien, confirmá. Podés volver para cambiar cualquier dato.
@@ -272,7 +272,10 @@ export function ResidentAuthorizationNewPage() {
           </div>
         </section>
       ) : (
-        <form onSubmit={handleReview} className="max-w-2xl space-y-4">
+        <form
+          onSubmit={handleReview}
+          className="max-w-2xl space-y-5 rounded-4xl border border-border bg-card p-6"
+        >
           <div className="space-y-1">
             <Label htmlFor="resident-destination">Destino</Label>
             <Select
@@ -432,7 +435,7 @@ export function ResidentAuthorizationNewPage() {
             </p>
           )}
 
-          <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+          <div className="space-y-2 rounded-lg border border-border bg-card p-3">
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

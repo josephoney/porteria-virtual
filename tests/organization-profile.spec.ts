@@ -90,8 +90,11 @@ test.describe('Organization edit', () => {
       await saved;
 
       // The dialog stays open in edit mode, which makes the table aria-hidden,
-      // so assert against the DOM instead of role queries.
-      await expect(page.locator('tbody').first()).toContainText(temporaryName);
+      // so assert against the DOM instead of role queries. The table refreshes
+      // from a second request that can be slow under parallel workers.
+      await expect(page.locator('tbody').first()).toContainText(temporaryName, {
+        timeout: 20_000,
+      });
     } finally {
       await restoreOrganization(request, RENAME_ORG);
     }

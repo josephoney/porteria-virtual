@@ -80,12 +80,13 @@ const STATUS_LABELS: Record<DisplayStatus, string> = {
   expired: 'Vencida',
 };
 
-const STATUS_VARIANTS: Record<DisplayStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  active: 'default',
-  used: 'secondary',
-  revoked: 'destructive',
-  expired: 'outline',
-};
+const STATUS_VARIANTS: Record<DisplayStatus, 'default' | 'secondary' | 'destructive' | 'outline'> =
+  {
+    active: 'default',
+    used: 'secondary',
+    revoked: 'destructive',
+    expired: 'outline',
+  };
 
 const dateFormat = new Intl.DateTimeFormat('es-CO', {
   dateStyle: 'medium',
@@ -320,7 +321,7 @@ export function ResidentAuthorizationsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="space-y-4">
+    <div className="p-6 space-y-6">
       <PageHeader
         title="Autorizaciones"
         description="Todo lo que autorizaste, con su destino y su ventana de validez."
@@ -341,7 +342,7 @@ export function ResidentAuthorizationsPage() {
       />
 
       {disabled && (
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-4xl border border-border bg-card p-6">
           <p className="text-sm font-medium">Las autorizaciones con QR están desactivadas</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu administrador todavía no habilitó este módulo en la comunidad.
@@ -356,7 +357,13 @@ export function ResidentAuthorizationsPage() {
             onSearchChange={setSearchInput}
             placeholder="Buscar autorizaciones"
           >
-            <Select value={statusFilter} onValueChange={(value) => { setStatusFilter(value); setPage(1); }}>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value);
+                setPage(1);
+              }}
+            >
               <SelectTrigger className="w-44" aria-label="Estado">
                 <SelectValue />
               </SelectTrigger>
@@ -426,7 +433,7 @@ export function ResidentAuthorizationsPage() {
           )}
 
           {error && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
               <p role="alert" className="text-sm text-destructive">
                 {error}
               </p>
@@ -450,7 +457,7 @@ export function ResidentAuthorizationsPage() {
           )}
 
           {!error && !loading && passes.length === 0 && (
-            <div className="rounded-xl border border-dashed border-border p-6 text-center">
+            <div className="rounded-4xl border border-dashed border-border p-8 text-center">
               <p className="text-sm font-medium">
                 {search || statusFilter !== 'all' || destinationFilter !== 'all' || batchFilter
                   ? 'No hay autorizaciones con esos filtros'
@@ -468,7 +475,7 @@ export function ResidentAuthorizationsPage() {
           )}
 
           {!error && !loading && passes.length > 0 && (
-            <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="overflow-hidden rounded-4xl border border-border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -653,8 +660,8 @@ export function ResidentAuthorizationsPage() {
           <DialogHeader>
             <DialogTitle>Revocar autorización</DialogTitle>
             <DialogDescription>
-              El QR y el enlace de {revokePass ? visitorName(revokePass) : 'esta visita'} van a dejar
-              de funcionar. La visita ya no va a poder ingresar con esta autorización.
+              El QR y el enlace de {revokePass ? visitorName(revokePass) : 'esta visita'} van a
+              dejar de funcionar. La visita ya no va a poder ingresar con esta autorización.
             </DialogDescription>
           </DialogHeader>
 

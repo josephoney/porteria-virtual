@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { RiDownloadLine, RiFileList3Line, RiUploadCloud2Line } from '@remixicon/react';
+import {
+  RiDownloadLine,
+  RiFileList3Line,
+  RiFileUploadLine,
+  RiUploadCloud2Line,
+} from '@remixicon/react';
 import type { PassBatchResult } from '@porteria/shared';
 import { ApiError, get, post } from '../lib/apiClient';
 import { Badge } from '../components/ui/badge';
@@ -331,6 +336,8 @@ export function ResidentAuthorizationBulkPage() {
   );
   const [batchLabel, setBatchLabel] = useState('');
   const [csvText, setCsvText] = useState('');
+  const [fileName, setFileName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<'destination' | 'window' | 'file', string>>
@@ -473,6 +480,7 @@ export function ResidentAuthorizationBulkPage() {
     if (!file) return;
 
     clearFieldError('file');
+    setFileName(file.name);
     void file.text().then((text) => {
       setCsvText(text);
     });
@@ -494,6 +502,7 @@ export function ResidentAuthorizationBulkPage() {
     setResult(null);
     setPreview(null);
     setCsvText('');
+    setFileName('');
     setBatchLabel('');
     setFieldErrors({});
     setSubmitError('');
@@ -505,14 +514,14 @@ export function ResidentAuthorizationBulkPage() {
     )}&batchLabel=${encodeURIComponent(result.batchLabel ?? 'Lote sin nombre')}`;
 
     return (
-      <div className="space-y-6">
+      <div className="p-6 space-y-6">
         <PageHeader
           title="Carga masiva"
           description="Resultado del lote que acabás de autorizar."
         />
 
         <section className="space-y-4">
-          <div className="rounded-xl border border-border bg-card p-4">
+          <div className="rounded-4xl border border-border bg-card p-6">
             <h2 className="text-base font-semibold">
               {result.createdCount > 0 ? 'Lote creado' : 'No se creó ninguna autorización'}
             </h2>
@@ -539,28 +548,30 @@ export function ResidentAuthorizationBulkPage() {
           {result.rejected.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-sm font-medium">Filas rechazadas</h3>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Visitante</TableHead>
-                    <TableHead>Documento</TableHead>
-                    <TableHead>Motivo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.rejected.map((rejection) => (
-                    <TableRow key={`${rejection.document}-${rejection.reason}`}>
-                      <TableCell>
-                        {rejection.visitorFirstName} {rejection.visitorLastName}
-                      </TableCell>
-                      <TableCell>{rejection.document}</TableCell>
-                      <TableCell className="whitespace-normal text-sm text-muted-foreground">
-                        {rejection.reason}
-                      </TableCell>
+              <div className="overflow-hidden rounded-4xl border border-border bg-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Visitante</TableHead>
+                      <TableHead>Documento</TableHead>
+                      <TableHead>Motivo</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {result.rejected.map((rejection) => (
+                      <TableRow key={`${rejection.document}-${rejection.reason}`}>
+                        <TableCell>
+                          {rejection.visitorFirstName} {rejection.visitorLastName}
+                        </TableCell>
+                        <TableCell>{rejection.document}</TableCell>
+                        <TableCell className="whitespace-normal text-sm text-muted-foreground">
+                          {rejection.reason}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </section>
@@ -569,7 +580,7 @@ export function ResidentAuthorizationBulkPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <PageHeader
         title="Carga masiva"
         description="Autorizá varias visitas a la vez con un archivo CSV para un mismo destino."
@@ -581,14 +592,14 @@ export function ResidentAuthorizationBulkPage() {
       />
 
       {disabled ? (
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-4xl border border-border bg-card p-6">
           <p className="text-sm font-medium">Las autorizaciones con QR están desactivadas</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu administrador todavía no habilitó este módulo en la comunidad.
           </p>
         </div>
       ) : loadError ? (
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
           <p role="alert" className="text-sm text-destructive">
             {loadError}
           </p>
@@ -608,8 +619,10 @@ export function ResidentAuthorizationBulkPage() {
           <Skeleton className="h-48 w-full" />
         </div>
       ) : (
-        <div className="space-y-4">
-          <section className="max-w-3xl space-y-3">
+        <div className="space-y-6">
+          <section className="max-w-3xl space-y-4 rounded-4xl border border-border bg-card p-6">
+            <h2 className="font-heading text-lg font-semibold">Detalles del lote</h2>
+
             <div className="space-y-1">
               <Label htmlFor="bulk-destination">Destino del lote</Label>
               <Select
@@ -731,7 +744,7 @@ export function ResidentAuthorizationBulkPage() {
             </div>
           </section>
 
-          <section className="max-w-3xl space-y-3">
+          <section className="max-w-3xl space-y-4 rounded-4xl border border-border bg-card p-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-heading text-lg font-semibold">Visitantes</h2>
               <Button type="button" variant="ghost" size="sm" onClick={downloadTemplate}>
@@ -742,13 +755,27 @@ export function ResidentAuthorizationBulkPage() {
 
             <div className="space-y-1">
               <Label htmlFor="bulk-file">Archivo CSV</Label>
-              <Input
+              <input
+                ref={fileInputRef}
                 id="bulk-file"
                 type="file"
                 accept=".csv,text/csv"
                 onChange={handleFile}
-                className="cursor-pointer"
+                className="sr-only"
               />
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border p-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <RiFileUploadLine /> Elegir archivo
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {fileName || 'Ningún archivo seleccionado'}
+                </span>
+              </div>
               <p className="text-xs text-muted-foreground">
                 Columnas: nombre, apellido, documento y placa (opcional).
               </p>
@@ -770,7 +797,7 @@ export function ResidentAuthorizationBulkPage() {
                 placeholder={
                   'nombre,apellido,documento,placa\nAna,Torres,10203040,\nLuis,Gómez,55667788,ABC123'
                 }
-                className="w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="min-h-32 w-full rounded-3xl border border-transparent bg-input/50 px-3 py-2 font-mono text-sm outline-none transition-[color,box-shadow,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
               />
             </div>
 
@@ -809,39 +836,41 @@ export function ResidentAuthorizationBulkPage() {
                 </p>
               </div>
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Apellido</TableHead>
-                    <TableHead>Documento</TableHead>
-                    <TableHead>Placa</TableHead>
-                    <TableHead>Resultado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {preview.map((row) => (
-                    <TableRow key={`${row.line}-${row.document}`}>
-                      <TableCell>{row.firstName || '—'}</TableCell>
-                      <TableCell>{row.lastName || '—'}</TableCell>
-                      <TableCell>{row.document || '—'}</TableCell>
-                      <TableCell>{row.plate ? row.plate.toUpperCase() : '—'}</TableCell>
-                      <TableCell className="whitespace-normal">
-                        {row.reason ? (
-                          <div className="space-y-1">
-                            <Badge variant="destructive">Inválida</Badge>
-                            <p className="text-xs text-muted-foreground">{row.reason}</p>
-                          </div>
-                        ) : (
-                          <Badge>Válida</Badge>
-                        )}
-                      </TableCell>
+              <div className="overflow-hidden rounded-4xl border border-border bg-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Apellido</TableHead>
+                      <TableHead>Documento</TableHead>
+                      <TableHead>Placa</TableHead>
+                      <TableHead>Resultado</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {preview.map((row) => (
+                      <TableRow key={`${row.line}-${row.document}`}>
+                        <TableCell>{row.firstName || '—'}</TableCell>
+                        <TableCell>{row.lastName || '—'}</TableCell>
+                        <TableCell>{row.document || '—'}</TableCell>
+                        <TableCell>{row.plate ? row.plate.toUpperCase() : '—'}</TableCell>
+                        <TableCell className="whitespace-normal">
+                          {row.reason ? (
+                            <div className="space-y-1">
+                              <Badge variant="destructive">Inválida</Badge>
+                              <p className="text-xs text-muted-foreground">{row.reason}</p>
+                            </div>
+                          ) : (
+                            <Badge>Válida</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
 
-              <div className="space-y-2 rounded-xl border border-border bg-card p-4">
+              <div className="space-y-2 rounded-4xl border border-border bg-card p-6">
                 <p className="text-sm">
                   Destino: <span className="font-medium">{selectedDestination?.path ?? '—'}</span>
                 </p>
