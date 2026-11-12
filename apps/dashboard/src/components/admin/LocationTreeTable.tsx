@@ -12,6 +12,7 @@ import {
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { sectionTypeLabel } from '../../lib/section-types';
 import { useExpandedTree } from '../../lib/use-expanded-tree';
 
 export interface LocationNode {
@@ -143,8 +144,10 @@ export function LocationTreeTable({
         <TableCell>
           <div className="flex items-center gap-1">
             <Badge variant="outline">{node.status}</Badge>
-            {node.sectionTypeLabel && (
-              <span className="text-xs text-muted-foreground">{node.sectionTypeLabel}</span>
+            {node.levelPosition === 1 && node.sectionType && (
+              <Badge variant="secondary">
+                {sectionTypeLabel(node.sectionType, node.sectionTypeLabel)}
+              </Badge>
             )}
           </div>
         </TableCell>

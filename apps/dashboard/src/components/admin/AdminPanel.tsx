@@ -30,6 +30,7 @@ import { DetailField, DetailGrid } from '../ui/detail-field';
 import { LogoUpload } from '../ui/logo-upload';
 import { expandableRowProps, useExpandedRow } from '../../lib/use-expanded-row';
 import { COUNTRIES, DEFAULT_COUNTRY } from '../../lib/countries';
+import { sectionTypeLabel } from '../../lib/section-types';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 
 interface Community {
@@ -1064,6 +1065,25 @@ export function AdminPanel() {
                                             Definir estructura
                                           </Button>
                                         )}
+                                      </div>
+                                    )}
+                                    {buildings.filter(
+                                      (building) => building.communityId === community.id,
+                                    ).length > 0 && (
+                                      <div className="flex flex-wrap gap-1">
+                                        {buildings
+                                          .filter(
+                                            (building) => building.communityId === community.id,
+                                          )
+                                          .map((building) => (
+                                            <Badge key={building.id} variant="secondary">
+                                              {building.name} ·{' '}
+                                              {sectionTypeLabel(
+                                                building.sectionType,
+                                                building.sectionTypeLabel,
+                                              )}
+                                            </Badge>
+                                          ))}
                                       </div>
                                     )}
                                   </section>

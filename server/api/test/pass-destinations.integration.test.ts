@@ -10,6 +10,7 @@ process.env.PASS_QR_SECRET = 'integration-pass-secret';
 process.env.PASS_WEB_URL = 'http://localhost:5176';
 
 import { createDb } from '@porteria/database';
+import { eq } from 'drizzle-orm';
 import {
   accessPasses,
   accounts,
@@ -37,6 +38,8 @@ let archivedId: string;
 let foreignNodeId: string;
 let residentToken: string;
 let otherResidentToken: string;
+let orgAdminToken: string;
+let structureId: string;
 let residentUserId: string;
 let residentAccountId: string;
 let residentPersonId: string;
@@ -51,7 +54,7 @@ function auth(token: string) {
 }
 
 async function request(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'DELETE',
   url: string,
   payload?: unknown,
   token: string = residentToken,
@@ -328,6 +331,23 @@ describe('pass destinations integration', () => {
     app = (await buildApp()).app;
 
     const base = { orgId: organizationId, unitId: homeLeafId, isPlatformAdmin: false };
+
+    orgAdminToken = app.jwt.sign({
+      ...base,
+      sub: residentUserId,
+      accountId: residentAccountId,
+      personId: residentPersonId,
+      membershipId: residentMembership.id,
+      role: 'org_admin',
+      communityId,
+    });
+
+    const [structureRow] = await db
+      .select({ id: locationStructures.id })
+      .from(locationStructures)
+      .where(eq(locationStructures.communityId, communityId))
+      .limit(1);
+    structureId = structureRow!.id;
     residentToken = app.jwt.sign({
       ...base,
       sub: residentUserId,
@@ -531,5 +551,45 @@ describe('pass destinations integration', () => {
     const body = parse(response);
     assert.equal(body.message, 'batch_too_large');
     assert.equal(body.max, 200);
+  });
+
+  it('creates a common-area section through the API', async () => {
+    const response = await request(
+      'POST',
+      '/api/location-units',
+      {
+        communityId,
+        structureId,
+        name: `Zonas QA ${Date.now()}`,
+        sectionType: 'common_area',
+      },
+      orgAdminToken,
+    );
+
+    assert.equal(response.statusCode, 201, response.body);
+    const created = parse(response);
+    assert.equal(created.sectionType, 'common_area');
+
+    const removed = await request(
+      'DELETE',
+      `/api/location-units/${created.id}`,
+      undefined,
+      orgAdminToken,
+    );
+    assert.equal(removed.statusCode, 204, removed.body);
+  });
+
+  it('refuses to delete a place that already has authorizations', async () => {
+    await request('POST', '/api/passes', passPayload({ locationUnitId: poolId }));
+
+    const response = await request(
+      'DELETE',
+      `/api/location-units/${poolId}`,
+      undefined,
+      orgAdminToken,
+    );
+
+    assert.equal(response.statusCode, 409, response.body);
+    assert.equal(parse(response).code, 'node_has_authorizations');
   });
 });

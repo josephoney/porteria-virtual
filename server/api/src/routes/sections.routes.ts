@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { and, asc, count, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import {
+  accessPasses,
   communities,
   locationStructures,
   locationUnits,
@@ -23,6 +24,7 @@ const SECTION_TYPES = [
   'house',
   'lot',
   'commercial',
+  'common_area',
   'other',
 ] as const;
 
@@ -330,6 +332,19 @@ export async function sectionRoutes(app: FastifyInstance) {
           statusCode: 400,
           error: 'Bad Request',
           message: 'Cannot delete a section with nodes',
+        });
+      }
+
+      const [passCount] = await db
+        .select({ value: count() })
+        .from(accessPasses)
+        .where(eq(accessPasses.locationUnitId, id));
+      if ((passCount?.value ?? 0) > 0) {
+        return reply.status(409).send({
+          statusCode: 409,
+          error: 'Conflict',
+          message: 'This section already has authorizations. Archive it instead of deleting it.',
+          code: 'node_has_authorizations',
         });
       }
 

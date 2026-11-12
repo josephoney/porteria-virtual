@@ -17,11 +17,11 @@
 
 ## 3. Lugares comunes en el árbol
 
-- [ ] 3.1 Aceptar `common_area` en el alta y edición de nivel 1 en `location-nodes.routes` y `sections.routes`.
-- [ ] 3.2 Agregar el select de tipo de sección al alta de nivel 1 en `UnitsWorkspace`, con `Zona común` entre las opciones.
-- [ ] 3.3 Derivar el tipo por defecto del nombre del nivel (`Torre` → `tower`, `Piso` → `floor`, `Casa` → `house`, `Bloque` → `block`, `Lote` → `lot`, resto `other`).
-- [ ] 3.4 Mostrar el tipo de sección en el detalle expandido de la comunidad y en el diálogo de estructura.
-- [ ] 3.5 Traducir el rechazo por FK al eliminar una rama con pases a un 409 con mensaje claro.
+- [x] 3.1 Aceptar `common_area` en el alta y edición de nivel 1 en `location-nodes.routes` y `sections.routes`.
+- [x] 3.2 Agregar el select de tipo de sección al alta de nivel 1 en `UnitsWorkspace`, con `Zona común` entre las opciones.
+- [x] 3.3 Derivar el tipo por defecto del nombre del nivel (`Torre` → `tower`, `Piso` → `floor`, `Casa` → `house`, `Bloque` → `block`, `Lote` → `lot`, resto `other`).
+- [x] 3.4 Mostrar el tipo de sección en el detalle expandido de la comunidad y en el diálogo de estructura.
+- [x] 3.5 Traducir el rechazo por FK al eliminar una rama con pases a un 409 con mensaje claro.
 
 ## 4. API de pases con destino
 
