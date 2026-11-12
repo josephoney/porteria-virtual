@@ -1,20 +1,34 @@
 import bcrypt from 'bcryptjs';
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { createDb } from '@porteria/database';
-import { accessPasses, communities, locationUnits, memberships } from '@porteria/database/schema';
+import { accessPasses, communities, memberships } from '@porteria/database/schema';
 import {
   PassStatus,
   PassType,
   createEventEnvelope,
   type CreatePassDto,
+  type DestinationSummary,
+  type PassBatchCreated,
+  type PassBatchRejection,
+  type PassBatchRequest,
+  type PassBatchResult,
+  type PassBatchVisitorInput,
   type PassLinkResponse,
   type PassQrResponse,
 } from '@porteria/shared';
 import config from '../config.js';
 import { randomToken, sha256Hex } from '../lib/pass-tokens.js';
 import { buildLocationPath } from './location-path.service.js';
-import { validateLocationUnit } from './location-unit.service.js';
+import {
+  isAuthorizableCommonArea,
+  listAuthorizableDestinations,
+  loadCommunityTree,
+  resolveDestinationById,
+  resolveDestinationFromTree,
+  type CommunityTree,
+  type ResolvedDestination,
+} from './pass-destination.service.js';
 import { enqueueEventDefault } from './outbox.service.js';
 import { signPassQrToken } from './pass-qr-token.service.js';
 import type { PassResult } from './pass-errors.js';
@@ -99,33 +113,13 @@ export async function createPass(
   const personId = await resolvePersonId(requester);
   if (!personId) return { ok: false, code: 'forbidden' };
 
-  const [membership] = await db
-    .select({ id: memberships.id })
-    .from(memberships)
-    .where(
-      and(
-        eq(memberships.id, requester.membershipId),
-        eq(memberships.personId, personId),
-        eq(memberships.locationUnitId, input.locationUnitId),
-        eq(memberships.status, 'active'),
-      ),
-    )
-    .limit(1);
-
-  if (!membership) return { ok: false, code: 'forbidden' };
-
-  const validation = await validateLocationUnit(input.locationUnitId, requester.communityId);
-  if (!validation.ok) {
-    return { ok: false, code: validation.code === 'not_leaf' ? 'invalid' : 'not_found' };
-  }
-
-  const [unit] = await db
-    .select({ structureId: locationUnits.structureId })
-    .from(locationUnits)
-    .where(eq(locationUnits.id, input.locationUnitId))
-    .limit(1);
-
-  if (!unit) return { ok: false, code: 'not_found' };
+  const destinationResult = await resolveDestinationForRequester(
+    requester,
+    personId,
+    input.locationUnitId,
+  );
+  if (!destinationResult.ok) return destinationResult;
+  const destination = destinationResult.data;
 
   const validFrom = new Date(input.validFrom);
   const validUntil = new Date(input.validUntil);
@@ -190,7 +184,7 @@ export async function createPass(
       id: passId,
       communityId: requester.communityId,
       locationUnitId: input.locationUnitId,
-      structureId: unit.structureId,
+      structureId: destination.structureId,
       createdByPersonId: personId,
       authorizedByPersonId: personId,
       visitorFirstName: input.visitorFirstName.trim(),
@@ -233,46 +227,351 @@ export async function createPass(
   };
 }
 
+async function resolveDestinationForRequester(
+  requester: PassRequester,
+  personId: string,
+  locationUnitId: string,
+): Promise<PassResult<ResolvedDestination>> {
+  if (!requester.communityId) return { ok: false, code: 'forbidden' };
+
+  const tree = await loadCommunityTree(requester.communityId);
+  const destination = resolveDestinationFromTree(tree, locationUnitId);
+  if (!destination) return { ok: false, code: 'not_found' };
+  if (!destination.active) return { ok: false, code: 'destination_inactive' };
+
+  if (destination.kind === 'common_area') {
+    // A common-area root that still has children is a container, not a place.
+    if (!isAuthorizableCommonArea(destination)) return { ok: false, code: 'invalid' };
+    return { ok: true, data: destination };
+  }
+
+  if (destination.levelPosition !== destination.levelCount) {
+    return { ok: false, code: 'invalid' };
+  }
+
+  const [membership] = await db
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.personId, personId),
+        eq(memberships.locationUnitId, locationUnitId),
+        eq(memberships.status, 'active'),
+      ),
+    )
+    .limit(1);
+
+  if (!membership) return { ok: false, code: 'forbidden' };
+
+  return { ok: true, data: destination };
+}
+
+export async function listDestinations(
+  requester: PassRequester,
+): Promise<PassResult<DestinationSummary[]>> {
+  const personId = await resolvePersonId(requester);
+  if (!personId) return { ok: false, code: 'forbidden' };
+  if (!requester.communityId) return { ok: false, code: 'forbidden' };
+
+  return {
+    ok: true,
+    data: await listAuthorizableDestinations(personId, requester.communityId),
+  };
+}
+
+export const PASS_BATCH_MAX_VISITORS = 200;
+
+function parseWindow(rawFrom: string, rawUntil: string) {
+  const validFrom = new Date(rawFrom);
+  const validUntil = new Date(rawUntil);
+  if (
+    Number.isNaN(validFrom.getTime()) ||
+    Number.isNaN(validUntil.getTime()) ||
+    validFrom.getTime() >= validUntil.getTime()
+  ) {
+    return null;
+  }
+  return { validFrom, validUntil };
+}
+
+function rejectVisitor(visitor: PassBatchVisitorInput, reason: string): PassBatchRejection {
+  return {
+    document: visitor.document,
+    visitorFirstName: visitor.firstName.trim(),
+    visitorLastName: visitor.lastName.trim(),
+    reason,
+  };
+}
+
+export async function createPassBatch(
+  requester: PassRequester,
+  input: PassBatchRequest,
+): Promise<PassResult<PassBatchResult>> {
+  if (!config.features.dynamicQrEnabled) return { ok: false, code: 'dynamic_qr_disabled' };
+  if (!requester.communityId) return { ok: false, code: 'forbidden' };
+  if (input.type === PassType.EntryExitRecurring) {
+    return { ok: false, code: 'recurring_not_available' };
+  }
+  if (input.visitors.length > PASS_BATCH_MAX_VISITORS) {
+    return { ok: false, code: 'batch_too_large' };
+  }
+
+  const personId = await resolvePersonId(requester);
+  if (!personId) return { ok: false, code: 'forbidden' };
+
+  const destinationResult = await resolveDestinationForRequester(
+    requester,
+    personId,
+    input.destination,
+  );
+  if (!destinationResult.ok) return destinationResult;
+  const destination = destinationResult.data;
+
+  const window = parseWindow(input.validFrom, input.validUntil);
+  if (!window) return { ok: false, code: 'invalid' };
+
+  const batchId = randomUUID();
+  const batchLabel = input.batchLabel?.trim() || null;
+  const rejected: PassBatchRejection[] = [];
+  const seenDocuments = new Set<string>();
+  const candidates: PassBatchVisitorInput[] = [];
+
+  for (const visitor of input.visitors) {
+    const document = visitor.document.trim();
+    const duplicated = seenDocuments.has(document);
+    seenDocuments.add(document);
+    if (duplicated) {
+      rejected.push(rejectVisitor({ ...visitor, document }, 'documento duplicado en el archivo'));
+      continue;
+    }
+    candidates.push({ ...visitor, document });
+  }
+
+  const existing = candidates.length
+    ? await db
+        .select({ document: accessPasses.visitorDocument })
+        .from(accessPasses)
+        .where(
+          and(
+            eq(accessPasses.communityId, requester.communityId),
+            eq(accessPasses.locationUnitId, destination.id),
+            eq(accessPasses.status, PassStatus.Active),
+            inArray(
+              accessPasses.visitorDocument,
+              candidates.map((visitor) => visitor.document),
+            ),
+            gte(accessPasses.validUntil, window.validFrom),
+            lte(accessPasses.validFrom, window.validUntil),
+          ),
+        )
+    : [];
+  const alreadyAuthorized = new Set(existing.map((row) => row.document));
+
+  const valid: PassBatchVisitorInput[] = [];
+  for (const visitor of candidates) {
+    if (alreadyAuthorized.has(visitor.document)) {
+      rejected.push(rejectVisitor(visitor, 'ya tiene una autorización activa para ese destino'));
+      continue;
+    }
+    valid.push(visitor);
+  }
+
+  const created: PassBatchCreated[] = [];
+
+  if (valid.length > 0) {
+    // A batch is one logical operation: every pass lands or none does.
+    await db.transaction(async (tx) => {
+      for (const visitor of valid) {
+        const passId = randomUUID();
+        const linkToken = randomToken(32);
+        const linkExpiresAt = new Date(
+          Math.min(Date.now() + config.passes.linkTtlMinutes * 60_000, window.validUntil.getTime()),
+        );
+        const plate = visitor.vehiclePlate?.trim().toUpperCase() ?? '';
+
+        const [inserted] = await tx
+          .insert(accessPasses)
+          .values({
+            id: passId,
+            communityId: requester.communityId as string,
+            locationUnitId: destination.id,
+            structureId: destination.structureId,
+            createdByPersonId: personId,
+            authorizedByPersonId: personId,
+            visitorFirstName: visitor.firstName.trim(),
+            visitorLastName: visitor.lastName.trim(),
+            visitorDocument: visitor.document,
+            hasVehicle: plate.length > 0,
+            vehiclePlate: plate.length > 0 ? plate : null,
+            type: input.type,
+            validFrom: window.validFrom,
+            validUntil: window.validUntil,
+            allowedDays: null,
+            linkTokenHash: sha256Hex(linkToken),
+            linkExpiresAt,
+            pinHash: null,
+            pinEnabled: false,
+            batchId,
+            batchLabel,
+          })
+          .returning({
+            id: accessPasses.id,
+            visitorFirstName: accessPasses.visitorFirstName,
+            visitorLastName: accessPasses.visitorLastName,
+            visitorDocument: accessPasses.visitorDocument,
+            vehiclePlate: accessPasses.vehiclePlate,
+          });
+
+        created.push({
+          id: inserted.id,
+          visitorFirstName: inserted.visitorFirstName,
+          visitorLastName: inserted.visitorLastName,
+          visitorDocument: inserted.visitorDocument,
+          vehiclePlate: inserted.vehiclePlate,
+        });
+      }
+    });
+
+    // One event for the whole batch keeps the outbox readable.
+    await enqueuePassEvent(requester, 'pass.created', requester.communityId, {
+      batchId,
+      batchLabel,
+      locationUnitId: destination.id,
+      type: input.type,
+      count: created.length,
+    });
+  }
+
+  return {
+    ok: true,
+    data: {
+      batchId,
+      batchLabel,
+      createdCount: created.length,
+      rejectedCount: rejected.length,
+      created,
+      rejected,
+    },
+  };
+}
+
+export interface PassListQuery {
+  status?: PassStatus;
+  search?: string;
+  destinationUnitId?: string;
+  batchId?: string;
+  page: number;
+  pageSize: number;
+}
+
+export type PassListItem = AccessPassRow & {
+  locationPath: string;
+  destination: DestinationSummary;
+};
+
+function toDestinationSummary(destination: ResolvedDestination): DestinationSummary {
+  return {
+    id: destination.id,
+    name: destination.name,
+    path: destination.path,
+    kind: destination.kind,
+  };
+}
+
 export async function listPasses(
   requester: PassRequester,
-  query: { status?: PassStatus; page: number; pageSize: number },
-): Promise<PassResult<Array<AccessPassRow & { locationPath: string }>>> {
+  query: PassListQuery,
+): Promise<PassResult<{ items: PassListItem[]; total: number }>> {
   const personId = await resolvePersonId(requester);
   if (!personId) return { ok: false, code: 'forbidden' };
 
   const conditions = [eq(accessPasses.createdByPersonId, personId)];
   if (query.status) conditions.push(eq(accessPasses.status, query.status));
+  if (query.destinationUnitId) {
+    conditions.push(eq(accessPasses.locationUnitId, query.destinationUnitId));
+  }
+  if (query.batchId) conditions.push(eq(accessPasses.batchId, query.batchId));
+
+  const search = query.search?.trim();
+  if (search) {
+    const escaped = search.replace(/[%_\\]/g, (match) => `\\${match}`);
+    const pattern = `%${escaped}%`;
+    conditions.push(
+      or(
+        ilike(accessPasses.visitorFirstName, pattern),
+        ilike(accessPasses.visitorLastName, pattern),
+        ilike(accessPasses.visitorDocument, pattern),
+      ) as ReturnType<typeof eq>,
+    );
+  }
+
+  const where = and(...conditions);
+
+  const [totals] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(accessPasses)
+    .where(where);
 
   const rows = await db
     .select()
     .from(accessPasses)
-    .where(and(...conditions))
-    .orderBy(desc(accessPasses.createdAt))
+    .where(where)
+    .orderBy(desc(accessPasses.validFrom))
     .limit(query.pageSize)
     .offset((query.page - 1) * query.pageSize);
 
-  const data = await Promise.all(
-    rows.map(async (pass) => ({
-      ...pass,
-      locationPath: (await buildLocationPath(pass.locationUnitId)) ?? '',
-    })),
+  const trees = new Map<string, CommunityTree>();
+  await Promise.all(
+    [...new Set(rows.map((row) => row.communityId))].map(async (communityId) => {
+      trees.set(communityId, await loadCommunityTree(communityId));
+    }),
   );
 
-  return { ok: true, data };
+  const items: PassListItem[] = [];
+  for (const pass of rows) {
+    const tree = trees.get(pass.communityId);
+    const destination = tree ? resolveDestinationFromTree(tree, pass.locationUnitId) : null;
+    if (destination) {
+      items.push({
+        ...pass,
+        locationPath: destination.path,
+        destination: toDestinationSummary(destination),
+      });
+      continue;
+    }
+    // Defensive fallback: the row stays readable even if the node vanished.
+    items.push({
+      ...pass,
+      locationPath: (await buildLocationPath(pass.locationUnitId)) ?? '',
+      destination: {
+        id: pass.locationUnitId,
+        name: '',
+        path: '',
+        kind: 'home',
+      },
+    });
+  }
+
+  return { ok: true, data: { items, total: totals?.count ?? 0 } };
 }
 
 export async function getPassById(
   requester: PassRequester,
   passId: string,
-): Promise<PassResult<AccessPassRow & { locationPath: string }>> {
+): Promise<PassResult<PassListItem>> {
   const owned = await findOwnedPass(requester, passId);
   if (!owned.ok) return owned;
+
+  const destination = await resolveDestinationById(owned.data.locationUnitId);
 
   return {
     ok: true,
     data: {
       ...owned.data,
-      locationPath: (await buildLocationPath(owned.data.locationUnitId)) ?? '',
+      locationPath: destination?.path ?? (await buildLocationPath(owned.data.locationUnitId)) ?? '',
+      destination: destination
+        ? toDestinationSummary(destination)
+        : { id: owned.data.locationUnitId, name: '', path: '', kind: 'home' },
     },
   };
 }

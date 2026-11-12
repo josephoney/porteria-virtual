@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import config from '../config.js';
 import { sendPassError } from '../lib/pass-error-status.js';
 import { requireRole } from '../middlewares/rbac.js';
-import { createPassSchema, passesQuerySchema } from '../schemas/index.js';
+import { createPassBatchSchema, createPassSchema, passesQuerySchema } from '../schemas/index.js';
 import * as passService from '../services/pass.service.js';
 
 function getRequester(request: FastifyRequest): passService.PassRequester {
@@ -63,13 +63,52 @@ export async function passRoutes(app: FastifyInstance) {
   );
 
   app.get(
+    '/destinations',
+    { preHandler: [dynamicQrGuard, requireRole('owner', 'tenant', 'resident')] },
+    async (request, reply) => {
+      const result = await passService.listDestinations(getRequester(request));
+      if (!result.ok) return sendPassError(reply, result.code);
+      return reply.send(result.data);
+    },
+  );
+
+  app.post(
+    '/batch',
+    { preHandler: [dynamicQrGuard, requireRole('owner', 'tenant', 'resident')] },
+    async (request, reply) => {
+      const parsed = createPassBatchSchema.safeParse(request.body);
+      if (!parsed.success) {
+        const tooBig = parsed.error.issues.some((issue) => issue.code === 'too_big');
+        if (tooBig) {
+          return reply.status(400).send({
+            statusCode: 400,
+            error: 'Pass rejected',
+            message: 'batch_too_large',
+            max: passService.PASS_BATCH_MAX_VISITORS,
+          });
+        }
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: parsed.error.issues[0]?.message ?? 'invalid_batch',
+        });
+      }
+
+      const result = await passService.createPassBatch(getRequester(request), parsed.data);
+      if (!result.ok) return sendPassError(reply, result.code);
+      return reply.status(201).send(result.data);
+    },
+  );
+
+  app.get(
     '/',
     { preHandler: [dynamicQrGuard, requireRole('owner', 'tenant', 'resident')] },
     async (request, reply) => {
       const query = passesQuerySchema.parse(request.query);
       const result = await passService.listPasses(getRequester(request), query);
       if (!result.ok) return sendPassError(reply, result.code);
-      return reply.send(result.data);
+      // The mobile client expects a plain array; the total travels in a header.
+      return reply.header('X-Total-Count', String(result.data.total)).send(result.data.items);
     },
   );
 

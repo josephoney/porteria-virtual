@@ -46,6 +46,9 @@ export function passErrorStatus(code: PassErrorCode): number {
       return 403;
     case 'foreign_community':
       return 403;
+    case 'destination_inactive':
+    case 'batch_too_large':
+      return 400;
     default:
       return 400;
   }

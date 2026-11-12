@@ -42,6 +42,7 @@ export async function buildApp() {
   await app.register(cors, {
     origin: config.corsOrigins.length > 0 ? config.corsOrigins : false,
     credentials: true,
+    exposedHeaders: ['X-Total-Count'],
   });
   await app.register(multipart, { limits: { fileSize: 500 * 1024 } });
   await errorHandler(app);

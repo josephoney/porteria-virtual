@@ -25,15 +25,15 @@
 
 ## 4. API de pases con destino
 
-- [ ] 4.1 Resolver el ancestro de nivel 1 de un nodo y derivar `kind` (`home` | `common_area`).
-- [ ] 4.2 Validar el destino de vivienda: hoja, propia, fuera de una rama común.
-- [ ] 4.3 Validar el destino común: nodo activo dentro de una rama `common_area` de la comunidad, sin exigir hoja.
-- [ ] 4.4 Rechazar nodos archivados con 400 `destination_inactive` y nodos de otra comunidad con 404.
-- [ ] 4.5 Incluir `destination: { id, name, path, kind }`, `batchId` y `batchLabel` en `GET /api/passes` y `GET /api/passes/:id`.
-- [ ] 4.6 Aplicar `search`, `status`, `destinationUnitId` y `batchId` en la consulta de historial.
-- [ ] 4.7 Guardar el destino en la bitácora y en la respuesta de escaneo del guardia.
-- [ ] 4.8 Implementar `POST /api/passes/batch` con transacción única, `batch_id` compartido y reporte de rechazos.
-- [ ] 4.9 Agregar el endpoint que lista los destinos autorizables de la comunidad para el residente (viviendas propias + ramas comunes activas).
+- [x] 4.1 Resolver el ancestro de nivel 1 de un nodo y derivar `kind` (`home` | `common_area`).
+- [x] 4.2 Validar el destino de vivienda: hoja, propia, fuera de una rama común.
+- [x] 4.3 Validar el destino común: nodo activo dentro de una rama `common_area` de la comunidad, sin exigir hoja.
+- [x] 4.4 Rechazar nodos archivados con 400 `destination_inactive` y nodos de otra comunidad con 404.
+- [x] 4.5 Incluir `destination: { id, name, path, kind }`, `batchId` y `batchLabel` en `GET /api/passes` y `GET /api/passes/:id`.
+- [x] 4.6 Aplicar `search`, `status`, `destinationUnitId` y `batchId` en la consulta de historial.
+- [x] 4.7 Guardar el destino en la bitácora y en la respuesta de escaneo del guardia.
+- [x] 4.8 Implementar `POST /api/passes/batch` con transacción única, `batch_id` compartido y reporte de rechazos.
+- [x] 4.9 Agregar el endpoint que lista los destinos autorizables de la comunidad para el residente (viviendas propias + ramas comunes activas).
 
 ## 5. Workspace del residente
 

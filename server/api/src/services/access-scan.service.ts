@@ -22,6 +22,7 @@ import type {
 import config from '../config.js';
 import { insertBitacoraEntry } from './bitacora.service.js';
 import { buildLocationPath } from './location-path.service.js';
+import { resolveDestinationById } from './pass-destination.service.js';
 import { enqueueEvent } from './outbox.service.js';
 import type { PassResult } from './pass-errors.js';
 import { verifyPassQrToken } from './pass-qr-token.service.js';
@@ -207,7 +208,9 @@ async function writeDeniedEntry(
   details: Record<string, unknown> = {},
 ): Promise<string | null> {
   try {
-    const destinationPath = pass ? ((await buildLocationPath(pass.locationUnitId)) ?? '') : null;
+    const destination = pass ? await resolveDestinationById(pass.locationUnitId) : null;
+    const destinationPath =
+      destination?.path ?? (pass ? ((await buildLocationPath(pass.locationUnitId)) ?? '') : null);
     const authorizedByName = pass ? await loadAuthorizerName(pass.authorizedByPersonId) : null;
     const row = await insertBitacoraEntry(db, {
       communityId: context.communityId,
@@ -231,6 +234,8 @@ async function writeDeniedEntry(
           ? {
               visitor: toVisitor(pass),
               vehiclePlate: pass.vehiclePlate,
+              destinationName: destination?.name ?? null,
+              destinationKind: destination?.kind ?? null,
             }
           : {}),
         ...details,
@@ -484,12 +489,16 @@ export async function confirmScan(
         }),
       );
 
+      const destination = await resolveDestinationById(pass.locationUnitId);
+      const destinationPath =
+        destination?.path ?? (await buildLocationPath(pass.locationUnitId)) ?? '';
+
       const entry = await insertBitacoraEntry(tx, {
         communityId: context.communityId,
         accessPointId: context.accessPointId,
         accessPointName: context.accessPointName,
         destinationLocationUnitId: pass.locationUnitId,
-        destinationPath: (await buildLocationPath(pass.locationUnitId)) ?? '',
+        destinationPath,
         authorizedByPersonId: pass.authorizedByPersonId,
         authorizedByName: await loadAuthorizerName(pass.authorizedByPersonId),
         shiftId: context.shiftId,
@@ -510,7 +519,9 @@ export async function confirmScan(
           locationUnitId: pass.locationUnitId,
           structureId: pass.structureId,
           authorizedByPersonId: pass.authorizedByPersonId,
-          locationPath: (await buildLocationPath(pass.locationUnitId)) ?? '',
+          locationPath: destinationPath,
+          destinationName: destination?.name ?? null,
+          destinationKind: destination?.kind ?? null,
         },
       });
       bitacoraEntryId = entry.id;
@@ -590,12 +601,16 @@ export async function rejectScan(
         }),
       );
 
+      const destination = await resolveDestinationById(pass.locationUnitId);
+      const destinationPath =
+        destination?.path ?? (await buildLocationPath(pass.locationUnitId)) ?? '';
+
       const entry = await insertBitacoraEntry(tx, {
         communityId: context.communityId,
         accessPointId: context.accessPointId,
         accessPointName: context.accessPointName,
         destinationLocationUnitId: pass.locationUnitId,
-        destinationPath: (await buildLocationPath(pass.locationUnitId)) ?? '',
+        destinationPath,
         authorizedByPersonId: pass.authorizedByPersonId,
         authorizedByName: await loadAuthorizerName(pass.authorizedByPersonId),
         shiftId: context.shiftId,
@@ -611,7 +626,9 @@ export async function rejectScan(
           action: scan.action,
           visitor: toVisitor(pass),
           vehiclePlate: pass.vehiclePlate,
-          locationPath: (await buildLocationPath(pass.locationUnitId)) ?? '',
+          locationPath: destinationPath,
+          destinationName: destination?.name ?? null,
+          destinationKind: destination?.kind ?? null,
         },
       });
       bitacoraEntryId = entry.id;

@@ -23,6 +23,8 @@ export type PassErrorCode =
   | 'rate_limited'
   | 'no_active_shift'
   | 'not_on_shift_at_access_point'
-  | 'foreign_community';
+  | 'foreign_community'
+  | 'destination_inactive'
+  | 'batch_too_large';
 
 export type PassResult<T> = { ok: true; data: T } | { ok: false; code: PassErrorCode };
