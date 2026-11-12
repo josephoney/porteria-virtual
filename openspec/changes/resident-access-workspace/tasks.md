@@ -38,7 +38,7 @@
 ## 5. Workspace del residente
 
 - [x] 5.1 Quitar la redirección a `/app-required` para `owner`, `tenant` y `resident` en `HomePage`.
-- [x] 5.2 Agregar las rutas `/resident`, `/resident/authorizations`, `/resident/authorizations/new` y `/resident/authorizations/bulk` con `RequireRole`. (la ruta de carga masiva se agrega con la secci�n 7).
+- [x] 5.2 Agregar las rutas `/resident`, `/resident/authorizations`, `/resident/authorizations/new` y `/resident/authorizations/bulk` con `RequireRole`. (la ruta de carga masiva se agrega con la secci�n 7).
 - [x] 5.3 Crear `ResidentLayout` con el header existente y un sidebar reducido (Inicio, Autorizaciones, Autorizar).
 - [x] 5.4 Implementar el inicio con accesos rápidos, autorizaciones vigentes y estado vacío.
 - [x] 5.5 Mostrar el mensaje neutral cuando el feature flag de QR dinámico está apagado.
@@ -46,12 +46,12 @@
 
 ## 6. Formulario de autorización
 
-- [ ] 6.1 Cargar destinos disponibles (viviendas propias + lugares comunes activos) al abrir el formulario.
-- [ ] 6.2 Implementar el selector agrupado `Mi vivienda` / `Zonas comunes` con la ruta completa de cada opción.
-- [ ] 6.3 Implementar los campos de visitante, vehículo, tipo de pase y vigencia reusando los esquemas existentes.
-- [ ] 6.4 Implementar el paso de confirmación con resumen y navegación atrás sin perder datos.
-- [ ] 6.5 Al guardar, navegar al historial con la fila nueva visible sin recargar.
-- [ ] 6.6 Mostrar errores de API por campo, incluido `destination_inactive`.
+- [x] 6.1 Cargar destinos disponibles (viviendas propias + lugares comunes activos) al abrir el formulario. El selector arranca vacío a propósito: Radix limpia un valor controlado sin `SelectItem` montado, así que el residente elige el destino de forma explícita.
+- [x] 6.2 Implementar el selector agrupado `Mi vivienda` / `Zonas comunes` con la ruta completa de cada opción.
+- [x] 6.3 Implementar los campos de visitante, vehículo, tipo de pase y vigencia reusando los esquemas existentes.
+- [x] 6.4 Implementar el paso de confirmación con resumen y navegación atrás sin perder datos. Resumen con visitante, documento, destino, vigencia, tipo y vehículo; `Volver` conserva todo lo cargado.
+- [x] 6.5 Al guardar, navegar al historial con la fila nueva visible sin recargar.
+- [x] 6.6 Mostrar errores de API por campo, incluido `destination_inactive`. Los códigos de pase se traducen al campo que los causó (`destination_inactive`, `not_found`, `foreign_community`, `forbidden`, `invalid`); el resto cae en el mensaje general.
 
 ## 7. Historial de autorizaciones
 
