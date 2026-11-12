@@ -10,7 +10,18 @@ export type { AccessPoint } from './types/access-point.js';
 export type { User } from './types/user.js';
 export type { Call } from './types/call.js';
 export type { Event, EventMetadata } from './types/event.js';
-export type { AccessPass, PassScan, PassAlert } from './types/pass.js';
+export type {
+  AccessPass,
+  PassScan,
+  PassAlert,
+  DestinationKind,
+  DestinationSummary,
+  PassBatchVisitorInput,
+  PassBatchRequest,
+  PassBatchCreated,
+  PassBatchRejection,
+  PassBatchResult,
+} from './types/pass.js';
 export type { GuardShift, GuardShiftSegment, GuardShiftWithSegments } from './types/guard-shift.js';
 export type { BitacoraEntry, BitacoraComment } from './types/bitacora.js';
 

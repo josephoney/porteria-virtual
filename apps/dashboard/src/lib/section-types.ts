@@ -9,6 +9,7 @@ export const SECTION_TYPE_LABELS: Record<string, string> = {
   house: 'Casa',
   lot: 'Lote',
   commercial: 'Comercial',
+  common_area: 'Zona común',
   other: 'Otro',
 };
 

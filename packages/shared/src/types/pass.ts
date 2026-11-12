@@ -9,6 +9,20 @@ import type {
   ScanStatus,
 } from '../enums/index.js';
 
+/**
+ * Where an authorization sends its visitor. Every destination is a node of the
+ * community location tree; `common_area` only changes how it is classified.
+ */
+export type DestinationKind = 'home' | 'common_area';
+
+export interface DestinationSummary {
+  id: string;
+  name: string;
+  /** Full path from the level-1 section, separated by `›`. */
+  path: string;
+  kind: DestinationKind;
+}
+
 export interface AccessPass {
   id: string;
   communityId: string;
@@ -71,4 +85,50 @@ export interface PassAlert {
   createdAt: Date;
   resolvedAt: Date | null;
   resolvedByPersonId: string | null;
+}
+
+/** One CSV line of a bulk authorization. */
+export interface PassBatchVisitorInput {
+  firstName: string;
+  lastName: string;
+  document: string;
+  /** When present, the visitor is authorized with a vehicle. */
+  vehiclePlate?: string | null;
+}
+
+/**
+ * A whole batch shares destination, window and label: the file only carries
+ * visitors, so every pass of the batch differs just in who is authorized.
+ */
+export interface PassBatchRequest {
+  destination: string;
+  type: PassType;
+  validFrom: string;
+  validUntil: string;
+  batchLabel?: string | null;
+  visitors: PassBatchVisitorInput[];
+}
+
+export interface PassBatchCreated {
+  id: string;
+  visitorFirstName: string;
+  visitorLastName: string;
+  visitorDocument: string;
+  vehiclePlate: string | null;
+}
+
+export interface PassBatchRejection {
+  document: string;
+  visitorFirstName: string;
+  visitorLastName: string;
+  reason: string;
+}
+
+export interface PassBatchResult {
+  batchId: string;
+  batchLabel: string | null;
+  createdCount: number;
+  rejectedCount: number;
+  created: PassBatchCreated[];
+  rejected: PassBatchRejection[];
 }

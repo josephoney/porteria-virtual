@@ -9,11 +9,11 @@
 
 ## 2. Tipos compartidos y esquemas
 
-- [ ] 2.1 Exportar en `packages/shared` `DestinationKind` (`home` | `common_area`), `DestinationSummary`, `PassBatchRequest` y `PassBatchResult`.
-- [ ] 2.2 Extender `createPassSchema` para aceptar un `locationUnitId` de cualquier nivel y validar el nivel en el servicio.
-- [ ] 2.3 Crear `createPassBatchSchema` con el límite de 200 filas y `batchLabel` de hasta 80 caracteres.
-- [ ] 2.4 Extender el esquema de consulta de pases con `search`, `destinationUnitId` y `batchId`.
-- [ ] 2.5 Agregar `common_area` a `SECTION_TYPE_LABELS` como `Zona común`.
+- [x] 2.1 Exportar en `packages/shared` `DestinationKind` (`home` | `common_area`), `DestinationSummary`, `PassBatchRequest` y `PassBatchResult`.
+- [x] 2.2 Extender `createPassSchema` para aceptar un `locationUnitId` de cualquier nivel y validar el nivel en el servicio. El esquema ya aceptaba cualquier uuid; se documentó el contrato y la validación por nivel queda en 4.2 y 4.3.
+- [x] 2.3 Crear `createPassBatchSchema` con el límite de 200 filas y `batchLabel` de hasta 80 caracteres.
+- [x] 2.4 Extender el esquema de consulta de pases con `search`, `destinationUnitId` y `batchId`.
+- [x] 2.5 Agregar `common_area` a `SECTION_TYPE_LABELS` como `Zona común`.
 
 ## 3. Lugares comunes en el árbol
 

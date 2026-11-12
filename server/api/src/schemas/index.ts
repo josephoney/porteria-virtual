@@ -179,6 +179,11 @@ const passTypeSchema = z.enum(PassTypeValues as [PassType, ...PassType[]]);
 const passStatusSchema = z.enum(PassStatusValues as [PassStatus, ...PassStatus[]]);
 
 export const createPassSchema = z.object({
+  /**
+   * Any node of the structure is a valid candidate. Whether it is a home or a
+   * common area — and whether the requester may use it — is decided in the
+   * service, because it needs the node and its level-1 ancestor.
+   */
   locationUnitId: z.string().uuid(),
   visitorFirstName: z.string().trim().min(1).max(120),
   visitorLastName: z.string().trim().min(1).max(120),
@@ -215,8 +220,38 @@ export const bindPassSchema = z.object({
 
 export const passesQuerySchema = z.object({
   status: passStatusSchema.optional(),
+  /** Free text over visitor name, last name or document. */
+  search: z.string().trim().max(120).optional(),
+  /** Filters the history by the node the visitor was authorized to. */
+  destinationUnitId: z.string().uuid().optional(),
+  /** Filters the history by the bulk operation that created the passes. */
+  batchId: z.string().uuid().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+/**
+ * A batch shares destination, type and window; visitors come from a CSV file.
+ * The 200-row cap is enforced here, but the route maps `too_big` failures of
+ * this array to the `batch_too_large` reason the UI expects.
+ */
+export const createPassBatchSchema = z.object({
+  destination: z.string().uuid(),
+  type: passTypeSchema,
+  validFrom: z.string().datetime(),
+  validUntil: z.string().datetime(),
+  batchLabel: z.string().trim().max(80).nullable().optional(),
+  visitors: z
+    .array(
+      z.object({
+        firstName: z.string().trim().min(1).max(120),
+        lastName: z.string().trim().min(1).max(120),
+        document: z.string().trim().min(1).max(50),
+        vehiclePlate: z.string().trim().max(20).nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(200),
 });
 
 export const scanPassSchema = z.object({
