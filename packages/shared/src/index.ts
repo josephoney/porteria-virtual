@@ -16,6 +16,7 @@ export type {
   PassAlert,
   DestinationKind,
   DestinationSummary,
+  DestinationOption,
   PassBatchVisitorInput,
   PassBatchRequest,
   PassBatchCreated,

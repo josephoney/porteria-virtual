@@ -57,7 +57,12 @@ export default defineConfig({
       stderr: 'pipe',
       /* The suite logs in many times from one IP, which trips the 10/min limiter.
          This only applies to servers started by Playwright. */
-      env: { AUTH_LOGIN_RATE_LIMIT: '200' },
+      env: {
+        AUTH_LOGIN_RATE_LIMIT: '200',
+        /* The history spec creates several passes for the same demo unit in a
+           row; the 20/day limit would reject them mid-suite. 0 disables it. */
+        PASS_DAILY_LIMIT_PER_UNIT: '0',
+      },
     },
     {
       command: 'pnpm --filter @porteria/dashboard dev',

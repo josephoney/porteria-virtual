@@ -65,6 +65,9 @@ export const accessPasses = pgTable(
     linkTokenHash: char('link_token_hash', { length: 64 }).notNull(),
     deviceKeyHash: char('device_key_hash', { length: 64 }),
     linkExpiresAt: timestamp('link_expires_at', { withTimezone: true }).notNull(),
+    // The link token is a bearer credential the resident must be able to copy
+    // again from the history, so a recoverable copy lives beside the hash.
+    linkTokenEncrypted: text('link_token_encrypted'),
     pinHash: text('pin_hash'),
     pinEnabled: boolean('pin_enabled').notNull().default(false),
     pinFailedAttempts: integer('pin_failed_attempts').notNull().default(0),

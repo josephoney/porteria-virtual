@@ -113,6 +113,16 @@ export async function passRoutes(app: FastifyInstance) {
   );
 
   app.get(
+    '/history-destinations',
+    { preHandler: [dynamicQrGuard, requireRole('owner', 'tenant', 'resident')] },
+    async (request, reply) => {
+      const result = await passService.listHistoryDestinations(getRequester(request));
+      if (!result.ok) return sendPassError(reply, result.code);
+      return reply.send(result.data);
+    },
+  );
+
+  app.get(
     '/:id',
     { preHandler: [dynamicQrGuard, requireRole('owner', 'tenant', 'resident')] },
     async (request, reply) => {

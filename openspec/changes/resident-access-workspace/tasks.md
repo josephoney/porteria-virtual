@@ -55,14 +55,14 @@
 
 ## 7. Historial de autorizaciones
 
-- [ ] 7.1 Crear la tabla con visitante, destino, vigencia, estado y acciones.
-- [ ] 7.2 Implementar búsqueda, filtros de estado y destino, y paginación server-side.
-- [ ] 7.3 Derivar el estado `Vencida` cuando `valid_until` ya pasó y el pase sigue `active`.
-- [ ] 7.4 Implementar el diálogo de QR rotativo con refresco y corte al cerrar.
-- [ ] 7.5 Implementar copiar enlace, regenerar enlace y revocar con confirmación.
-- [ ] 7.6 Deshabilitar las acciones que no aplican según el estado del pase.
-- [ ] 7.7 Implementar el filtro por lote desde la etiqueta del historial.
-- [ ] 7.8 Implementar estados de carga, vacío y error con reintento.
+- [x] 7.1 Crear la tabla con visitante, destino, vigencia, estado y acciones.
+- [x] 7.2 Implementar búsqueda, filtros de estado y destino, y paginación server-side.
+- [x] 7.3 Derivar el estado `Vencida` cuando `valid_until` ya pasó y el pase sigue `active`.
+- [x] 7.4 Implementar el diálogo de QR rotativo con refresco y corte al cerrar.
+- [x] 7.5 Implementar copiar enlace, regenerar enlace y revocar con confirmación.
+- [x] 7.6 Deshabilitar las acciones que no aplican según el estado del pase.
+- [x] 7.7 Implementar el filtro por lote desde la etiqueta del historial.
+- [x] 7.8 Implementar estados de carga, vacío y error con reintento.
 
 ## 8. Carga masiva
 

@@ -293,3 +293,266 @@ test.describe('resident workspace', () => {
     expect(formFits).toBe(true);
   });
 });
+
+/** The resident's own home destination, required to create passes through the API. */
+async function homeDestination(request: APIRequestContext) {
+  const token = await residentToken(request);
+  const response = await request.get(`${API_URL}/api/passes/destinations`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const rows = unwrap(
+    (await response.json()) as Array<{ id: string; name: string; path: string; kind: string }>,
+  );
+  const home = rows.find((row) => row.kind === 'home');
+  if (!home) throw new Error('El residente demo no tiene una vivienda asociada');
+  return home;
+}
+
+interface CreatePassInput {
+  lastName: string;
+  document: string;
+  /** ISO timestamps; defaults to a window that starts now and lasts an hour. */
+  validFrom?: string;
+  validUntil?: string;
+  batchLabel?: string;
+}
+
+/** Creates a pass through the API so each test controls the window it needs. */
+async function createPassViaApi(request: APIRequestContext, input: CreatePassInput) {
+  const token = await residentToken(request);
+  const destination = await homeDestination(request);
+  const now = Date.now();
+  const response = await request.post(`${API_URL}/api/passes`, {
+    headers: { authorization: `Bearer ${token}` },
+    data: {
+      locationUnitId: destination.id,
+      visitorFirstName: 'QA',
+      visitorLastName: input.lastName,
+      visitorDocument: input.document,
+      type: 'entry_exit',
+      validFrom: input.validFrom ?? new Date(now).toISOString(),
+      validUntil: input.validUntil ?? new Date(now + 60 * 60 * 1000).toISOString(),
+    },
+  });
+  if (!response.ok()) throw new Error(`No se pudo crear el pase: ${response.status()}`);
+  const body = (await response.json()) as {
+    pass: { id: string };
+    shareUrl: string;
+  };
+  return { id: body.pass.id, shareUrl: body.shareUrl };
+}
+
+/** Creates a batch of passes and returns the label used to filter them. */
+async function createBatchViaApi(request: APIRequestContext, label: string, documents: string[]) {
+  const token = await residentToken(request);
+  const destination = await homeDestination(request);
+  const now = Date.now();
+  const response = await request.post(`${API_URL}/api/passes/batch`, {
+    headers: { authorization: `Bearer ${token}` },
+    data: {
+      destination: destination.id,
+      type: 'entry_exit',
+      validFrom: new Date(now).toISOString(),
+      validUntil: new Date(now + 60 * 60 * 1000).toISOString(),
+      batchLabel: label,
+      visitors: documents.map((document, index) => ({
+        firstName: `Lote${index + 1}`,
+        lastName: label,
+        document,
+      })),
+    },
+  });
+  if (!response.ok()) throw new Error(`No se pudo crear el lote: ${response.status()}`);
+  return (await response.json()) as { batchId: string; batchLabel: string; createdCount: number };
+}
+
+function daysAgo(days: number) {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+async function openHistory(page: Page, search?: string) {
+  await loginAs(page, DEMO_USERS.resident);
+  await expect(page).toHaveURL(/\/resident$/);
+  await page.goto('/resident/authorizations');
+  await expect(page.getByRole('heading', { level: 1, name: 'Autorizaciones' })).toBeVisible();
+  if (search) {
+    await page.getByPlaceholder('Buscar autorizaciones').fill(search);
+  }
+}
+
+test.describe('resident authorization history', () => {
+  test('lists the visitor, the destination, the window and the state', async ({
+    page,
+    request,
+  }) => {
+    const lastName = `Tabla${Date.now()}`;
+    await createPassViaApi(request, { lastName, document: '99100001' });
+
+    try {
+      await openHistory(page, lastName);
+
+      await expect(page.getByRole('columnheader', { name: 'Visitante' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Destino' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Vigencia' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Estado' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Acciones' })).toBeVisible();
+
+      const row = page.locator('tbody tr').filter({ hasText: lastName }).first();
+      await expect(row).toBeVisible();
+      await expect(row.getByText('Vivienda')).toBeVisible();
+      await expect(row.getByText('A-101')).toBeVisible();
+      await expect(row.getByText('Activa')).toBeVisible();
+      await expect(row.getByText('99100001')).toBeVisible();
+    } finally {
+      await revokePasses(request, lastName);
+    }
+  });
+
+  test('an active pass past its window reads as Vencida and loses its actions', async ({
+    page,
+    request,
+  }) => {
+    const lastName = `Vencida${Date.now()}`;
+    await createPassViaApi(request, {
+      lastName,
+      document: '99100002',
+      validFrom: daysAgo(2),
+      validUntil: daysAgo(1),
+    });
+
+    try {
+      await openHistory(page, lastName);
+      const visitor = `QA ${lastName}`;
+      const row = page.locator('tbody tr').filter({ hasText: lastName }).first();
+
+      // The database row is still `active`; the UI derives the expired state.
+      await expect(row.getByText('Vencida', { exact: true })).toBeVisible();
+      await expect(row.getByText('Activa')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: `Ver QR de ${visitor}` })).toBeDisabled();
+      await expect(
+        page.getByRole('button', { name: `Revocar autorización de ${visitor}` }),
+      ).toBeDisabled();
+
+      // The status filter uses the same derivation as the badge.
+      await page.getByLabel('Estado').click();
+      await page.getByRole('option', { name: 'Vencidas' }).click();
+      await expect(page.getByText(lastName)).toBeVisible();
+
+      await page.getByLabel('Estado').click();
+      await page.getByRole('option', { name: 'Activas' }).click();
+      await expect(page.getByText(lastName)).toHaveCount(0);
+    } finally {
+      await revokePasses(request, lastName);
+    }
+  });
+
+  test('the QR dialog shows a code and closes cleanly', async ({ page, request }) => {
+    const lastName = `Qr${Date.now()}`;
+    await createPassViaApi(request, { lastName, document: '99100003' });
+
+    try {
+      await openHistory(page, lastName);
+      await page.getByRole('button', { name: `Ver QR de QA ${lastName}` }).click();
+
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByRole('heading', { name: 'QR de acceso' })).toBeVisible();
+      await expect(dialog.locator('svg').first()).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Copiar enlace' })).toBeVisible();
+
+      await dialog.getByRole('button', { name: 'Close' }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    } finally {
+      await revokePasses(request, lastName);
+    }
+  });
+
+  test('copying and regenerating the link hands out a new working URL', async ({
+    page,
+    context,
+    request,
+  }) => {
+    const lastName = `Enlace${Date.now()}`;
+    const created = await createPassViaApi(request, { lastName, document: '99100004' });
+    const visitor = `QA ${lastName}`;
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    try {
+      await openHistory(page, lastName);
+
+      await page.getByRole('button', { name: `Copiar enlace de ${visitor}` }).click();
+      // The welcome toast is also a status region, so filter by the notice text.
+      await expect(
+        page.getByRole('status').filter({ hasText: `Enlace de ${visitor} copiado.` }),
+      ).toBeVisible();
+      const copied = await page.evaluate(() => navigator.clipboard.readText());
+      expect(copied).toBe(created.shareUrl);
+
+      await page.getByRole('button', { name: `Regenerar enlace de ${visitor}` }).click();
+      await expect(
+        page.getByRole('status').filter({ hasText: 'El anterior dejó de funcionar.' }),
+      ).toBeVisible();
+
+      const regenerated = await page.evaluate(() => navigator.clipboard.readText());
+      expect(regenerated).not.toBe(created.shareUrl);
+      expect(regenerated).toContain('/p/');
+    } finally {
+      await revokePasses(request, lastName);
+    }
+  });
+
+  test('revoking asks for confirmation and updates the row without reloading', async ({
+    page,
+    request,
+  }) => {
+    const lastName = `Revocar${Date.now()}`;
+    await createPassViaApi(request, { lastName, document: '99100005' });
+    const visitor = `QA ${lastName}`;
+
+    await openHistory(page, lastName);
+    const row = page.locator('tbody tr').filter({ hasText: lastName }).first();
+    await expect(row.getByText('Activa')).toBeVisible();
+
+    await page.getByRole('button', { name: `Revocar autorización de ${visitor}` }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'Revocar autorización' })).toBeVisible();
+
+    // Cancelling leaves the pass untouched.
+    await dialog.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(row.getByText('Activa')).toBeVisible();
+
+    await page.getByRole('button', { name: `Revocar autorización de ${visitor}` }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Revocar', exact: true }).click();
+
+    await expect(page.getByRole('status').filter({ hasText: 'revocada' })).toBeVisible();
+    await expect(row.getByText('Revocada')).toBeVisible();
+    await expect(page.getByRole('button', { name: `Ver QR de ${visitor}` })).toBeDisabled();
+  });
+
+  test('the batch chip filters the history down to that batch', async ({ page, request }) => {
+    const label = `Lote QA ${Date.now()}`;
+    const batch = await createBatchViaApi(request, label, ['99100006', '99100007']);
+    expect(batch.createdCount).toBe(2);
+
+    try {
+      await openHistory(page, label);
+
+      // Both rows share the batch label and expose the filter action.
+      await expect(page.locator('tbody tr').filter({ hasText: label })).toHaveCount(2);
+
+      await page
+        .getByRole('button', { name: `Filtrar por el lote ${label}` })
+        .first()
+        .click();
+
+      await expect(page.getByText(`Lote: ${label}`)).toBeVisible();
+      await expect(page.locator('tbody tr').filter({ hasText: label })).toHaveCount(2);
+      await expect(page.getByText(/2 autorizaciones/)).toBeVisible();
+
+      await page.getByRole('button', { name: 'Quitar filtro de lote' }).click();
+      await expect(page.getByText(`Lote: ${label}`)).toHaveCount(0);
+    } finally {
+      await revokePasses(request, label);
+    }
+  });
+});

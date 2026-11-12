@@ -23,6 +23,15 @@ export interface DestinationSummary {
   kind: DestinationKind;
 }
 
+/**
+ * A destination offered to the resident. `active` is false for a place that was
+ * archived after it received passes: the history filter still lists it so those
+ * rows stay filterable.
+ */
+export interface DestinationOption extends DestinationSummary {
+  active: boolean;
+}
+
 export interface AccessPass {
   id: string;
   communityId: string;

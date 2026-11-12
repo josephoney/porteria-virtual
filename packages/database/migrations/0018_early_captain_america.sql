@@ -1,0 +1,1 @@
+ALTER TABLE "access_passes" ADD COLUMN "link_token_encrypted" text;

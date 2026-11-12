@@ -3,6 +3,8 @@ import { CONFIG } from '../config';
 export interface ApiResponse<T> {
   data: T;
   status: number;
+  /** Total row count when the endpoint paginates through the `X-Total-Count` header. */
+  total?: number;
 }
 
 export class ApiError extends Error {
@@ -101,8 +103,13 @@ async function request<T>(
     return { data: undefined as T, status: res.status };
   }
 
+  const totalHeader = res.headers.get('X-Total-Count');
   const data = await res.json();
-  return { data, status: res.status };
+  return {
+    data,
+    status: res.status,
+    ...(totalHeader ? { total: Number(totalHeader) } : {}),
+  };
 }
 
 async function retryRequest<T>(
@@ -148,8 +155,13 @@ async function retryRequest<T>(
     return { data: undefined as T, status: res.status };
   }
 
+  const totalHeader = res.headers.get('X-Total-Count');
   const data = await res.json();
-  return { data, status: res.status };
+  return {
+    data,
+    status: res.status,
+    ...(totalHeader ? { total: Number(totalHeader) } : {}),
+  };
 }
 
 export function get<T>(path: string): Promise<ApiResponse<T>> {

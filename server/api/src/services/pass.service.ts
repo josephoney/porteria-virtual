@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { createDb } from '@porteria/database';
 import { accessPasses, communities, memberships } from '@porteria/database/schema';
@@ -8,6 +8,7 @@ import {
   PassType,
   createEventEnvelope,
   type CreatePassDto,
+  type DestinationOption,
   type DestinationSummary,
   type PassBatchCreated,
   type PassBatchRejection,
@@ -18,7 +19,7 @@ import {
   type PassQrResponse,
 } from '@porteria/shared';
 import config from '../config.js';
-import { randomToken, sha256Hex } from '../lib/pass-tokens.js';
+import { decryptLinkToken, encryptLinkToken, randomToken, sha256Hex } from '../lib/pass-tokens.js';
 import { buildLocationPath } from './location-path.service.js';
 import {
   isAuthorizableCommonArea,
@@ -200,6 +201,7 @@ export async function createPass(
       timeFrom: input.timeFrom ?? null,
       timeTo: input.timeTo ?? null,
       linkTokenHash: sha256Hex(linkToken),
+      linkTokenEncrypted: encryptLinkToken(linkToken, config.passes.qrSecret),
       linkExpiresAt,
       pinHash,
       pinEnabled: Boolean(input.pin),
@@ -276,6 +278,47 @@ export async function listDestinations(
   return {
     ok: true,
     data: await listAuthorizableDestinations(personId, requester.communityId),
+  };
+}
+
+/**
+ * Destinations that appear in the resident's own history, including places that
+ * were archived after they received passes. Without this the history filter
+ * could not reach those rows any more.
+ */
+export async function listHistoryDestinations(
+  requester: PassRequester,
+): Promise<PassResult<DestinationOption[]>> {
+  const personId = await resolvePersonId(requester);
+  if (!personId) return { ok: false, code: 'forbidden' };
+
+  const rows = await db
+    .selectDistinct({
+      locationUnitId: accessPasses.locationUnitId,
+      communityId: accessPasses.communityId,
+    })
+    .from(accessPasses)
+    .where(eq(accessPasses.createdByPersonId, personId));
+
+  const trees = new Map<string, CommunityTree>();
+  await Promise.all(
+    [...new Set(rows.map((row) => row.communityId))].map(async (communityId) => {
+      trees.set(communityId, await loadCommunityTree(communityId));
+    }),
+  );
+
+  const options = new Map<string, DestinationOption>();
+  for (const row of rows) {
+    if (options.has(row.locationUnitId)) continue;
+    const tree = trees.get(row.communityId);
+    const destination = tree ? resolveDestinationFromTree(tree, row.locationUnitId) : null;
+    if (!destination) continue;
+    options.set(row.locationUnitId, { ...toDestinationSummary(destination), active: destination.active });
+  }
+
+  return {
+    ok: true,
+    data: [...options.values()].sort((left, right) => left.path.localeCompare(right.path, 'es')),
   };
 }
 
@@ -408,6 +451,7 @@ export async function createPassBatch(
             validUntil: window.validUntil,
             allowedDays: null,
             linkTokenHash: sha256Hex(linkToken),
+            linkTokenEncrypted: encryptLinkToken(linkToken, config.passes.qrSecret),
             linkExpiresAt,
             pinHash: null,
             pinEnabled: false,
@@ -464,10 +508,29 @@ export interface PassListQuery {
   pageSize: number;
 }
 
-export type PassListItem = AccessPassRow & {
+export type PassListItem = Omit<AccessPassRow, 'linkTokenEncrypted'> & {
   locationPath: string;
   destination: DestinationSummary;
+  shareUrl: string | null;
 };
+
+/** The encrypted copy is for the server only: never send it to a client. */
+function toPassItem(pass: AccessPassRow): Omit<AccessPassRow, 'linkTokenEncrypted'> {
+  const { linkTokenEncrypted: _encrypted, ...rest } = pass;
+  return rest;
+}
+
+/**
+ * Rebuilds the public link so the resident can share it again from the history.
+ * Null when the row predates the encrypted copy or the link already expired:
+ * the UI disables the copy action instead of handing out a dead link.
+ */
+function shareUrlFor(pass: AccessPassRow): string | null {
+  if (pass.linkExpiresAt.getTime() <= Date.now()) return null;
+  if (!pass.linkTokenEncrypted) return null;
+  const token = decryptLinkToken(pass.linkTokenEncrypted, config.passes.qrSecret);
+  return token ? `${config.passes.passWebUrl}/p/${token}` : null;
+}
 
 function toDestinationSummary(destination: ResolvedDestination): DestinationSummary {
   return {
@@ -486,7 +549,21 @@ export async function listPasses(
   if (!personId) return { ok: false, code: 'forbidden' };
 
   const conditions = [eq(accessPasses.createdByPersonId, personId)];
-  if (query.status) conditions.push(eq(accessPasses.status, query.status));
+  if (query.status === PassStatus.Expired) {
+    // The UI shows "Vencida" for any active pass past its window, so the filter
+    // must return the same rows the badge labels that way.
+    conditions.push(
+      or(
+        eq(accessPasses.status, PassStatus.Expired),
+        and(eq(accessPasses.status, PassStatus.Active), lt(accessPasses.validUntil, new Date())),
+      ) as ReturnType<typeof eq>,
+    );
+  } else if (query.status === PassStatus.Active) {
+    conditions.push(eq(accessPasses.status, PassStatus.Active));
+    conditions.push(gte(accessPasses.validUntil, new Date()));
+  } else if (query.status) {
+    conditions.push(eq(accessPasses.status, query.status));
+  }
   if (query.destinationUnitId) {
     conditions.push(eq(accessPasses.locationUnitId, query.destinationUnitId));
   }
@@ -533,15 +610,16 @@ export async function listPasses(
     const destination = tree ? resolveDestinationFromTree(tree, pass.locationUnitId) : null;
     if (destination) {
       items.push({
-        ...pass,
+        ...toPassItem(pass),
         locationPath: destination.path,
         destination: toDestinationSummary(destination),
+        shareUrl: shareUrlFor(pass),
       });
       continue;
     }
     // Defensive fallback: the row stays readable even if the node vanished.
     items.push({
-      ...pass,
+      ...toPassItem(pass),
       locationPath: (await buildLocationPath(pass.locationUnitId)) ?? '',
       destination: {
         id: pass.locationUnitId,
@@ -549,6 +627,7 @@ export async function listPasses(
         path: '',
         kind: 'home',
       },
+      shareUrl: shareUrlFor(pass),
     });
   }
 
@@ -567,11 +646,12 @@ export async function getPassById(
   return {
     ok: true,
     data: {
-      ...owned.data,
+      ...toPassItem(owned.data),
       locationPath: destination?.path ?? (await buildLocationPath(owned.data.locationUnitId)) ?? '',
       destination: destination
         ? toDestinationSummary(destination)
         : { id: owned.data.locationUnitId, name: '', path: '', kind: 'home' },
+      shareUrl: shareUrlFor(owned.data),
     },
   };
 }
@@ -611,6 +691,7 @@ export async function regenerateLink(
     .update(accessPasses)
     .set({
       linkTokenHash: sha256Hex(token),
+      linkTokenEncrypted: encryptLinkToken(token, config.passes.qrSecret),
       deviceKeyHash: null,
       boundAt: null,
       linkExpiresAt,
