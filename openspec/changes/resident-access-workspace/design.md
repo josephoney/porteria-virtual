@@ -13,15 +13,16 @@ La API ya soporta casi todo lo necesario:
 
 Lo que falta es de modelo y de superficie:
 
-- `createPassSchema` exige `locationUnitId` de una hoja, y `pass.service` valida que coincida con `memberships.locationUnitId`. No hay destino que no sea la vivienda.
-- No existe catálogo de lugares comunes.
+- `pass.service` exige que el destino sea una hoja y que coincida con `memberships.locationUnitId`. No hay destino que no sea la vivienda.
+- No hay forma de distinguir un lugar común de una vivienda dentro del árbol.
 - No existe alta por lote.
 - No existe UI.
 
 ## Goals
 
 - Que un residente entre al dashboard y gestione sus autorizaciones sin salir a otra app.
-- Que pueda autorizar a su vivienda **o** a un lugar común activo de su comunidad.
+- Que pueda autorizar a su vivienda **o** a un lugar común de su comunidad.
+- Que la comunidad defina sus lugares comunes con las mismas herramientas que ya usa para torres y pisos.
 - Que pueda autorizar a muchas personas de una vez con un CSV y ver qué filas fallaron y por qué.
 - Que el historial sea la vista principal: qué autorizó, a dónde, hasta cuándo y en qué estado.
 - Reusar el QR rotativo, el enlace público y el binding de dispositivo ya especificados en `add-dynamic-qr-access`, sin duplicarlos.
@@ -32,6 +33,7 @@ Lo que falta es de modelo y de superficie:
 - Reservar amenidades, cobrar o controlar cupos.
 - Cambiar el flujo del guardia ni el escaneo.
 - Construir la app móvil del residente.
+- Crear un catálogo de lugares paralelo al árbol de ubicaciones.
 
 ## Decisions
 
@@ -56,60 +58,71 @@ El sidebar admin expone Comunidades, Unidades, Usuarios y Auditoría, que el res
 
 La identidad del workspace (`useWorkspace`) ya resuelve comunidad y logo, así que el header no cambia.
 
-### 3. Los lugares comunes son una entidad propia, no nodos del árbol
+### 3. Los lugares comunes son ramas del árbol, no una entidad nueva
 
-Un lugar común no es una vivienda: no tiene pisos, no tiene residentes asociados y no participa del árbol de `location_units`. Meterlo en `location_units` obligaría a inventar un cuarto nivel y a relajar todas las validaciones de hoja.
+Un lugar común es una **rama** de `location_units`, no una tabla aparte. La sección de nivel 1 marca la rama con `section_type = 'common_area'`; sus descendientes son los lugares concretos.
 
-Nueva tabla `community_destinations`:
+El admin ya crea secciones de nivel 1 en `Unidades`. Lo único que falta es que ese alta pida el tipo. Un ejemplo real:
+
+```
+Zonas comunes        (nivel 1, section_type = 'common_area')
+├── Piscina          (nivel 2)
+├── Club social      (nivel 2)
+└── Cancha de golf   (nivel 2)
+```
+
+No hay nivel 3 para esos espacios, y no hace falta: el destino puede ser un nodo interno.
+
+Consecuencias:
+
+- Una sola jerarquía para viviendas y lugares comunes. El guardia, la bitácora y `buildLocationPath` siguen funcionando sin ramas nuevas.
+- El nombre del nivel 1 sigue siendo libre: la rama puede llamarse "Zonas comunes", "Amenidades" o "Áreas sociales"; lo que la identifica es el tipo, no el texto.
+- Los lugares se renombran, archivan y eliminan con las acciones que la tabla anidada ya tiene.
+
+Se descarta la tabla `community_destinations` del primer borrador: obligaba a mantener dos catálogos y a resolver dos caminos en cada lectura de pases.
+
+### 4. El pase sigue apuntando a un nodo, y el nodo es el destino
+
+`access_passes.location_unit_id` y `structure_id` **siguen `NOT NULL`**. No hay columna `destination_id`, ni columnas nulables, ni check de exclusividad.
+
+La diferencia entre vivienda y lugar común es una propiedad del nodo, no del pase. El pase guarda el nodo; la lectura deriva `kind` subiendo hasta el nivel 1:
 
 ```ts
-communityDestinations = pgTable('community_destinations', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  communityId: uuid('community_id')
-    .notNull()
-    .references(() => communities.id, { onDelete: 'cascade' }),
-  name: varchar('name', { length: 120 }).notNull(),
-  kind: destinationKindEnum('kind').notNull().default('common_area'),
-  description: varchar('description', { length: 240 }),
-  status: destinationStatusEnum('status').notNull().default('active'),
-  createdAt,
-  updatedAt,
-});
+function destinationKind(level1SectionType: string | null) {
+  return level1SectionType === 'common_area' ? 'common_area' : 'home';
+}
 ```
 
-- `kind`: `common_area` (salón comunal, zona BBQ), `sport` (cancha, gimnasio), `recreation` (piscina, club house), `other`.
-- Índice único `(community_id, lower(name))` para no duplicar "Piscina" con "piscina".
-- Archivar, no borrar: un pase histórico debe seguir mostrando su destino. `DELETE` solo si nunca se usó.
+Es un `LEFT JOIN` de a un padre por nivel, con un máximo de tres niveles. El costo es despreciable y la integridad referencial queda garantizada por la FK existente.
 
-### 4. El pase apunta a un destino, y el destino es excluyente
+### 5. La validación de hoja se relaja solo para lugares comunes
 
-`access_passes` gana `destination_id` nullable y `location_unit_id` pasa a nullable. Regla:
+Hoy `pass.service` rechaza cualquier destino que no sea hoja. La regla nueva:
 
-```sql
-CHECK (
-  (location_unit_id IS NOT NULL AND destination_id IS NULL)
-  OR (location_unit_id IS NULL AND destination_id IS NOT NULL)
-);
-```
+- **Vivienda**: el nodo debe ser hoja y no pertenecer a una rama `common_area`.
+- **Lugar común**: el nodo puede ser interno. Solo se exige que esté activo y que su nivel 1 sea `common_area`.
 
-- Vivienda: se sigue enviando `locationUnitId` como hoy. `destination_id` queda `NULL`.
-- Lugar común: se envía `destinationId`. `location_unit_id` queda `NULL` y `structure_id` también, porque la estructura describe el árbol de viviendas.
+Sin esta excepción, `Piscina` en una estructura de tres niveles sería rechazada por no tener hijos.
 
-`structure_id` hoy es `NOT NULL`; pasa a nullable por la misma razón. `pass.service.buildLocationPath` devuelve `null` para lugares y la UI muestra "Piscina · Torre Norte".
-
-Se descarta un `destination_type` textual en el pase: dos columnas nullable con un CHECK expresan lo mismo con integridad referencial.
-
-### 5. El residente puede autorizar a su vivienda y a cualquier lugar activo de su comunidad
+### 6. El residente autoriza su vivienda o cualquier lugar común activo
 
 Alcance del destino:
 
 - **Vivienda**: unidades hoja donde el usuario tenga un `location_residents` activo. Si no tiene ninguna fila ahí, se acepta `memberships.locationUnitId` como fallback, que es lo que hoy usa `pass.service`.
-- **Lugar común**: cualquier `community_destinations` con `status = 'active'` de la comunidad de la membresía activa.
-- Un residente **no** puede autorizar a la vivienda de otro. La validación se hace en el servicio, no solo en el formulario.
+- **Lugar común**: cualquier nodo activo dentro de una rama `common_area` de la comunidad de la membresía activa.
+- Un residente **no** puede autorizar la vivienda de otro. La validación se hace en el servicio, no solo en el formulario.
 
-El selector de destino en el formulario muestra primero "Mi vivienda" con la ruta (`Torre Norte · Torre 1 · Piso 3 · Apartamento 302`) y debajo los lugares agrupados por `kind`.
+El selector muestra primero "Mi vivienda" con la ruta (`Torre Norte › Torre 1 › Piso 3 › Apartamento 302`) y debajo "Zonas comunes" con la ruta de cada lugar.
 
-### 6. Historial primero, con acciones por fila
+### 7. El tipo de sección se elige al crear el nivel 1
+
+El alta de nivel 1 en `Unidades` hoy envía `sectionType: 'other'` con la etiqueta del nivel. Pasa a mostrar un select con los tipos de `sectionTypeEnum` más `Zona común`.
+
+Valor por defecto: el tipo que corresponda al nombre del nivel cuando exista (`Torre` → `tower`, `Piso` → `floor`, `Casa` → `house`, `Bloque` → `block`, `Lote` → `lot`), y `other` cuando no.
+
+`common_area` se agrega al enum con una migración de una línea. Se descarta reutilizar `zone`, que ya significa otra cosa (zonas de una urbanización) y volvería ambiguo el filtro.
+
+### 8. Historial primero, con acciones por fila
 
 `/resident/authorizations` es la vista principal y la que abre el menú. Columnas: Visitante, Destino, Vigencia, Estado, Acciones.
 
@@ -120,7 +133,7 @@ El selector de destino en el formulario muestra primero "Mi vivienda" con la rut
 - Revocar pide confirmación y explica que el QR deja de servir.
 - El QR se muestra en un diálogo que refresca el token antes de los 24 s, igual que el resto del sistema.
 
-### 7. Carga masiva: CSV pegado o subido, un destino y una ventana
+### 9. Carga masiva: CSV pegado o subido, un destino y una ventana
 
 Formato mínimo, con encabezados obligatorios:
 
@@ -137,28 +150,30 @@ Luis,Gómez,10203041,ABC123
 - **Éxito parcial**: se crean las filas válidas y se informa cuántas se crearon y cuántas se rechazaron. Se descarta el todo-o-nada porque en un evento real conviene que entren 48 de 50 y reintentar las 2.
 - Cada pase creado lleva `batch_id` (uuid del lote) y `batch_label` (`Cumpleaños de Ana`, opcional, máximo 80 caracteres). El historial muestra el lote como etiqueta y permite filtrar por él.
 
-### 8. Los duplicados dentro del lote se detectan en memoria
+`batch_id` y `batch_label` son las únicas columnas nuevas en `access_passes`.
+
+### 10. Los duplicados dentro del lote se detectan en memoria
 
 El índice único de `access_passes` no cubre "mismo documento, mismo destino, misma ventana", y agregarlo rompería autorizaciones legítimas repetidas en el tiempo. La duplicación se valida en el archivo antes de insertar, y la inserción corre en una transacción por lote para que un error de base no deje la mitad creada sin reporte.
 
-### 9. El admin administra lugares desde el detalle de la comunidad
+### 11. No hay menú ni bloque nuevo para lugares comunes
 
-No se agrega un menú "Lugares". El detalle expandido de Comunidades gana un bloque "Lugares autorizables" con la lista, un botón `Agregar lugar` y acciones `Editar {nombre}` / `Archivar {nombre}` / `Restaurar {nombre}` / `Eliminar {nombre}`.
+El admin los gestiona desde `Unidades`, que ya es la pantalla del árbol. Un bloque en el detalle de la comunidad duplicaría la misma operación con otra UX y otra caché. El detalle de la comunidad solo muestra el resumen de estructura, que ya incluye la rama.
 
-Permisos: `org_admin` y `community_admin` de esa comunidad. El platform admin puede leer y editar por su bypass existente, pero la UI de plataforma no gana un tab nuevo.
-
-### 10. El feature flag se respeta en la UI
+### 12. El feature flag se respeta en la UI
 
 `config.features.dynamicQrEnabled` ya bloquea `/api/passes` con 404. Si está apagado, `/resident` muestra "Las autorizaciones no están habilitadas en esta comunidad" en vez de un error de carga. No se agrega un flag nuevo.
 
-### 11. Los datos del historial se leen de una sola llamada
+### 13. Los datos del historial se leen de una sola llamada
 
-`GET /api/passes` ya devuelve la lista con alcance por membresía. Se extiende para incluir `destination: { id, name, kind } | null`, `locationPath`, `batchId` y `batchLabel`, y para aceptar `search`, `status`, `destinationId` y `batchId`. El historial no hace N llamadas por fila.
+`GET /api/passes` ya devuelve la lista con alcance por membresía. Se extiende para incluir `destination: { id, name, path, kind }`, `batchId` y `batchLabel`, y para aceptar `search`, `status`, `destinationUnitId` y `batchId`. El historial no hace N llamadas por fila.
 
 ## Risks
 
-- **Migración con columnas nulables**: `structure_id` y `location_unit_id` dejan de ser `NOT NULL`. Hay que verificar que `buildLocationPath`, el escaneo y la bitácora toleren `null` antes de aplicar la migración; hoy asumen una unidad.
+- **Validación de hoja relajada**: es el cambio con más superficie. `pass.service` hoy asume hoja en varios puntos; hay que centralizar la regla y cubrirla con tests de ambos tipos de destino.
+- **Clasificación por ancestro**: si una rama común se mueve bajo una torre, el nodo cambia de tipo. El movimiento de nodos ya existe; el design acepta el cambio de clasificación y no lo bloquea.
+- **Borrado de una rama en uso**: la FK de `access_passes` restringe el borrado, pero la API debe traducirlo a 409 con mensaje claro en vez de un 500.
 - **Alcance por `location_residents`**: si la base demo tiene residentes sin fila en esa tabla, el fallback a `memberships.locationUnitId` evita romper el flujo, pero deja dos fuentes de verdad. Se documenta y se prioriza `location_residents`.
 - **Carga masiva y rate limit**: 200 pases son 200 inserciones en una transacción, no 200 requests. Se mantiene un solo POST.
 - **Duplicados entre lotes**: dos lotes simultáneos con el mismo documento y destino pueden crear dos pases activos. Se acepta en esta fase; el guardia ve ambos y el residente puede revocar.
-- **Reutilización del QR público**: el pase de un lugar común usa el mismo token rotativo y el mismo binding de dispositivo. El guardia no necesita saber si el destino es vivienda o piscina, pero la bitácora sí debe guardar el destino para que el reporte tenga sentido.
+- **Reutilización del QR público**: un pase a un lugar común usa el mismo token rotativo y el mismo binding de dispositivo. El guardia no necesita saber si el destino es vivienda o piscina, pero la bitácora sí debe guardar el destino para que el reporte tenga sentido.

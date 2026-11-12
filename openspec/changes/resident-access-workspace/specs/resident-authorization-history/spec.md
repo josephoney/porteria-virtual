@@ -9,7 +9,8 @@ The resident SHALL have a history of the authorizations they created.
 - **WHEN** the resident opens `/resident/authorizations`
 - **THEN** the table shows `Visitante`, `Destino`, `Vigencia`, `Estado`, and `Acciones`
 - **THEN** each visitor cell shows first and last name
-- **THEN** each destination cell shows the common area name or the unit path
+- **THEN** each destination cell shows the full path from the level-1 section to the node
+- **AND** common areas are visually distinguished from residences
 - **THEN** each validity cell shows the start and end date and time
 
 #### Scenario: Default order and pagination
@@ -137,7 +138,7 @@ The pass list endpoint SHALL support the history needs without per-row requests.
 
 #### Scenario: Query parameters
 
-- **WHEN** `GET /api/passes` is called with `search`, `status`, `destinationId`, or `batchId`
+- **WHEN** `GET /api/passes` is called with `search`, `status`, `destinationUnitId`, or `batchId`
 - **THEN** the API applies them on the server
 - **THEN** the response includes the pagination metadata
 
