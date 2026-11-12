@@ -118,20 +118,9 @@ export default function GuardScanScreen() {
     }, [load]),
   );
 
-  if (!session) {
-    return <Redirect href="/" />;
-  }
-  if (modeForRole(session.activeMembership.role) !== 'guard') {
-    return <Redirect href={homeForRole(session.activeMembership.role)} />;
-  }
-
-  const communityId = session.activeMembership.communityId;
-  const defaultAccessPoint = accessPoints.find(
-    (point) => point.id === session.activeMembership.defaultAccessPointId,
-  );
-  const activeShift = current?.shift ?? null;
-  const currentAccessPoint = current?.accessPoint ?? null;
-
+  // Every hook runs before the early returns below. Otherwise the first render
+  // (session still loading) skips this callback and React fails with
+  // "Rendered fewer hooks than expected" once the guard session arrives.
   const refresh = useCallback(async () => {
     try {
       const [shift, shifts] = await Promise.all([
@@ -145,6 +134,20 @@ export default function GuardScanScreen() {
       setError(errorMessage(refreshError));
     }
   }, [request]);
+
+  if (!session) {
+    return <Redirect href="/" />;
+  }
+  if (modeForRole(session.activeMembership.role) !== 'guard') {
+    return <Redirect href={homeForRole(session.activeMembership.role)} />;
+  }
+
+  const communityId = session.activeMembership.communityId;
+  const defaultAccessPoint = accessPoints.find(
+    (point) => point.id === session.activeMembership.defaultAccessPointId,
+  );
+  const activeShift = current?.shift ?? null;
+  const currentAccessPoint = current?.accessPoint ?? null;
 
   const onStart = async (accessPointId?: string) => {
     setBusy(true);
