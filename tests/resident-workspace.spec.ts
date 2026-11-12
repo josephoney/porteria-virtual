@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, DEMO_USERS, loginAs } from './helpers/auth';
+import { DEMO_PASSWORD, DEMO_USERS, loginAs, logoutFromUserMenu } from './helpers/auth';
 
 const API_URL = 'http://localhost:3000';
 
@@ -669,6 +669,75 @@ test.describe('resident bulk authorizations', () => {
       await expect(page.getByText(/2 autorizaciones/)).toBeVisible();
     } finally {
       await revokePasses(request, lastName);
+    }
+  });
+});
+
+/** Removes a node created through the UI so the demo tree stays clean. */
+async function deleteNodeByName(request: APIRequestContext, name: string) {
+  const token = await adminToken(request);
+  const headers = { authorization: `Bearer ${token}` };
+
+  const communitiesResponse = await request.get(`${API_URL}/api/communities`, { headers });
+  const communities = unwrap(
+    (await communitiesResponse.json()) as Array<{ id: string; name: string }>,
+  );
+  const community = communities.find((item) => item.name === 'Torre Norte');
+  if (!community) return;
+
+  const nodesResponse = await request.get(
+    `${API_URL}/api/location-units?communityId=${community.id}`,
+    { headers },
+  );
+  const nodes = unwrap((await nodesResponse.json()) as Array<{ id: string; name: string }>);
+  const node = nodes.find((item) => item.name === name);
+  if (!node) return;
+
+  await request.delete(`${API_URL}/api/location-units/${node.id}`, { headers });
+}
+
+test.describe('common area branches', () => {
+  test('a common area created from Unidades is offered to the resident', async ({
+    page,
+    request,
+  }) => {
+    const name = `Zona QA ${Date.now()}`;
+
+    try {
+      await loginAs(page, DEMO_USERS.orgAdmin);
+      await expect(page).toHaveURL(/\/admin$/);
+      await page.goto('/admin/units');
+      await expect(page.getByRole('heading', { level: 1, name: 'Unidades' })).toBeVisible();
+
+      // Level one is always visible, so its add action is the only one on screen.
+      await page.getByRole('button', { name: /^Agregar torre$/i }).click();
+
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByRole('heading', { name: /Agregar torre/i })).toBeVisible();
+
+      await page.locator('#unit-node-name').fill(name);
+      await page.locator('#unit-node-section-type').click();
+      await page.getByRole('option', { name: 'Zona común' }).click();
+      await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByRole('cell').filter({ hasText: name })).toBeVisible();
+
+      await logoutFromUserMenu(page, DEMO_USERS.orgAdmin);
+      await loginAs(page, DEMO_USERS.resident);
+      await expect(page).toHaveURL(/\/resident$/);
+
+      await page.goto('/resident/authorizations/new');
+      await page.locator('#resident-destination').click();
+
+      // The branch is grouped under common areas, not under the resident home.
+      // Scope to the listbox: Radix also renders a hidden native select whose
+      // <option>s would match a plain text assertion.
+      const listbox = page.getByRole('listbox');
+      await expect(listbox).toContainText('Zonas comunes');
+      await expect(listbox).toContainText(name);
+    } finally {
+      await deleteNodeByName(request, name);
     }
   });
 });

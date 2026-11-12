@@ -76,12 +76,12 @@
 
 ## 9. Verificación
 
-- [ ] 9.1 Correr `tsc --noEmit` en dashboard y API.
-- [ ] 9.2 Correr la suite de integración de la API con los casos de destino común interno, vivienda de otro residente y lote.
-- [ ] 9.3 Crear `tests/resident-access.spec.ts` con ingreso del residente, alta de autorización, destino de lugar común, historial y revocación.
-- [ ] 9.4 Agregar al spec el alta de una rama `Zona común` desde `Unidades` y su aparición en el selector del residente.
-- [ ] 9.5 Agregar el caso de carga masiva con archivo válido y con filas inválidas.
-- [ ] 9.6 Ajustar los specs que hoy esperan `/app-required` para residentes.
-- [ ] 9.7 Correr Playwright completo.
-- [ ] 9.8 Aplicar Prettier y validar el change con `openspec validate resident-access-workspace --strict`.
-- [ ] 9.9 Verificar que el dashboard no rompa el canal de la app: un pase creado por API con el mismo usuario sigue visible en el historial y el ingreso web no revoca enlaces ni sesiones.
+- [x] 9.1 Correr `tsc --noEmit` en dashboard y API. Ambos sin errores.
+- [x] 9.2 Correr la suite de integración de la API con los casos de destino común interno, vivienda de otro residente y lote. 118/118 en 9 suites.
+- [x] 9.3 Crear `tests/resident-access.spec.ts` con ingreso del residente, alta de autorización, destino de lugar común, historial y revocación. Se cubrió en `tests/resident-workspace.spec.ts` en vez de un archivo nuevo: ya tiene ingreso, alta con destino común, historial, revocación y carga masiva, y duplicarlo solo agregaría logins por corrida.
+- [x] 9.4 Agregar al spec el alta de una rama `Zona común` desde `Unidades` y su aparición en el selector del residente. Cubierto con el test que crea la rama desde `/admin/units` con tipo «Zona común» y la busca en el listbox del residente.
+- [x] 9.5 Agregar el caso de carga masiva con archivo válido y con filas inválidas. Cubierto con destino faltante, columna faltante, tope de 200 filas, invalidación de la vista previa y el flujo con 2 válidas y 1 documento repetido.
+- [x] 9.6 Ajustar los specs que hoy esperan `/app-required` para residentes. `auth.spec.ts` y `polish-dashboard.spec.ts` ahora esperan `/resident`.
+- [x] 9.7 Correr Playwright completo. 85/85 en 1.6 min.
+- [x] 9.8 Aplicar Prettier y validar el change con `openspec validate resident-access-workspace --strict`. Prettier sin cambios y el change válido.
+- [x] 9.9 Verificar que el dashboard no rompa el canal de la app: un pase creado por API con el mismo usuario sigue visible en el historial y el ingreso web no revoca enlaces ni sesiones. Los tests del historial crean los pases por API y después los ven y operan desde la web, y el enlace que devuelve la API es el mismo que se copia desde el historial.
