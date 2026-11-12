@@ -20,8 +20,7 @@ import { FormDialog } from '../components/layout/FormDialog';
 import { COUNTRIES, DEFAULT_COUNTRY } from '../lib/countries';
 import { ListToolbar } from '../components/layout/ListToolbar';
 import { StructureTreeDialog } from '../components/layout/StructureTreeDialog';
-import { StructureForm } from '../components/layout/StructureForm';
-import { SECTION_TYPE_LABELS, sectionTypeLabel } from '../lib/section-types';
+import { UnitsWorkspace } from '../components/admin/UnitsWorkspace';
 import { Skeleton } from '../components/ui/skeleton';
 import { DetailField, DetailGrid } from '../components/ui/detail-field';
 import { expandableRowProps, useExpandedRow } from '../lib/use-expanded-row';
@@ -161,8 +160,6 @@ const ROLES = [
   'staff',
 ];
 
-const UNIT_TYPES = ['apartment', 'house', 'office', 'parking', 'storage'];
-
 const PAGE_META: Record<string, { title: string; description: string }> = {
   dashboard: {
     title: 'Resumen',
@@ -176,13 +173,9 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
     title: 'Comunidades',
     description: 'Comunidades agrupadas por organización.',
   },
-  sections: {
-    title: 'Secciones',
-    description: 'Agrupadores de ubicación de cada comunidad.',
-  },
   units: {
     title: 'Unidades',
-    description: 'Unidades y espacios administrados por comunidad.',
+    description: 'Estructura, secciones y unidades de cada comunidad.',
   },
   invitations: {
     title: 'Invitaciones',
@@ -219,9 +212,6 @@ export function PlatformPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [formDialog, setFormDialog] = useState<string | null>(null);
-  const [sectionSearch, setSectionSearch] = useState('');
-  const [sectionTypeFilter, setSectionTypeFilter] = useState('all');
-  const [sectionCommunityFilter, setSectionCommunityFilter] = useState('all');
   const [organizationSearch, setOrganizationSearch] = useState('');
   const organizationRow = useExpandedRow();
   const [editingOrganizationId, setEditingOrganizationId] = useState<string | null>(null);
@@ -231,12 +221,8 @@ export function PlatformPage() {
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [communitySearch, setCommunitySearch] = useState('');
   const [communityOrganizationFilter, setCommunityOrganizationFilter] = useState('all');
-  const [unitSearch, setUnitSearch] = useState('');
-  const [unitCommunityFilter, setUnitCommunityFilter] = useState('all');
-  const [unitSectionFilter, setUnitSectionFilter] = useState('all');
   const [userSearch, setUserSearch] = useState('');
   const [structureTarget, setStructureTarget] = useState<{ id: string; name: string } | null>(null);
-  const [structureFormOpen, setStructureFormOpen] = useState(false);
 
   const [orgForm, setOrgForm] = useState({
     name: '',
@@ -257,20 +243,6 @@ export function PlatformPage() {
     address: '',
     timezone: 'America/Bogota',
     slug: '',
-  });
-  const [buildingForm, setBuildingForm] = useState({
-    communityId: '',
-    name: '',
-    code: '',
-    sectionType: 'building',
-    sectionTypeLabel: '',
-  });
-  const [unitForm, setUnitForm] = useState({
-    communityId: '',
-    buildingId: '',
-    code: '',
-    floor: '',
-    type: 'apartment',
   });
   const [inviteForm, setInviteForm] = useState({
     email: '',
@@ -315,21 +287,6 @@ export function PlatformPage() {
     loadAll();
   }, [loadAll]);
 
-  const filteredBuildings = useMemo(() => {
-    const term = sectionSearch.toLowerCase();
-    return buildings.filter((building) => {
-      const matchesSearch = !term
-        ? true
-        : `${building.name} ${building.code ?? ''} ${building.communityName}`
-            .toLowerCase()
-            .includes(term);
-      const matchesType = sectionTypeFilter === 'all' || building.sectionType === sectionTypeFilter;
-      const matchesCommunity =
-        sectionCommunityFilter === 'all' || building.communityId === sectionCommunityFilter;
-      return matchesSearch && matchesType && matchesCommunity;
-    });
-  }, [buildings, sectionSearch, sectionTypeFilter, sectionCommunityFilter]);
-
   const filteredPlatformUsers = useMemo(() => {
     const term = userSearch.trim().toLowerCase();
     if (!term) return platformUsers;
@@ -370,29 +327,6 @@ export function PlatformPage() {
       return matchesSearch && matchesOrganization;
     });
   }, [communities, communitySearch, communityOrganizationFilter]);
-
-  const unitSectionOptions = useMemo(
-    () =>
-      buildings.filter(
-        (building) => unitCommunityFilter === 'all' || building.communityId === unitCommunityFilter,
-      ),
-    [buildings, unitCommunityFilter],
-  );
-
-  const filteredUnits = useMemo(() => {
-    const term = unitSearch.toLowerCase();
-    return units.filter((unit) => {
-      const matchesSearch = !term
-        ? true
-        : `${unit.code ?? ''} ${unit.sectionName} ${unit.communityName}`
-            .toLowerCase()
-            .includes(term);
-      const matchesCommunity =
-        unitCommunityFilter === 'all' || unit.communityId === unitCommunityFilter;
-      const matchesSection = unitSectionFilter === 'all' || unit.sectionId === unitSectionFilter;
-      return matchesSearch && matchesCommunity && matchesSection;
-    });
-  }, [units, unitSearch, unitCommunityFilter, unitSectionFilter]);
 
   async function toggleOrganizationOverview(id: string) {
     if (organizationRow.isExpanded(id)) {
@@ -560,57 +494,6 @@ export function PlatformPage() {
     }
   }
 
-  async function createBuilding(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-    try {
-      await post('/api/sections', {
-        communityId: buildingForm.communityId,
-        name: buildingForm.name,
-        code: buildingForm.code || null,
-        sectionType: buildingForm.sectionType,
-        sectionTypeLabel:
-          buildingForm.sectionType === 'other' ? buildingForm.sectionTypeLabel : null,
-      });
-      setBuildingForm({
-        communityId: buildingForm.communityId,
-        name: '',
-        code: '',
-        sectionType: buildingForm.sectionType,
-        sectionTypeLabel: '',
-      });
-      loadAll();
-      setFormDialog(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error creando sección');
-    }
-  }
-
-  async function createUnit(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-    try {
-      await post('/api/units', {
-        communityId: unitForm.communityId,
-        sectionId: unitForm.buildingId,
-        code: unitForm.code,
-        floor: unitForm.floor ? Number(unitForm.floor) : null,
-        type: unitForm.type,
-      });
-      setUnitForm({
-        communityId: unitForm.communityId,
-        buildingId: unitForm.buildingId,
-        code: '',
-        floor: '',
-        type: 'apartment',
-      });
-      loadAll();
-      setFormDialog(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error creando unidad');
-    }
-  }
-
   async function createInvitation(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -692,7 +575,7 @@ export function PlatformPage() {
                     description: 'En todas las organizaciones',
                   },
                   {
-                    label: 'Secciones',
+                    label: 'Agrupadores',
                     value: buildings.length,
                     description: 'Agrupadores de ubicación',
                   },
@@ -1155,316 +1038,14 @@ export function PlatformPage() {
               </Table>
             </TabsContent>
 
-            <TabsContent value="sections" className="space-y-4">
-              <FormDialog
-                open={formDialog === 'sections'}
-                onOpenChange={(open) => setFormDialog(open ? 'sections' : null)}
-                title="Nueva sección"
-                description="Creá una sección dentro de una comunidad."
-                triggerLabel="Crear sección"
-                hidden
-              >
-                <form onSubmit={createBuilding} className="flex flex-wrap items-end gap-2">
-                  <div className="space-y-1">
-                    <Label>Comunidad</Label>
-                    <select
-                      className="h-9 rounded border border-border bg-card px-2 text-sm"
-                      value={buildingForm.communityId}
-                      onChange={(e) =>
-                        setBuildingForm({ ...buildingForm, communityId: e.target.value })
-                      }
-                      required
-                    >
-                      <option value="">Elegir…</option>
-                      {communities.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Nombre</Label>
-                    <Input
-                      value={buildingForm.name}
-                      onChange={(e) => setBuildingForm({ ...buildingForm, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Código</Label>
-                    <Input
-                      value={buildingForm.code}
-                      onChange={(e) => setBuildingForm({ ...buildingForm, code: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Tipo</Label>
-                    <select
-                      className="h-9 rounded border border-border bg-card px-2 text-sm"
-                      value={buildingForm.sectionType}
-                      onChange={(e) =>
-                        setBuildingForm({ ...buildingForm, sectionType: e.target.value })
-                      }
-                    >
-                      {Object.entries(SECTION_TYPE_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {buildingForm.sectionType === 'other' && (
-                    <div className="space-y-1">
-                      <Label>Tipo personalizado</Label>
-                      <Input
-                        value={buildingForm.sectionTypeLabel}
-                        onChange={(e) =>
-                          setBuildingForm({ ...buildingForm, sectionTypeLabel: e.target.value })
-                        }
-                        required
-                      />
-                    </div>
-                  )}
-                  <Button type="submit">Crear sección</Button>
-                </form>
-              </FormDialog>
-              <FormDialog
-                open={structureFormOpen}
-                onOpenChange={setStructureFormOpen}
-                title="Nueva estructura"
-                description="Definí los niveles de la jerarquía de esta comunidad."
-                triggerLabel="Nueva estructura"
-                hidden
-              >
-                <StructureForm
-                  communities={communities}
-                  onSaved={() => setStructureFormOpen(false)}
-                />
-              </FormDialog>
-              <ListToolbar
-                search={sectionSearch}
-                onSearchChange={setSectionSearch}
-                placeholder="Buscar sección…"
-              >
-                <select
-                  className="h-9 rounded border border-border bg-card px-2 text-sm"
-                  value={sectionCommunityFilter}
-                  onChange={(event) => setSectionCommunityFilter(event.target.value)}
-                  aria-label="Filtrar por comunidad"
-                >
-                  <option value="all">Todas las comunidades</option>
-                  {communities.map((community) => (
-                    <option key={community.id} value={community.id}>
-                      {community.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="h-9 rounded border border-border bg-card px-2 text-sm"
-                  value={sectionTypeFilter}
-                  onChange={(event) => setSectionTypeFilter(event.target.value)}
-                  aria-label="Filtrar por tipo de sección"
-                >
-                  <option value="all">Todos los tipos</option>
-                  {Object.entries(SECTION_TYPE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </ListToolbar>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Comunidad</TableHead>
-                    <TableHead>Niveles</TableHead>
-                    <TableHead>Unidades</TableHead>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredBuildings.length === 0 && (
-                    <EmptyRow colSpan={8}>No hay secciones para mostrar</EmptyRow>
-                  )}
-                  {filteredBuildings.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell>{b.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {sectionTypeLabel(b.sectionType, b.sectionTypeLabel)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{b.communityName}</TableCell>
-                      <TableCell>{b.levelCount}</TableCell>
-                      <TableCell>{b.unitCount ?? 0}</TableCell>
-                      <TableCell className="font-mono text-xs">{b.code ?? '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{b.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setStructureTarget({ id: b.communityId, name: b.communityName })
-                          }
-                        >
-                          Ver estructura
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TabsContent>
-
             <TabsContent value="units" className="space-y-4">
-              <FormDialog
-                open={formDialog === 'units'}
-                onOpenChange={(open) => setFormDialog(open ? 'units' : null)}
-                title="Nueva unidad"
-                description="Creá una unidad dentro de una sección."
-                triggerLabel="Crear unidad"
-                hidden
-              >
-                <form onSubmit={createUnit} className="flex flex-wrap items-end gap-2">
-                  <div className="space-y-1">
-                    <Label>Comunidad</Label>
-                    <select
-                      className="h-9 rounded border border-border bg-card px-2 text-sm"
-                      value={unitForm.communityId}
-                      onChange={(e) =>
-                        setUnitForm({ ...unitForm, communityId: e.target.value, buildingId: '' })
-                      }
-                      required
-                    >
-                      <option value="">Elegir…</option>
-                      {communities.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Sección</Label>
-                    <select
-                      className="h-9 rounded border border-border bg-card px-2 text-sm"
-                      value={unitForm.buildingId}
-                      onChange={(e) => setUnitForm({ ...unitForm, buildingId: e.target.value })}
-                    >
-                      <option value="">Sin sección</option>
-                      {buildings
-                        .filter((b) => b.communityId === unitForm.communityId)
-                        .map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Código</Label>
-                    <Input
-                      value={unitForm.code}
-                      onChange={(e) => setUnitForm({ ...unitForm, code: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Piso</Label>
-                    <Input
-                      type="number"
-                      value={unitForm.floor}
-                      onChange={(e) => setUnitForm({ ...unitForm, floor: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Tipo</Label>
-                    <select
-                      className="h-9 rounded border border-border bg-card px-2 text-sm"
-                      value={unitForm.type}
-                      onChange={(e) => setUnitForm({ ...unitForm, type: e.target.value })}
-                    >
-                      {UNIT_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <Button type="submit">Crear unidad</Button>
-                </form>
-              </FormDialog>
-              <ListToolbar
-                search={unitSearch}
-                onSearchChange={setUnitSearch}
-                placeholder="Buscar unidad…"
-              >
-                <select
-                  className="h-9 rounded border border-border bg-card px-2 text-sm"
-                  value={unitCommunityFilter}
-                  onChange={(event) => {
-                    setUnitCommunityFilter(event.target.value);
-                    setUnitSectionFilter('all');
-                  }}
-                  aria-label="Filtrar por comunidad"
-                >
-                  <option value="all">Todas las comunidades</option>
-                  {communities.map((community) => (
-                    <option key={community.id} value={community.id}>
-                      {community.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="h-9 rounded border border-border bg-card px-2 text-sm"
-                  value={unitSectionFilter}
-                  onChange={(event) => setUnitSectionFilter(event.target.value)}
-                  aria-label="Filtrar por sección"
-                >
-                  <option value="all">Todas las secciones</option>
-                  {unitSectionOptions.map((section) => (
-                    <option key={section.id} value={section.id}>
-                      {section.name}
-                    </option>
-                  ))}
-                </select>
-              </ListToolbar>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Sección</TableHead>
-                    <TableHead>Comunidad</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Piso</TableHead>
-                    <TableHead>Estado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUnits.length === 0 && (
-                    <EmptyRow colSpan={6}>No hay unidades para mostrar</EmptyRow>
-                  )}
-                  {filteredUnits.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-mono text-xs">{u.code}</TableCell>
-                      <TableCell>{u.path || u.sectionName || 'Sin sección'}</TableCell>
-                      <TableCell>{u.communityName}</TableCell>
-                      <TableCell>{u.type}</TableCell>
-                      <TableCell>{u.floor ?? '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{u.status}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <UnitsWorkspace
+                communities={communities.map((community) => ({
+                  id: community.id,
+                  name: community.name,
+                }))}
+                onStructureChanged={() => void loadAll()}
+              />
             </TabsContent>
 
             <TabsContent value="users" className="space-y-4">

@@ -127,7 +127,10 @@ test.describe('Community detail', () => {
     await page.getByRole('cell', { name: COMMUNITY_NAME, exact: true }).first().click();
     await expect(page.locator('dl').first()).toBeVisible();
 
-    await page.getByRole('button', { name: 'Editar', exact: true }).first().click();
+    await page
+      .getByRole('button', { name: `Editar ${COMMUNITY_NAME}`, exact: true })
+      .first()
+      .click();
 
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: 'Editar comunidad' })).toBeVisible();
@@ -171,7 +174,12 @@ test.describe('Community detail', () => {
     await loginAndWait(page, DEMO_USERS.orgAdmin, /\/admin$/);
     await page.goto('/admin/communities');
 
-    await page.getByRole('button', { name: 'Ver estructura', exact: true }).first().click();
+    // The community row also has role="button" and its accessible name includes
+    // this label, so match the inner icon button exactly.
+    await page
+      .getByRole('button', { name: `Ver estructura de ${COMMUNITY_NAME}`, exact: true })
+      .first()
+      .click();
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();

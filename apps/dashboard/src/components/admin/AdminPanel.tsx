@@ -1,6 +1,12 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { RiArrowDownSLine, RiArrowRightSLine } from '@remixicon/react';
+import {
+  RiArrowDownSLine,
+  RiArrowRightSLine,
+  RiNodeTree,
+  RiPencilLine,
+  RiUserAddLine,
+} from '@remixicon/react';
 import { assetObjectUrl, get, patch, post, upload } from '../../lib/apiClient';
 import { PageHeader } from '../layout/PageHeader';
 import { ListToolbar } from '../layout/ListToolbar';
@@ -10,17 +16,16 @@ import { Badge } from '../ui/badge';
 import { SectionCards } from '../layout/SectionCards';
 import { ChartAreaInteractive } from '../layout/ChartAreaInteractive';
 import { StructureTreeDialog } from '../layout/StructureTreeDialog';
-import { StructureForm } from '../layout/StructureForm';
 import { FormDialog } from '../layout/FormDialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
-import { SECTION_TYPE_LABELS, sectionTypeLabel } from '../../lib/section-types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { UsersTable } from './UsersTable';
 import { CallHistoryTable } from './CallHistoryTable';
+import { UnitsWorkspace } from './UnitsWorkspace';
 import { DetailField, DetailGrid } from '../ui/detail-field';
 import { LogoUpload } from '../ui/logo-upload';
 import { expandableRowProps, useExpandedRow } from '../../lib/use-expanded-row';
@@ -228,6 +233,32 @@ const emptyCommunityForm = {
   slug: '',
 };
 
+function mergeCommunity(
+  payload: {
+    name: string;
+    address: string;
+    phone: string | null;
+    type: string;
+    typeLabel: string | null;
+    welcomeMessage: string | null;
+  },
+  saved: Partial<Community> & { id?: string },
+): Community | null {
+  if (!saved.id) return null;
+  return {
+    id: saved.id,
+    name: payload.name,
+    address: payload.address,
+    phone: saved.phone ?? payload.phone ?? null,
+    type: saved.type ?? payload.type,
+    typeLabel: saved.typeLabel ?? (payload.typeLabel || null),
+    welcomeMessage: saved.welcomeMessage ?? (payload.welcomeMessage || null),
+    logoAssetId: saved.logoAssetId ?? null,
+    administratorEmail: saved.administratorEmail ?? null,
+    status: saved.status ?? 'active',
+  };
+}
+
 const sectionMeta: Record<string, { title: string; description: string }> = {
   dashboard: {
     title: 'Resumen',
@@ -237,13 +268,9 @@ const sectionMeta: Record<string, { title: string; description: string }> = {
     title: 'Comunidades',
     description: 'Comunidades dentro de tu alcance.',
   },
-  sections: {
-    title: 'Secciones',
-    description: 'Secciones y agrupadores de ubicación.',
-  },
   units: {
     title: 'Unidades',
-    description: 'Unidades y espacios administrados.',
+    description: 'Estructura, secciones y unidades de cada comunidad.',
   },
   invitations: {
     title: 'Invitaciones',
@@ -275,11 +302,7 @@ export function AdminPanel() {
   const [error, setError] = useState('');
 
   const [search, setSearch] = useState('');
-  const [communityFilter, setCommunityFilter] = useState('all');
-  const [sectionFilter, setSectionFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
   const [structureTarget, setStructureTarget] = useState<{ id: string; name: string } | null>(null);
-  const [structureFormOpen, setStructureFormOpen] = useState(false);
   const [communityFormOpen, setCommunityFormOpen] = useState(false);
   const communityRow = useExpandedRow();
   const [editingCommunityId, setEditingCommunityId] = useState<string | null>(null);
@@ -296,44 +319,77 @@ export function AdminPanel() {
   const [adminInviteError, setAdminInviteError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
 
-    try {
-      const [communityResult, sectionResult, unitResult, invitationResult, userResult] =
-        await Promise.all([
-          get<Community[]>('/api/communities'),
-          get<{ data: Building[] }>('/api/sections?pageSize=100'),
-          get<{ data: UnitApi[] }>('/api/units?pageSize=100'),
-          get<Invitation[]>('/api/invitations'),
-          get<{ total: number }>('/api/users?page=1&pageSize=1'),
-        ]);
+    // Independent resources: one failed request must not blank the whole panel.
+    const [communityResult, sectionResult, unitResult, invitationResult, userResult] =
+      await Promise.allSettled([
+        get<Community[]>('/api/communities'),
+        get<{ data: Building[] }>('/api/sections?pageSize=100'),
+        get<{ data: UnitApi[] }>('/api/units?pageSize=100'),
+        get<Invitation[]>('/api/invitations'),
+        get<{ total: number }>('/api/users?page=1&pageSize=1'),
+      ]);
 
-      const communityList = communityResult.data;
-      const buildingList = sectionResult.data.data;
-      const unitList = unitResult.data.data.map((unit) => ({
-        ...unit,
-        floor: unit.metadata?.legacyFloor ?? null,
-        type: unit.metadata?.legacyType ?? 'apartment',
-      }));
-
-      setCommunities(communityList);
-      setBuildings(buildingList);
-      setUnits(unitList);
-      setInvitations(invitationResult.data);
-      setUserTotal(userResult.data.total);
-    } catch {
-      setError('No se pudo cargar la información. Reintentá en unos segundos.');
-    } finally {
-      setLoading(false);
+    if (communityResult.status === 'fulfilled') {
+      setCommunities(communityResult.value.data);
     }
-  }, []);
+
+    if (sectionResult.status === 'fulfilled') {
+      setBuildings(sectionResult.value.data.data);
+    }
+
+    if (unitResult.status === 'fulfilled') {
+      setUnits(
+        unitResult.value.data.data.map((unit) => ({
+          ...unit,
+          floor: unit.metadata?.legacyFloor ?? null,
+          type: unit.metadata?.legacyType ?? 'apartment',
+        })),
+      );
+    }
+
+    if (invitationResult.status === 'fulfilled') {
+      setInvitations(invitationResult.value.data);
+    }
+
+    if (userResult.status === 'fulfilled') {
+      setUserTotal(userResult.value.data.total);
+    }
+
+    if (
+      [communityResult, sectionResult, unitResult, invitationResult, userResult].some(
+        (result) => result.status === 'rejected',
+      )
+    ) {
+      setError('No se pudo cargar parte de la información. Reintentá en unos segundos.');
+    }
+
+    setLoading(false);
+  }, [refreshKey]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
+
+  async function loadCommunityOverview(communityId: string) {
+    setOverviewLoadingId(communityId);
+    try {
+      const result = await get<CommunityOverview>(`/api/communities/${communityId}/overview`);
+      setCommunityOverviews((current) => ({
+        ...current,
+        [communityId]: result.data,
+      }));
+    } catch {
+      setError('No se pudo cargar el detalle de la comunidad.');
+    } finally {
+      setOverviewLoadingId(null);
+    }
+  }
 
   async function toggleCommunity(community: Community) {
     if (communityRow.isExpanded(community.id)) {
@@ -343,32 +399,18 @@ export function AdminPanel() {
     communityRow.toggle(community.id);
     if (communityOverviews[community.id]) return;
 
-    setOverviewLoadingId(community.id);
-    try {
-      const result = await get<CommunityOverview>(`/api/communities/${community.id}/overview`);
-      setCommunityOverviews((current) => ({
-        ...current,
-        [community.id]: result.data,
-      }));
-    } catch {
-      setError('No se pudo cargar el detalle de la comunidad.');
-    } finally {
-      setOverviewLoadingId(null);
-    }
+    await loadCommunityOverview(community.id);
   }
 
   useEffect(() => {
     setSearch('');
-    setCommunityFilter('all');
-    setSectionFilter('all');
-    setTypeFilter('all');
     setStatusFilter('all');
     setPage(1);
   }, [section]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, communityFilter, sectionFilter, typeFilter, statusFilter]);
+  }, [search, statusFilter]);
 
   const filteredCommunities = useMemo(
     () =>
@@ -376,31 +418,6 @@ export function AdminPanel() {
         `${community.name} ${community.address}`.toLowerCase().includes(search.toLowerCase()),
       ),
     [communities, search],
-  );
-
-  const filteredSections = useMemo(
-    () =>
-      buildings.filter((building) => {
-        const matchesSearch = `${building.name} ${building.code ?? ''}`
-          .toLowerCase()
-          .includes(search.toLowerCase());
-        const matchesCommunity =
-          communityFilter === 'all' || building.communityId === communityFilter;
-        const matchesType = typeFilter === 'all' || building.sectionType === typeFilter;
-        return matchesSearch && matchesCommunity && matchesType;
-      }),
-    [buildings, search, communityFilter, typeFilter],
-  );
-
-  const filteredUnits = useMemo(
-    () =>
-      units.filter((unit) => {
-        const matchesSearch = (unit.code ?? '').toLowerCase().includes(search.toLowerCase());
-        const matchesCommunity = communityFilter === 'all' || unit.communityId === communityFilter;
-        const matchesSection = sectionFilter === 'all' || unit.sectionId === sectionFilter;
-        return matchesSearch && matchesCommunity && matchesSection;
-      }),
-    [units, search, communityFilter, sectionFilter],
   );
 
   const filteredInvitations = useMemo(
@@ -411,10 +428,6 @@ export function AdminPanel() {
         return matchesSearch && matchesStatus;
       }),
     [invitations, search, statusFilter],
-  );
-
-  const sectionOptions = buildings.filter(
-    (building) => communityFilter === 'all' || building.communityId === communityFilter,
   );
 
   async function revokeInvitation(id: string) {
@@ -537,10 +550,30 @@ export function AdminPanel() {
       ...(communityForm.slug ? { slug: communityForm.slug } : {}),
     };
     try {
-      if (editingCommunityId) {
-        await patch(`/api/communities/${editingCommunityId}`, payload);
+      if (editedCommunityId) {
+        const result = await patch<Partial<Community> & { id: string }>(
+          `/api/communities/${editedCommunityId}`,
+          payload,
+        );
+        const saved = mergeCommunity(payload, { ...result.data, id: editedCommunityId });
+        if (saved) {
+          setCommunities((current) =>
+            current.map((community) => (community.id === editedCommunityId ? saved : community)),
+          );
+        }
       } else {
-        await post('/api/organizations/me/communities', payload);
+        const result = await post<Partial<Community> & { id: string }>(
+          '/api/organizations/me/communities',
+          payload,
+        );
+        const saved = mergeCommunity(payload, result.data);
+        if (saved) {
+          // The row must show up immediately, not after the background reload.
+          setCommunities((current) => [
+            saved,
+            ...current.filter((community) => community.id !== saved.id),
+          ]);
+        }
       }
       setCommunityForm({ ...emptyCommunityForm });
       setEditingCommunityId(null);
@@ -604,8 +637,6 @@ export function AdminPanel() {
   }
 
   const communitiesPage = paginate(filteredCommunities);
-  const sectionsPage = paginate(filteredSections);
-  const unitsPage = paginate(filteredUnits);
   const invitationsPage = paginate(filteredInvitations);
 
   return (
@@ -642,9 +673,9 @@ export function AdminPanel() {
                     description: 'Dentro de tu alcance',
                   },
                   {
-                    label: 'Secciones',
+                    label: 'Agrupadores',
                     value: buildings.length,
-                    description: 'Agrupadores de ubicación',
+                    description: 'Primer nivel de las estructuras',
                   },
                   { label: 'Unidades', value: units.length, description: 'Espacios administrados' },
                   {
@@ -911,33 +942,26 @@ export function AdminPanel() {
                               <Badge variant="outline">{community.status}</Badge>
                             </TableCell>
                             <TableCell>
-                              <div className="flex flex-wrap gap-1">
+                              <div className="flex items-center gap-1">
                                 <Button
-                                  variant="outline"
-                                  size="sm"
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  title="Editar comunidad"
+                                  aria-label={`Editar ${community.name}`}
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     void openCommunityEdit(community);
                                   }}
                                 >
-                                  Editar
+                                  <RiPencilLine />
                                 </Button>
                                 <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setAdminInviteCommunity(community);
-                                    setAdminInviteEmail('');
-                                    setAdminInviteLink('');
-                                    setAdminInviteError('');
-                                  }}
-                                >
-                                  Invitar admin
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  title="Ver estructura"
+                                  aria-label={`Ver estructura de ${community.name}`}
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     setStructureTarget({
@@ -946,7 +970,23 @@ export function AdminPanel() {
                                     });
                                   }}
                                 >
-                                  Ver estructura
+                                  <RiNodeTree />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  title="Invitar administrador"
+                                  aria-label={`Invitar administrador a ${community.name}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setAdminInviteCommunity(community);
+                                    setAdminInviteEmail('');
+                                    setAdminInviteLink('');
+                                    setAdminInviteError('');
+                                  }}
+                                >
+                                  <RiUserAddLine />
                                 </Button>
                               </div>
                             </TableCell>
@@ -1049,183 +1089,14 @@ export function AdminPanel() {
             </>
           )}
 
-          {section === 'sections' && (
-            <>
-              <FormDialog
-                open={structureFormOpen}
-                onOpenChange={setStructureFormOpen}
-                title="Definir estructura"
-                description="Definí los niveles y los nombres de la jerarquía de la comunidad."
-                triggerLabel="Definir estructura"
-              >
-                <StructureForm
-                  communities={communities}
-                  onSaved={() => setStructureFormOpen(false)}
-                />
-              </FormDialog>
-              <ListToolbar search={search} onSearchChange={setSearch} placeholder="Buscar sección…">
-                <Select value={communityFilter} onValueChange={setCommunityFilter}>
-                  <SelectTrigger className="w-48" aria-label="Filtrar por comunidad">
-                    <SelectValue placeholder="Todas las comunidades" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas las comunidades</SelectItem>
-                    {communities.map((community) => (
-                      <SelectItem key={community.id} value={community.id}>
-                        {community.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger className="w-40" aria-label="Filtrar por tipo">
-                    <SelectValue placeholder="Todos los tipos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los tipos</SelectItem>
-                    {Object.entries(SECTION_TYPE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </ListToolbar>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Comunidad</TableHead>
-                      <TableHead>Niveles</TableHead>
-                      <TableHead>Unidades</TableHead>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sectionsPage.items.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
-                          No hay secciones para mostrar
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {sectionsPage.items.map((building) => (
-                      <TableRow key={building.id}>
-                        <TableCell>{building.name}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {sectionTypeLabel(building.sectionType, building.sectionTypeLabel)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{building.communityName}</TableCell>
-                        <TableCell>{building.levelCount}</TableCell>
-                        <TableCell>{building.unitCount ?? 0}</TableCell>
-                        <TableCell className="font-mono text-xs">{building.code ?? '—'}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{building.status}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setStructureTarget({
-                                id: building.communityId,
-                                name: building.communityName,
-                              })
-                            }
-                          >
-                            Ver estructura
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <Pagination
-                page={sectionsPage.currentPage}
-                totalPages={sectionsPage.totalPages}
-                onPageChange={setPage}
-              />
-            </>
-          )}
-
           {section === 'units' && (
-            <>
-              <ListToolbar search={search} onSearchChange={setSearch} placeholder="Buscar unidad…">
-                <Select value={communityFilter} onValueChange={setCommunityFilter}>
-                  <SelectTrigger className="w-48" aria-label="Filtrar por comunidad">
-                    <SelectValue placeholder="Todas las comunidades" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas las comunidades</SelectItem>
-                    {communities.map((community) => (
-                      <SelectItem key={community.id} value={community.id}>
-                        {community.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={sectionFilter} onValueChange={setSectionFilter}>
-                  <SelectTrigger className="w-44" aria-label="Filtrar por sección">
-                    <SelectValue placeholder="Todas las secciones" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas las secciones</SelectItem>
-                    {sectionOptions.map((building) => (
-                      <SelectItem key={building.id} value={building.id}>
-                        {building.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </ListToolbar>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Sección</TableHead>
-                      <TableHead>Comunidad</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Piso</TableHead>
-                      <TableHead>Estado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {unitsPage.items.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                          No hay unidades para mostrar
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {unitsPage.items.map((unit) => (
-                      <TableRow key={unit.id}>
-                        <TableCell className="font-mono">{unit.code}</TableCell>
-                        <TableCell>{unit.path || unit.sectionName}</TableCell>
-                        <TableCell>{unit.communityName}</TableCell>
-                        <TableCell>{unit.type}</TableCell>
-                        <TableCell>{unit.floor ?? '—'}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{unit.status}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <Pagination
-                page={unitsPage.currentPage}
-                totalPages={unitsPage.totalPages}
-                onPageChange={setPage}
-              />
-            </>
+            <UnitsWorkspace
+              communities={communities.map((community) => ({
+                id: community.id,
+                name: community.name,
+              }))}
+              onStructureChanged={() => setRefreshKey((value) => value + 1)}
+            />
           )}
 
           {section === 'invitations' && (
@@ -1351,7 +1222,19 @@ export function AdminPanel() {
           communityName={structureTarget.name}
           open
           onOpenChange={(open) => {
-            if (!open) setStructureTarget(null);
+            if (open) return;
+            const closedId = structureTarget.id;
+            setStructureTarget(null);
+            setCommunityOverviews((current) => {
+              const next = { ...current };
+              delete next[closedId];
+              return next;
+            });
+            // Structure changes must reach the table that opened the dialog.
+            setRefreshKey((value) => value + 1);
+            if (communityRow.isExpanded(closedId)) {
+              void loadCommunityOverview(closedId);
+            }
           }}
         />
       )}

@@ -24,7 +24,6 @@ import {
   RiFootprintLine,
   RiHistoryLine,
   RiGovernmentLine,
-  RiStackLine,
   RiDashboardLine,
   RiMailLine,
   RiGroupLine,
@@ -88,14 +87,6 @@ const items: NavItem[] = [
     group: 'admin',
   },
   {
-    to: '/platform/sections',
-    label: 'Secciones',
-    icon: RiStackLine,
-    roles: [],
-    platformOnly: true,
-    group: 'admin',
-  },
-  {
     to: '/platform/units',
     label: 'Unidades',
     icon: RiBox3Line,
@@ -141,13 +132,6 @@ const items: NavItem[] = [
     label: 'Comunidades',
     icon: RiBuilding2Line,
     roles: ['org_admin'],
-    group: 'admin',
-  },
-  {
-    to: '/admin/sections',
-    label: 'Secciones',
-    icon: RiStackLine,
-    roles: ['org_admin', 'community_admin'],
     group: 'admin',
   },
   {

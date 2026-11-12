@@ -123,14 +123,7 @@ function DashboardApp() {
               </RequirePlatformAdmin>
             }
           />
-          <Route
-            path="platform/sections"
-            element={
-              <RequirePlatformAdmin>
-                <PlatformPage />
-              </RequirePlatformAdmin>
-            }
-          />
+          <Route path="platform/sections" element={<Navigate to="/platform/units" replace />} />
           <Route
             path="platform/units"
             element={
@@ -220,14 +213,7 @@ function DashboardApp() {
               </RequireRole>
             }
           />
-          <Route
-            path="admin/sections"
-            element={
-              <RequireRole role={['org_admin', 'community_admin']}>
-                <AdminPanel />
-              </RequireRole>
-            }
-          />
+          <Route path="admin/sections" element={<Navigate to="/admin/units" replace />} />
           <Route
             path="admin/units"
             element={

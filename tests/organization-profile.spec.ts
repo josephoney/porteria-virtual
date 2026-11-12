@@ -3,6 +3,7 @@ import { DEMO_PASSWORD, DEMO_USERS, loginAs } from './helpers/auth';
 
 const API_URL = 'http://localhost:3000';
 const ORG_NAME = 'Administradora Demo';
+const RENAME_ORG = 'KMA';
 const COMMUNITY_NAME = 'Torre Norte';
 
 /** Resolves when the next PATCH to a platform organization or community finishes. */
@@ -23,31 +24,35 @@ async function platformToken(request: APIRequestContext): Promise<string> {
   return body.accessToken;
 }
 
-async function findOrganizationId(request: APIRequestContext, token: string): Promise<string> {
+async function findOrganizationId(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+): Promise<string> {
   const response = await request.get(
-    `${API_URL}/api/platform/organizations?search=Administradora&pageSize=50`,
+    `${API_URL}/api/platform/organizations?search=${encodeURIComponent(name)}&pageSize=50`,
     { headers: { authorization: `Bearer ${token}` } },
   );
   const body = (await response.json()) as { data: Array<{ id: string; name: string }> };
-  const match = body.data.find((organization) => organization.name.startsWith(ORG_NAME));
-  if (!match) throw new Error('No se encontró la organización de prueba');
+  const match = body.data.find((organization) => organization.name.startsWith(name));
+  if (!match) throw new Error(`No se encontró la organización ${name}`);
   return match.id;
 }
 
 /** Puts the demo organization back the way it was, even if the test failed. */
-async function restoreOrganization(request: APIRequestContext) {
+async function restoreOrganization(request: APIRequestContext, name: string) {
   const token = await platformToken(request);
-  const organizationId = await findOrganizationId(request, token);
+  const organizationId = await findOrganizationId(request, token, name);
   await request.patch(`${API_URL}/api/platform/organizations/${organizationId}`, {
     headers: { authorization: `Bearer ${token}` },
-    data: { name: ORG_NAME },
+    data: { name },
   });
 }
 
 /** Revokes a pending org_admin invitation so the demo data stays clean. */
 async function revokePendingAdministrator(request: APIRequestContext) {
   const token = await platformToken(request);
-  const organizationId = await findOrganizationId(request, token);
+  const organizationId = await findOrganizationId(request, token, ORG_NAME);
   const response = await request.get(
     `${API_URL}/api/platform/organizations/${organizationId}/overview`,
     { headers: { authorization: `Bearer ${token}` } },
@@ -63,13 +68,21 @@ async function revokePendingAdministrator(request: APIRequestContext) {
 
 test.describe('Organization edit', () => {
   test('renaming from the platform updates the table', async ({ page, request }) => {
-    const temporaryName = `${ORG_NAME} QA`;
+    const temporaryName = `${RENAME_ORG} QA`;
 
     await loginAs(page, DEMO_USERS.platformAdmin);
     await expect(page).toHaveURL(/\/platform$/);
     await page.goto('/platform/organizations');
     try {
-      await page.getByRole('button', { name: 'Editar', exact: true }).first().click();
+      // The rename must not touch the shared demo organization: other specs
+      // read its name in parallel.
+      // The organization row has role="button", which removes the row role.
+      await page
+        .locator('tbody tr')
+        .filter({ hasText: RENAME_ORG })
+        .first()
+        .getByRole('button', { name: 'Editar', exact: true })
+        .click();
       await page.locator('#platform-organization-name').fill(temporaryName);
 
       const saved = waitForSave(page);
@@ -80,11 +93,11 @@ test.describe('Organization edit', () => {
       // so assert against the DOM instead of role queries.
       await expect(page.locator('tbody').first()).toContainText(temporaryName);
     } finally {
-      await restoreOrganization(request);
+      await restoreOrganization(request, RENAME_ORG);
     }
 
     await page.reload();
-    await expect(page.getByRole('cell', { name: ORG_NAME, exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: RENAME_ORG, exact: true })).toBeVisible();
   });
 
   test('a new administrator email stays pending and shows the invite link', async ({
@@ -98,7 +111,13 @@ test.describe('Organization edit', () => {
       await expect(page).toHaveURL(/\/platform$/);
       await page.goto('/platform/organizations');
 
-      await page.getByRole('button', { name: 'Editar', exact: true }).first().click();
+      // The organization row has role="button", which removes the row role.
+      await page
+        .locator('tbody tr')
+        .filter({ hasText: ORG_NAME })
+        .first()
+        .getByRole('button', { name: 'Editar', exact: true })
+        .click();
       await page.locator('#platform-organization-admin').fill(invitedEmail);
 
       const saved = waitForSave(page);
@@ -147,7 +166,10 @@ test.describe('Community geography', () => {
     const restoreDepartment = originalDepartment === '—' ? '' : originalDepartment;
 
     const saveGeography = async (municipalityValue: string, departmentValue: string) => {
-      await page.getByRole('button', { name: 'Editar', exact: true }).first().click();
+      await page
+        .getByRole('button', { name: `Editar ${COMMUNITY_NAME}`, exact: true })
+        .first()
+        .click();
       await page.locator('#admin-community-municipality').fill(municipalityValue);
       await page.locator('#admin-community-department').fill(departmentValue);
       const saved = waitForSave(page);
