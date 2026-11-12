@@ -130,9 +130,9 @@
 ### 10. Outbox topic routing (MVP subset)
 
 - [x] 10.1 Add `topic` to the outbox schema/migration
-- [ ] 10.2 Update the main outbox worker to claim `topic = 'events'`
-- [ ] 10.3 Update outbox stats to group by topic
-- [ ] 10.4 Add a test that the main worker ignores non-`events` rows
+- [x] 10.2 Update the main outbox worker to claim `topic = 'events'`
+- [x] 10.3 Update outbox stats to group by topic
+- [x] 10.4 Add a test that the main worker ignores non-`events` rows
 
 ### 11. Configuration and seed
 
@@ -141,7 +141,7 @@
 - [x] 11.2 Add `PASS_PIN_ATTEMPTS=5`, `PASS_PIN_LOCK_MINUTES=15`
 - [x] 11.3 Add `PASS_SCAN_PENDING_TTL_SECONDS=120`
 - [x] 11.4 Add `PASS_MISSING_EXIT_GRACE_MINUTES=15` (reserved, unused in MVP)
-- [ ] 11.5 Seed a demo pass and a demo link
+- [x] 11.5 Seed a demo pass and a demo link
 - [x] 11.6 Document the local pass-web URL and demo flow
 
 ### 12. Automated tests and verification

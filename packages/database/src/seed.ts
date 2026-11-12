@@ -19,6 +19,7 @@ import { visitors } from './schema/visitors.js';
 import { locationStructures } from './schema/location-structures.js';
 import { locationUnits } from './schema/location-units.js';
 import { locationResidents } from './schema/location-residents.js';
+import { accessPasses } from './schema/access-passes.js';
 
 if (process.env.NODE_ENV === 'production' && process.env.SEED_DEMO_DATA !== 'true') {
   throw new Error(
@@ -638,7 +639,86 @@ async function seed() {
     });
   }
 
+  // Demo pass plus a public link so the pass app can be exercised without
+  // creating a pass by hand. The link token is regenerated on every seed run:
+  // only its hash is stored, so the old URL stops working.
+  const passWebUrl = process.env.PASS_WEB_URL || 'http://localhost:5176';
+  const [demoStructure] = await db
+    .select({ id: locationStructures.id })
+    .from(locationStructures)
+    .where(
+      and(
+        eq(locationStructures.communityId, torreNorte.id),
+        eq(locationStructures.name, 'Estructura principal'),
+      ),
+    )
+    .limit(1);
+
+  const [residentPerson] = await db
+    .select({ id: people.id })
+    .from(people)
+    .where(eq(people.contactEmail, resident.email))
+    .limit(1);
+
+  if (!demoStructure || !residentPerson) {
+    throw new Error('Cannot seed the demo pass: missing structure or resident person');
+  }
+
+  const demoLinkToken = crypto.randomBytes(32).toString('hex');
+  const demoLinkHash = crypto.createHash('sha256').update(demoLinkToken).digest('hex');
+  const now = Date.now();
+  const demoPassValidFrom = new Date(now - 60 * 60 * 1000);
+  const demoPassValidUntil = new Date(now + 7 * 24 * 60 * 60 * 1000);
+
+  const [existingDemoPass] = await db
+    .select({ id: accessPasses.id })
+    .from(accessPasses)
+    .where(
+      and(
+        eq(accessPasses.communityId, torreNorte.id),
+        eq(accessPasses.visitorDocument, '87654321'),
+      ),
+    )
+    .limit(1);
+
+  if (existingDemoPass) {
+    await db
+      .update(accessPasses)
+      .set({
+        status: 'active',
+        presenceState: 'outside',
+        validFrom: demoPassValidFrom,
+        validUntil: demoPassValidUntil,
+        linkTokenHash: demoLinkHash,
+        linkExpiresAt: demoPassValidUntil,
+        deviceKeyHash: null,
+        boundAt: null,
+        entryAt: null,
+        exitAt: null,
+        entryCount: 0,
+        exitCount: 0,
+      })
+      .where(eq(accessPasses.id, existingDemoPass.id));
+  } else {
+    await db.insert(accessPasses).values({
+      communityId: torreNorte.id,
+      locationUnitId: unitA101.id,
+      structureId: demoStructure.id,
+      createdByPersonId: residentPerson.id,
+      authorizedByPersonId: residentPerson.id,
+      visitorFirstName: 'Lucía',
+      visitorLastName: 'Demo',
+      visitorDocument: '87654321',
+      type: 'entry_exit',
+      validFrom: demoPassValidFrom,
+      validUntil: demoPassValidUntil,
+      linkTokenHash: demoLinkHash,
+      linkExpiresAt: demoPassValidUntil,
+    });
+  }
+
   console.log(`\n  Kiosk device token (dev): ${DEVICE_TOKEN}`);
+  console.log(`  Demo pass link: ${passWebUrl}/p/${demoLinkToken}`);
   console.log('\nSeed complete!');
   console.log(`   Password for all demo users: ${DEMO_PASSWORD}`);
   console.log('   superadmin@porteria.local  (platform admin)');

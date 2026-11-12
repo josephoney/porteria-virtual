@@ -6,6 +6,7 @@ import {
   getStats,
   markDone,
   markFailed,
+  OUTBOX_TOPIC_EVENTS,
   purgeDone,
   resetProcessing,
 } from '../services/outbox.service.js';
@@ -20,7 +21,7 @@ async function tick(logger: FastifyBaseLogger): Promise<void> {
   running = true;
 
   try {
-    const rows = await claimBatch(config.outbox.batchSize);
+    const rows = await claimBatch(config.outbox.batchSize, OUTBOX_TOPIC_EVENTS);
 
     for (const row of rows) {
       try {
@@ -59,9 +60,10 @@ async function tick(logger: FastifyBaseLogger): Promise<void> {
     }
 
     const stats = await getStats();
-    if (stats.oldestPendingAge > config.outbox.lagWarnSeconds) {
+    const eventStats = stats.topics[OUTBOX_TOPIC_EVENTS];
+    if (eventStats && eventStats.oldestPendingAge > config.outbox.lagWarnSeconds) {
       logger.warn(
-        { oldestPendingAge: stats.oldestPendingAge, pending: stats.pending },
+        { oldestPendingAge: eventStats.oldestPendingAge, pending: eventStats.pending },
         'Outbox lag exceeds threshold',
       );
     }

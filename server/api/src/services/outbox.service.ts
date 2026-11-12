@@ -1,7 +1,7 @@
-import { and, count, desc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import { outboxEvents } from '@porteria/database/schema';
-import type { EventEnvelope, OutboxStats } from '@porteria/shared';
+import type { EventEnvelope, OutboxStats, OutboxTopicStats } from '@porteria/shared';
 
 const db = createDb();
 
@@ -17,11 +17,16 @@ export interface ClaimedOutboxRow {
   organization_id: string;
   community_id: string | null;
   event_type: string;
+  topic: string;
 }
+
+/** The queue consumed by the main event worker. */
+export const OUTBOX_TOPIC_EVENTS = 'events';
 
 export async function enqueueEvent(
   executor: DbExecutor,
   envelope: EventEnvelope,
+  topic: string = OUTBOX_TOPIC_EVENTS,
 ): Promise<boolean> {
   const [inserted] = await executor
     .insert(outboxEvents)
@@ -30,6 +35,7 @@ export async function enqueueEvent(
       eventType: envelope.eventType,
       organizationId: envelope.organizationId,
       communityId: envelope.communityId ?? null,
+      topic,
       payload: envelope.payload,
       envelope,
     })
@@ -39,12 +45,15 @@ export async function enqueueEvent(
   return Boolean(inserted);
 }
 
-export async function claimBatch(batchSize: number): Promise<ClaimedOutboxRow[]> {
+export async function claimBatch(
+  batchSize: number,
+  topic: string = OUTBOX_TOPIC_EVENTS,
+): Promise<ClaimedOutboxRow[]> {
   const result = await db.execute<ClaimedOutboxRow>(sql`
     WITH claimed AS (
       SELECT id
       FROM outbox_events
-      WHERE status = 'pending' AND available_at <= now()
+      WHERE status = 'pending' AND available_at <= now() AND topic = ${topic}
       ORDER BY available_at ASC
       LIMIT ${batchSize}
       FOR UPDATE SKIP LOCKED
@@ -53,7 +62,7 @@ export async function claimBatch(batchSize: number): Promise<ClaimedOutboxRow[]>
     SET status = 'processing', attempts = o.attempts + 1
     FROM claimed c
     WHERE o.id = c.id
-    RETURNING o.id, o.envelope, o.attempts, o.organization_id, o.community_id, o.event_type
+    RETURNING o.id, o.envelope, o.attempts, o.organization_id, o.community_id, o.event_type, o.topic
   `);
 
   return result.rows;
@@ -92,48 +101,84 @@ export async function markFailed(
     .where(eq(outboxEvents.id, id));
 }
 
-export async function resetProcessing(): Promise<number> {
+export async function resetProcessing(topic: string = OUTBOX_TOPIC_EVENTS): Promise<number> {
   const updated = await db
     .update(outboxEvents)
     .set({ status: 'pending' })
-    .where(eq(outboxEvents.status, 'processing'))
+    .where(and(eq(outboxEvents.status, 'processing'), eq(outboxEvents.topic, topic)))
     .returning({ id: outboxEvents.id });
   return updated.length;
 }
 
+function emptyTopicStats(): OutboxTopicStats {
+  return { pending: 0, processing: 0, done: 0, dead: 0, oldestPendingAge: 0, lastError: null };
+}
+
 export async function getStats(): Promise<OutboxStats> {
-  const rows = await db
-    .select({ status: outboxEvents.status, count: count() })
-    .from(outboxEvents)
-    .groupBy(outboxEvents.status);
-
-  const byStatus: Record<string, number> = {};
-  for (const row of rows) byStatus[row.status] = row.count;
-
-  const [oldest] = await db
-    .select({ createdAt: outboxEvents.createdAt })
-    .from(outboxEvents)
-    .where(eq(outboxEvents.status, 'pending'))
-    .orderBy(outboxEvents.createdAt)
-    .limit(1);
-
-  const [lastError] = await db
-    .select({ lastError: outboxEvents.lastError })
-    .from(outboxEvents)
-    .where(eq(outboxEvents.status, 'dead'))
-    .orderBy(desc(outboxEvents.createdAt))
-    .limit(1);
-
-  return {
-    pending: byStatus.pending ?? 0,
-    processing: byStatus.processing ?? 0,
-    done: byStatus.done ?? 0,
-    dead: byStatus.dead ?? 0,
-    oldestPendingAge: oldest
-      ? Math.max(0, Math.round((Date.now() - oldest.createdAt.getTime()) / 1000))
-      : 0,
-    lastError: lastError?.lastError ?? null,
+  const topics: Record<string, OutboxTopicStats> = {};
+  const forTopic = (topic: string): OutboxTopicStats => {
+    topics[topic] ??= emptyTopicStats();
+    return topics[topic];
   };
+
+  const statusRows = await db.execute<{ topic: string; status: string; count: number }>(sql`
+    SELECT topic, status, count(*)::int AS count
+    FROM outbox_events
+    GROUP BY topic, status
+  `);
+  for (const row of statusRows.rows) {
+    const stats = forTopic(row.topic);
+    switch (row.status) {
+      case 'pending':
+        stats.pending = Number(row.count);
+        break;
+      case 'processing':
+        stats.processing = Number(row.count);
+        break;
+      case 'done':
+        stats.done = Number(row.count);
+        break;
+      case 'dead':
+        stats.dead = Number(row.count);
+        break;
+    }
+  }
+
+  const oldestRows = await db.execute<{ topic: string; oldestAt: Date | string }>(sql`
+    SELECT topic, min(created_at) AS "oldestAt"
+    FROM outbox_events
+    WHERE status = 'pending'
+    GROUP BY topic
+  `);
+  for (const row of oldestRows.rows) {
+    const oldestAt = row.oldestAt instanceof Date ? row.oldestAt : new Date(row.oldestAt);
+    forTopic(row.topic).oldestPendingAge = Math.max(
+      0,
+      Math.round((Date.now() - oldestAt.getTime()) / 1000),
+    );
+  }
+
+  const errorRows = await db.execute<{ topic: string; lastError: string | null }>(sql`
+    SELECT DISTINCT ON (topic) topic, last_error AS "lastError"
+    FROM outbox_events
+    WHERE status = 'dead'
+    ORDER BY topic, created_at DESC
+  `);
+  for (const row of errorRows.rows) forTopic(row.topic).lastError = row.lastError;
+
+  const totals = Object.values(topics).reduce(
+    (acc, stats) => ({
+      pending: acc.pending + stats.pending,
+      processing: acc.processing + stats.processing,
+      done: acc.done + stats.done,
+      dead: acc.dead + stats.dead,
+      oldestPendingAge: Math.max(acc.oldestPendingAge, stats.oldestPendingAge),
+      lastError: acc.lastError ?? stats.lastError,
+    }),
+    emptyTopicStats(),
+  );
+
+  return { ...totals, topics };
 }
 
 export async function listDead(limit = 100) {

@@ -58,7 +58,7 @@ export type {
   CallStats,
   EventTimeSeries,
 } from './types/reports.js';
-export type { EventEnvelope, OutboxStats } from './types/outbox.js';
+export type { EventEnvelope, OutboxStats, OutboxTopicStats } from './types/outbox.js';
 
 export type {
   CreatePassDto,
