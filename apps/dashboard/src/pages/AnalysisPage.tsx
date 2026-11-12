@@ -39,7 +39,7 @@ export function AnalysisPage({ scope = 'tenant' }: { scope?: 'tenant' | 'platfor
     <div className="p-6 space-y-6 overflow-y-auto">
       <PageHeader title={page.title} description={page.description} />
       {section === 'bitacora' && <BitacoraView />}
-      {section === 'bitacora-accesos' && <AccessBitacoraView compact />}
+      {section === 'bitacora-accesos' && <AccessBitacoraView compact poll />}
       {section === 'reports' && <ReportsPanel />}
       {section === 'history' && scope === 'platform' && <BitacoraView />}
     </div>

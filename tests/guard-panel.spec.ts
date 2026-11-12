@@ -140,4 +140,28 @@ test.describe('guard panel and access bitacora', () => {
     await closeButton.click();
     await expect(startShiftButton).toBeVisible();
   });
+
+  test('the analysis board polls the bitacora for a community admin', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.communityAdmin);
+    await expect(page).toHaveURL(/\/admin$/);
+
+    // The listener has to be attached before navigating: the probe fires on
+    // mount, when the community admin already has a community from the session.
+    let polls = 0;
+    page.on('request', (request) => {
+      const url = request.url();
+      if (
+        request.method() === 'GET' &&
+        url.includes('/api/bitacora?') &&
+        url.includes('pageSize=1')
+      ) {
+        polls += 1;
+      }
+    });
+
+    await page.goto('/analysis/bitacora-accesos');
+    await expect(page.getByRole('heading', { name: 'Bitácora de accesos' })).toBeVisible();
+
+    await expect.poll(() => polls, { timeout: 20_000 }).toBeGreaterThan(0);
+  });
 });

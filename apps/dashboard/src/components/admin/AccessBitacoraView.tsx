@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ApiError, get, post } from '../../lib/apiClient';
 import { Button } from '../ui/button';
@@ -60,6 +60,9 @@ interface BitacoraDetail extends BitacoraEntryRow {
   comments: BitacoraCommentRow[];
 }
 
+/** How often the board asks whether a new movement was recorded. */
+const BITACORA_POLL_MS = 15_000;
+
 interface AccessBitacoraViewProps {
   communityId?: string | null;
   accessPointId?: string | null;
@@ -70,6 +73,12 @@ interface AccessBitacoraViewProps {
    * remount, which would reset them.
    */
   refreshToken?: number;
+  /**
+   * Ask the server periodically whether a new movement was recorded. Off by
+   * default: the guard panel already polls its own way, and only standalone
+   * boards (analysis) need it.
+   */
+  poll?: boolean;
 }
 
 const typeLabels: Record<string, string> = {
@@ -118,6 +127,7 @@ export function AccessBitacoraView({
   accessPointId: fixedAccessPointId,
   compact = false,
   refreshToken = 0,
+  poll = false,
 }: AccessBitacoraViewProps) {
   const { activeMembership } = useAuth();
   const isOrgAdmin = activeMembership?.role === 'org_admin';
@@ -133,6 +143,8 @@ export function AccessBitacoraView({
   const [items, setItems] = useState<BitacoraEntryRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  /** Last total seen by the poll, used to tell "nothing new" from "new row". */
+  const lastTotal = useRef<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<BitacoraDetail | null>(null);
@@ -232,6 +244,54 @@ export function AccessBitacoraView({
     // `refreshToken` intentionally retriggers the fetch: the parent asks for
     // fresh rows after an action taken outside this component.
   }, [load, refreshToken]);
+
+  /**
+   * This board is written by the guard app, so the only way to notice a new
+   * movement is to ask. Fetching the page itself would move ~13 KB per tick;
+   * asking for a single row costs ~685 bytes and only triggers the real fetch
+   * when the total changed.
+   */
+  useEffect(() => {
+    if (!poll || !communityId) return;
+    const community = communityId;
+    let cancelled = false;
+    // Changing filters means a different table: start from a clean baseline so
+    // the first probe is not mistaken for "something happened".
+    lastTotal.current = null;
+
+    async function check() {
+      if (document.visibilityState !== 'visible') return;
+      const params = new URLSearchParams({ page: '1', pageSize: '1', communityId: community });
+      if (accessPointId !== 'all') params.set('accessPointId', accessPointId);
+      if (type !== 'all') params.set('type', type);
+      if (from) params.set('from', new Date(`${from}T00:00:00`).toISOString());
+      if (to) params.set('to', new Date(`${to}T23:59:59`).toISOString());
+      try {
+        const result = await get<{ total: number }>(`/api/bitacora?${params.toString()}`);
+        if (cancelled) return;
+        const next = result.data.total;
+        if (lastTotal.current !== null && next !== lastTotal.current) {
+          await load();
+        }
+        lastTotal.current = next;
+      } catch {
+        // A failed probe is not worth a banner: the next tick retries.
+      }
+    }
+
+    void check();
+    const timer = window.setInterval(() => {
+      void check();
+    }, BITACORA_POLL_MS);
+    // Coming back to the tab should feel instant, not wait for the tick.
+    document.addEventListener('visibilitychange', check);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [poll, communityId, accessPointId, type, from, to, load]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const activeAccessPoints = useMemo(
