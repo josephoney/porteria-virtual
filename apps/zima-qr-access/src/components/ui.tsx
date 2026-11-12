@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -57,7 +57,7 @@ export function Button({
 }: {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  variant?: 'primary' | 'success' | 'secondary' | 'danger' | 'ghost';
   loading?: boolean;
   disabled?: boolean;
 }) {
@@ -69,6 +69,7 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         variant === 'primary' && styles.buttonPrimary,
+        variant === 'success' && styles.buttonSuccess,
         variant === 'secondary' && styles.buttonSecondary,
         variant === 'danger' && styles.buttonDanger,
         variant === 'ghost' && styles.buttonGhost,
@@ -77,13 +78,15 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.white : colors.text} />
+        <ActivityIndicator
+          color={variant === 'primary' || variant === 'success' ? colors.white : colors.text}
+        />
       ) : (
         <Text
           style={[
             styles.buttonLabel,
-            variant === 'primary' && styles.buttonLabelPrimary,
-            variant === 'danger' && styles.buttonLabelPrimary,
+            (variant === 'primary' || variant === 'success' || variant === 'danger') &&
+              styles.buttonLabelPrimary,
           ]}
         >
           {label}
@@ -200,6 +203,44 @@ export function Divider() {
   return <View style={styles.divider} />;
 }
 
+/**
+ * A card whose body only mounts while it is open. Two reasons: long lists stop
+ * pushing the screen down, and closed sections do not render rows nobody sees.
+ * The state is deliberately local, so it resets on every visit.
+ */
+export function CollapsibleSection({
+  title,
+  defaultOpen = false,
+  badge,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  badge?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <View style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={badge ? `${title}, ${badge}` : title}
+        onPress={() => setOpen((value) => !value)}
+        style={({ pressed }) => [styles.sectionHeader, pressed && styles.sectionHeaderPressed]}
+      >
+        <View style={styles.sectionHeaderText}>
+          <Text style={styles.sectionHeaderTitle}>{title}</Text>
+          {badge ? <Text style={styles.sectionHeaderBadge}>{badge}</Text> : null}
+        </View>
+        <Text style={styles.sectionChevron}>{open ? '▾' : '▸'}</Text>
+      </Pressable>
+      {open ? <View style={styles.sectionBody}>{children}</View> : null}
+    </View>
+  );
+}
+
 export const ui = StyleSheet.create({
   title: {
     color: colors.text,
@@ -274,6 +315,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  buttonSuccess: {
+    backgroundColor: colors.success,
   },
   buttonDanger: {
     backgroundColor: colors.danger,
@@ -387,5 +431,38 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.border,
     marginVertical: spacing.sm,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  sectionHeaderPressed: {
+    opacity: 0.7,
+  },
+  sectionHeaderText: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  sectionHeaderTitle: {
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: '700',
+  },
+  sectionHeaderBadge: {
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: '600',
+  },
+  sectionChevron: {
+    color: colors.textMuted,
+    fontSize: typography.body,
+  },
+  sectionBody: {
+    gap: spacing.sm,
   },
 });

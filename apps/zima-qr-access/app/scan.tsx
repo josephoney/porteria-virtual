@@ -1,9 +1,10 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import type {
   AccessPoint,
+  BitacoraEntryDto,
   GuardShiftCurrentResponse,
   GuardShiftHistoryItem,
   ScanDecisionResponse,
@@ -11,6 +12,7 @@ import type {
 } from '@porteria/shared';
 
 import { confirmScan, rejectScan, scanPass } from '@/api/access';
+import { listBitacora } from '@/api/bitacora';
 import {
   changeAccessPoint,
   endShift,
@@ -25,6 +27,7 @@ import {
   Badge,
   Button,
   Card,
+  CollapsibleSection,
   Divider,
   EmptyState,
   Field,
@@ -33,8 +36,9 @@ import {
   Screen,
   ui,
 } from '@/components/ui';
+import { reasonText, toActivityItem } from '@/lib/bitacora';
 import { errorMessage } from '@/lib/errors';
-import { formatDateTime, roleLabel } from '@/lib/format';
+import { formatDateTime, formatTime, roleLabel } from '@/lib/format';
 import { colors, radius, spacing } from '@/theme';
 
 function formatElapsed(seconds: number): string {
@@ -52,25 +56,6 @@ function actionLabel(action: string | null): string {
   return 'Acción';
 }
 
-function reasonLabel(reason: string | null): string {
-  switch (reason) {
-    case 'pass_used':
-      return 'El pase ya fue utilizado.';
-    case 'revoked':
-      return 'El pase fue revocado.';
-    case 'expired':
-      return 'El pase está expirado.';
-    case 'out_of_schedule':
-      return 'El pase está fuera del horario permitido.';
-    case 'wrong_direction':
-      return 'El sentido del escaneo no coincide con este acceso.';
-    case 'token_already_used':
-      return 'Ese QR ya fue usado.';
-    default:
-      return reason ?? 'Escaneo denegado.';
-  }
-}
-
 export default function GuardScanScreen() {
   const { session, request, signOut } = useAuth();
   const router = useRouter();
@@ -79,15 +64,46 @@ export default function GuardScanScreen() {
   const [current, setCurrent] = useState<GuardShiftCurrentResponse | null>(null);
   const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([]);
   const [history, setHistory] = useState<GuardShiftHistoryItem[]>([]);
+  const [activity, setActivity] = useState<BitacoraEntryDto[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'idle' | 'change'>('idle');
+  const [pickedAccessPointId, setPickedAccessPointId] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [manualToken, setManualToken] = useState('');
   const [scanResult, setScanResult] = useState<ScanPassResponse | null>(null);
   const [decision, setDecision] = useState<ScanDecisionResponse | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanned, setScanned] = useState(false);
+
+  /**
+   * The activity only exists while a shift is open: it is the bitacora filtered
+   * by `shiftId`. Closing the shift clears the list, never the records.
+   */
+  const loadActivity = useCallback(
+    async (shiftId: string | null) => {
+      if (!shiftId) {
+        setActivity([]);
+        setActivityError(null);
+        setActivityLoading(false);
+        return;
+      }
+      setActivityLoading(true);
+      try {
+        const result = await listBitacora(request, { shiftId });
+        setActivity(result.items);
+        setActivityError(null);
+      } catch (activityFailure) {
+        setActivityError(errorMessage(activityFailure));
+      } finally {
+        setActivityLoading(false);
+      }
+    },
+    [request],
+  );
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -105,12 +121,13 @@ export default function GuardScanScreen() {
       setAccessPoints(points.items);
       setHistory(shifts.items);
       setError(null);
+      await loadActivity(shift.shift?.id ?? null);
     } catch (loadError) {
       setError(errorMessage(loadError));
     } finally {
       setLoading(false);
     }
-  }, [request, session]);
+  }, [loadActivity, request, session]);
 
   useFocusEffect(
     useCallback(() => {
@@ -130,10 +147,11 @@ export default function GuardScanScreen() {
       setCurrent(shift);
       setHistory(shifts.items);
       setError(null);
+      await loadActivity(shift.shift?.id ?? null);
     } catch (refreshError) {
       setError(errorMessage(refreshError));
     }
-  }, [request]);
+  }, [loadActivity, request]);
 
   if (!session) {
     return <Redirect href="/" />;
@@ -149,11 +167,18 @@ export default function GuardScanScreen() {
   const activeShift = current?.shift ?? null;
   const currentAccessPoint = current?.accessPoint ?? null;
 
-  const onStart = async (accessPointId?: string) => {
+  // The default access point is preselected, but only while it still exists.
+  const selectedAccessPointId =
+    pickedAccessPointId && accessPoints.some((point) => point.id === pickedAccessPointId)
+      ? pickedAccessPointId
+      : (defaultAccessPoint?.id ?? accessPoints[0]?.id ?? null);
+
+  const onStart = async () => {
+    if (!selectedAccessPointId) return;
     setBusy(true);
     setError(null);
     try {
-      const next = await startShift(request, accessPointId ? { accessPointId } : {});
+      const next = await startShift(request, { accessPointId: selectedAccessPointId });
       setCurrent(next);
       setMode('idle');
       await refresh();
@@ -215,6 +240,26 @@ export default function GuardScanScreen() {
     setScanError(null);
     setScanned(false);
     setManualToken('');
+    setCameraOpen(false);
+  };
+
+  /**
+   * The camera asks for its permission here, not when the shift starts: a guard
+   * that is not scanning should not have the camera running.
+   */
+  const openCamera = async () => {
+    setScanned(false);
+    setScanError(null);
+    if (!permission?.granted) {
+      const next = await requestPermission();
+      if (!next.granted) {
+        setScanError(
+          'Necesitamos permiso de cámara para escanear el QR. Podés ingresar el token manualmente.',
+        );
+        return;
+      }
+    }
+    setCameraOpen(true);
   };
 
   const runScan = async (qrToken: string) => {
@@ -233,6 +278,7 @@ export default function GuardScanScreen() {
       setScanError(errorMessage(scanFailure));
     } finally {
       setBusy(false);
+      setCameraOpen(false);
     }
   };
 
@@ -278,9 +324,11 @@ export default function GuardScanScreen() {
   return (
     <Screen>
       <Card>
-        <Text style={ui.heading}>{session.user.name}</Text>
+        <Row>
+          <Text style={ui.heading}>{session.user.name}</Text>
+          <Badge label={roleLabel(session.activeMembership.role)} tone="info" />
+        </Row>
         <Text style={ui.muted}>{session.user.email}</Text>
-        <Text style={ui.muted}>Rol: {roleLabel(session.activeMembership.role)}</Text>
         {defaultAccessPoint ? (
           <Text style={ui.muted}>Acceso asignado: {defaultAccessPoint.name}</Text>
         ) : null}
@@ -305,20 +353,47 @@ export default function GuardScanScreen() {
               title="Sin accesos activos"
               message="El administrador todavía no configuró porterías para esta comunidad."
             />
-          ) : null}
-          {accessPoints.map((point) => (
-            <Card key={point.id} onPress={() => void onStart(point.id)}>
-              <Row>
-                <Text style={ui.body}>{point.name}</Text>
-                {point.id === session.activeMembership.defaultAccessPointId ? (
-                  <Badge label="Asignado" tone="info" />
-                ) : null}
-              </Row>
-              <Text style={ui.muted}>
-                {point.type} · {point.direction}
-              </Text>
-            </Card>
-          ))}
+          ) : (
+            <>
+              {accessPoints.map((point) => {
+                const selected = point.id === selectedAccessPointId;
+                return (
+                  <Pressable
+                    key={point.id}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={point.name}
+                    onPress={() => setPickedAccessPointId(point.id)}
+                    style={({ pressed }) => [
+                      styles.accessOption,
+                      selected && styles.accessOptionSelected,
+                      pressed && styles.accessOptionPressed,
+                    ]}
+                  >
+                    <Row>
+                      <View style={[styles.radio, selected && styles.radioSelected]}>
+                        {selected ? <View style={styles.radioDot} /> : null}
+                      </View>
+                      <Text style={ui.body}>{point.name}</Text>
+                      {point.id === session.activeMembership.defaultAccessPointId ? (
+                        <Badge label="Asignado" tone="info" />
+                      ) : null}
+                    </Row>
+                    <Text style={ui.muted}>
+                      {point.type} · {point.direction}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+              <Button
+                label="Iniciar turno"
+                variant="success"
+                onPress={() => void onStart()}
+                loading={busy}
+                disabled={busy || !selectedAccessPointId}
+              />
+            </>
+          )}
         </Card>
       ) : (
         <>
@@ -362,29 +437,30 @@ export default function GuardScanScreen() {
 
           <Card>
             <Text style={ui.sectionTitle}>Escanear QR</Text>
-            {!permission?.granted ? (
+            {cameraOpen ? (
               <>
-                <Text style={ui.muted}>
-                  Necesitamos permiso de cámara para escanear el QR del visitante.
-                </Text>
-                <Button label="Permitir cámara" onPress={() => void requestPermission()} />
+                <View style={styles.cameraWrap}>
+                  <CameraView
+                    style={styles.camera}
+                    facing="back"
+                    barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                    onBarcodeScanned={({ data }) => {
+                      if (!scanned && !busy) {
+                        setScanned(true);
+                        void runScan(data);
+                      }
+                    }}
+                  />
+                </View>
+                <Button label="Cancelar" variant="ghost" onPress={() => setCameraOpen(false)} />
               </>
-            ) : scanned ? (
-              <Text style={ui.muted}>Escaneo listo. Revisá el resultado debajo.</Text>
             ) : (
-              <View style={styles.cameraWrap}>
-                <CameraView
-                  style={styles.camera}
-                  facing="back"
-                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-                  onBarcodeScanned={({ data }) => {
-                    if (!scanned && !busy) {
-                      setScanned(true);
-                      void runScan(data);
-                    }
-                  }}
-                />
-              </View>
+              <Button
+                label="Escanear QR"
+                variant="secondary"
+                onPress={() => void openCamera()}
+                disabled={busy}
+              />
             )}
             <Divider />
             <Field
@@ -433,7 +509,7 @@ export default function GuardScanScreen() {
                 {formatDateTime(scanResult.schedule.validUntil)}
               </Text>
               {scanResult.reason ? (
-                <Text style={ui.error}>{reasonLabel(scanResult.reason)}</Text>
+                <Text style={ui.error}>{reasonText(scanResult.reason)}</Text>
               ) : null}
 
               {scanResult.authorized && scanResult.scanId && !decision ? (
@@ -459,11 +535,64 @@ export default function GuardScanScreen() {
               <Button label="Escanear otro" variant="secondary" onPress={resetScan} />
             </Card>
           ) : null}
+
+          <CollapsibleSection
+            title="Actividad del turno"
+            defaultOpen
+            badge={
+              activity.length > 0
+                ? `${activity.length} ${activity.length === 1 ? 'movimiento' : 'movimientos'}`
+                : undefined
+            }
+          >
+            {activityLoading && activity.length === 0 ? (
+              <Text style={ui.muted}>Cargando movimientos…</Text>
+            ) : null}
+            {activityError ? (
+              <>
+                <Text style={ui.error}>{activityError}</Text>
+                <Button
+                  label="Reintentar"
+                  variant="secondary"
+                  onPress={() => void loadActivity(activeShift.id)}
+                />
+              </>
+            ) : null}
+            {!activityLoading && !activityError && activity.length === 0 ? (
+              <Text style={ui.muted}>Todavía no hay movimientos en este turno.</Text>
+            ) : null}
+            {activity.map((entry) => {
+              const item = toActivityItem(entry);
+              return (
+                <View key={item.id} style={styles.activityRow}>
+                  <Row>
+                    <Badge label={item.movement} tone={item.tone} />
+                    <Text style={ui.body}>{item.visitor ?? 'Sin visitante'}</Text>
+                  </Row>
+                  <Text style={ui.muted}>
+                    {formatTime(item.createdAt)}
+                    {item.document ? ` · Doc. ${item.document}` : ''}
+                  </Text>
+                  {item.destination ? <Text style={ui.muted}>{item.destination}</Text> : null}
+                  {item.vehiclePlate ? (
+                    <Text style={ui.muted}>Vehículo: {item.vehiclePlate}</Text>
+                  ) : null}
+                  {item.reason ? <Text style={ui.error}>{reasonText(item.reason)}</Text> : null}
+                </View>
+              );
+            })}
+          </CollapsibleSection>
         </>
       )}
 
-      <Card>
-        <Text style={ui.sectionTitle}>Mis turnos</Text>
+      <CollapsibleSection
+        title="Mis turnos"
+        badge={
+          history.length > 0
+            ? `${history.length} ${history.length === 1 ? 'turno' : 'turnos'}`
+            : undefined
+        }
+      >
         {history.length === 0 ? (
           <Text style={ui.muted}>Todavía no hay turnos registrados.</Text>
         ) : (
@@ -482,7 +611,7 @@ export default function GuardScanScreen() {
             </View>
           ))
         )}
-      </Card>
+      </CollapsibleSection>
 
       <Button label="Cerrar sesión" variant="secondary" onPress={() => void onSignOut()} />
     </Screen>
@@ -500,6 +629,44 @@ const styles = StyleSheet.create({
   camera: {
     height: 260,
     width: '100%',
+  },
+  accessOption: {
+    gap: spacing.xs,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+    padding: spacing.md,
+  },
+  accessOptionSelected: {
+    borderColor: colors.primary,
+  },
+  accessOptionPressed: {
+    opacity: 0.85,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioSelected: {
+    borderColor: colors.primary,
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
+  activityRow: {
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   historyRow: {
     gap: spacing.xs,

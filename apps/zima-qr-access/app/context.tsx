@@ -1,10 +1,11 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '@/auth/AuthContext';
 import { homeForRole } from '@/auth/roles';
 import { Button, Card, Screen, ui } from '@/components/ui';
+import { ZimaLogo } from '@/components/zima-logo';
 import { errorMessage } from '@/lib/errors';
 import { roleLabel } from '@/lib/format';
 import { colors, spacing } from '@/theme';
@@ -39,6 +40,9 @@ export default function ContextScreen() {
 
   return (
     <Screen>
+      <View style={styles.brand}>
+        <ZimaLogo height={44} />
+      </View>
       <Text style={ui.heading}>Elegí con qué membresía entrar</Text>
       <Text style={ui.muted}>
         Tenés más de un contexto activo. La app va a usar el rol y la unidad de la membresía que
@@ -69,6 +73,10 @@ export default function ContextScreen() {
 }
 
 const styles = StyleSheet.create({
+  brand: {
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+  },
   submitting: {
     color: colors.primary,
     fontSize: 13,

@@ -5,6 +5,7 @@ import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-na
 import { useAuth } from '@/auth/AuthContext';
 import { homeForRole } from '@/auth/roles';
 import { Button, Field, LoadingView, Screen, ui } from '@/components/ui';
+import { ZimaLogo } from '@/components/zima-logo';
 import { errorMessage } from '@/lib/errors';
 import { colors, spacing, typography } from '@/theme';
 
@@ -55,9 +56,7 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.hero}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>Z</Text>
-          </View>
+          <ZimaLogo />
           <Text style={ui.title}>Zima QR Access</Text>
           <Text style={styles.subtitle}>Pases de visita dinámicos para tu comunidad.</Text>
         </View>
@@ -100,20 +99,6 @@ const styles = StyleSheet.create({
   hero: {
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  logoText: {
-    color: colors.white,
-    fontSize: 36,
-    fontWeight: '800',
   },
   subtitle: {
     color: colors.textMuted,
