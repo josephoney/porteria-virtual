@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 
 /** How often the panel asks whether a new access movement was recorded. */
@@ -112,6 +113,17 @@ export function GuardPanel() {
   const [bitacoraToken, setBitacoraToken] = useState(0);
   /** Last total seen by the poll, used to tell "nothing new" from "new row". */
   const lastActivityTotal = useRef<number | null>(null);
+  const [boardTab, setBoardTab] = useState<'access' | 'shifts'>('access');
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(10);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const historyTotalPages = Math.max(1, Math.ceil(historyTotal / historyPageSize));
+
+  // Same fallback as the bitácora: never strand the user on a page that no
+  // longer has rows.
+  useEffect(() => {
+    if (historyPage > historyTotalPages) setHistoryPage(historyTotalPages);
+  }, [historyPage, historyTotalPages]);
 
   useEffect(() => {
     setCommunityId(activeMembership?.communityId ?? null);
@@ -170,16 +182,20 @@ export function GuardPanel() {
   const loadHistory = useCallback(async () => {
     if (!communityId) return;
     try {
-      const params = new URLSearchParams({ page: '1', pageSize: '20' });
+      const params = new URLSearchParams({
+        page: String(historyPage),
+        pageSize: String(historyPageSize),
+      });
       if (isAdmin) params.set('communityId', communityId);
-      const result = await get<{ items: ShiftHistoryItem[] }>(
+      const result = await get<{ items: ShiftHistoryItem[]; total: number }>(
         `/api/guard/shifts?${params.toString()}`,
       );
       setHistory(result.data.items);
+      setHistoryTotal(result.data.total);
     } catch (err) {
       setError(errorMessage(err));
     }
-  }, [communityId, isAdmin]);
+  }, [communityId, isAdmin, historyPage, historyPageSize]);
 
   useEffect(() => {
     let cancelled = false;
@@ -548,74 +564,126 @@ export function GuardPanel() {
         </div>
       )}
 
-      {currentAccessPointId ? (
-        <AccessBitacoraView
-          communityId={communityId}
-          accessPointId={currentAccessPointId}
-          refreshToken={bitacoraToken}
-          compact
-        />
-      ) : (
-        <div className="rounded-4xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          Seleccioná un acceso para ver su bitácora.
-        </div>
-      )}
+      <Tabs value={boardTab} onValueChange={(value) => setBoardTab(value as 'access' | 'shifts')}>
+        <TabsList>
+          <TabsTrigger value="access">Ingresos y salidas</TabsTrigger>
+          <TabsTrigger value="shifts">Turnos</TabsTrigger>
+        </TabsList>
 
-      <div className="space-y-2">
-        <h3 className="font-heading text-lg font-bold tracking-tight">Historial de turnos</h3>
-        {history.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Todavía no hay turnos registrados.</p>
-        ) : (
-          <div className="rounded-4xl border border-border bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Inicio</TableHead>
-                  <TableHead>Fin</TableHead>
-                  <TableHead>Acceso</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Duración</TableHead>
-                  {isAdmin && <TableHead className="text-right">Acciones</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.map((shift) => {
-                  const lastSegment = shift.segments[shift.segments.length - 1];
-                  return (
-                    <TableRow key={shift.id}>
-                      <TableCell>{formatDateTime(shift.startedAt)}</TableCell>
-                      <TableCell>{formatDateTime(shift.endedAt)}</TableCell>
-                      <TableCell>
-                        {lastSegment?.accessPointName ?? lastSegment?.accessPointId ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={shift.status === 'open' ? 'default' : 'secondary'}>
-                          {shift.status === 'open' ? 'Abierto' : 'Cerrado'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{formatElapsed(shift.durationSeconds)}</TableCell>
-                      {isAdmin && (
-                        <TableCell className="text-right">
-                          {shift.status === 'open' && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => forceClose(shift)}
-                              disabled={busy}
-                            >
-                              Forzar cierre
-                            </Button>
-                          )}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+        <TabsContent value="access" className="space-y-4">
+          {currentAccessPointId ? (
+            <AccessBitacoraView
+              communityId={communityId}
+              accessPointId={currentAccessPointId}
+              refreshToken={bitacoraToken}
+              compact
+            />
+          ) : (
+            <div className="rounded-4xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+              Seleccioná un acceso para ver su bitácora.
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="shifts" className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Página {historyPage} de {historyTotalPages} · {historyTotal} turnos
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">Filas por página</span>
+              <Select
+                value={String(historyPageSize)}
+                onValueChange={(value) => {
+                  setHistoryPageSize(Number(value));
+                  setHistoryPage(1);
+                }}
+              >
+                <SelectTrigger className="w-24" aria-label="Filas por página de turnos">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="35">35</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Página anterior de turnos"
+                onClick={() => setHistoryPage((value) => Math.max(1, value - 1))}
+                disabled={historyPage <= 1}
+              >
+                ←
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Página siguiente de turnos"
+                onClick={() => setHistoryPage((value) => Math.min(historyTotalPages, value + 1))}
+                disabled={historyPage >= historyTotalPages}
+              >
+                →
+              </Button>
+            </div>
           </div>
-        )}
-      </div>
+          {history.length === 0 ? (
+            <p className="rounded-4xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+              Todavía no hay turnos registrados.
+            </p>
+          ) : (
+            <div className="max-h-[55vh] overflow-auto rounded-4xl border border-border bg-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Inicio</TableHead>
+                    <TableHead>Fin</TableHead>
+                    <TableHead>Acceso</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Duración</TableHead>
+                    {isAdmin && <TableHead className="text-right">Acciones</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {history.map((shift) => {
+                    const lastSegment = shift.segments[shift.segments.length - 1];
+                    return (
+                      <TableRow key={shift.id}>
+                        <TableCell>{formatDateTime(shift.startedAt)}</TableCell>
+                        <TableCell>{formatDateTime(shift.endedAt)}</TableCell>
+                        <TableCell>
+                          {lastSegment?.accessPointName ?? lastSegment?.accessPointId ?? '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={shift.status === 'open' ? 'default' : 'secondary'}>
+                            {shift.status === 'open' ? 'Abierto' : 'Cerrado'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{formatElapsed(shift.durationSeconds)}</TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-right">
+                            {shift.status === 'open' && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => forceClose(shift)}
+                                disabled={busy}
+                              >
+                                Forzar cierre
+                              </Button>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

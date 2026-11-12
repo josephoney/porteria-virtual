@@ -57,8 +57,8 @@ export default function LoginScreen() {
       >
         <View style={styles.hero}>
           <ZimaLogo />
-          <Text style={ui.title}>Zima QR Access</Text>
-          <Text style={styles.subtitle}>Pases de visita dinámicos para tu comunidad.</Text>
+          <Text style={ui.title}>QR Access</Text>
+          <Text style={styles.subtitle}>Acceso a tu comunidad.</Text>
         </View>
 
         <View style={styles.form}>

@@ -158,7 +158,7 @@ export function AccessBitacoraView({
   const [manualSummary, setManualSummary] = useState('');
   const [manualDetails, setManualDetails] = useState('');
 
-  const pageSize = 20;
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     setCommunityId(fixedCommunityId ?? activeMembership?.communityId ?? null);
@@ -237,7 +237,7 @@ export function AccessBitacoraView({
     } finally {
       setLoading(false);
     }
-  }, [communityId, accessPointId, type, from, to, page]);
+  }, [communityId, accessPointId, type, from, to, page, pageSize]);
 
   useEffect(() => {
     load();
@@ -294,6 +294,13 @@ export function AccessBitacoraView({
   }, [poll, communityId, accessPointId, type, from, to, load]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // Records can disappear while a page is open (a filter change, or the poll
+  // noticing a different total). Landing on page 7 of 4 shows an empty table with
+  // no way forward, so fall back to the last page that still exists.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
   const activeAccessPoints = useMemo(
     () => accessPoints.filter((item) => item.active),
     [accessPoints],
@@ -508,7 +515,7 @@ export function AccessBitacoraView({
           No hay movimientos para los filtros seleccionados.
         </div>
       ) : (
-        <div className="rounded-4xl border border-border bg-card">
+        <div className="max-h-[55vh] overflow-auto rounded-4xl border border-border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -548,28 +555,47 @@ export function AccessBitacoraView({
         </div>
       )}
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
         <span>
           Página {page} de {totalPages} · {total} movimientos
         </span>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:inline">Filas por página</span>
+          <Select
+            value={String(pageSize)}
+            onValueChange={(value) => {
+              setPageSize(Number(value));
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="h-8 w-20" aria-label="Filas por página">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="35">35</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="icon-sm"
+            aria-label="Página anterior"
             disabled={page <= 1}
             onClick={() => setPage((current) => Math.max(1, current - 1))}
           >
-            Anterior
+            ←
           </Button>
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="icon-sm"
+            aria-label="Página siguiente"
             disabled={page >= totalPages}
             onClick={() => setPage((current) => current + 1)}
           >
-            Siguiente
+            →
           </Button>
         </div>
       </div>
