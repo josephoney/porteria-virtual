@@ -141,3 +141,11 @@ export interface PassBatchResult {
   created: PassBatchCreated[];
   rejected: PassBatchRejection[];
 }
+
+/** Dry run of a batch: the same classification the insert will apply. */
+export interface PassBatchPreview {
+  batchLabel: string | null;
+  total: number;
+  validCount: number;
+  rejected: PassBatchRejection[];
+}

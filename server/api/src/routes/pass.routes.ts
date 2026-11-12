@@ -37,6 +37,32 @@ async function dynamicQrGuard(_request: FastifyRequest, reply: FastifyReply) {
   }
 }
 
+type BatchBody = Parameters<typeof passService.createPassBatch>[1];
+
+/** Parses a batch body, replying with 400 when the payload cannot be used. */
+function parseBatchBody(request: FastifyRequest, reply: FastifyReply): BatchBody | null {
+  const parsed = createPassBatchSchema.safeParse(request.body);
+  if (parsed.success) return parsed.data;
+
+  const tooBig = parsed.error.issues.some((issue) => issue.code === 'too_big');
+  if (tooBig) {
+    reply.status(400).send({
+      statusCode: 400,
+      error: 'Pass rejected',
+      message: 'batch_too_large',
+      max: passService.PASS_BATCH_MAX_VISITORS,
+    });
+    return null;
+  }
+
+  reply.status(400).send({
+    statusCode: 400,
+    error: 'Bad Request',
+    message: parsed.error.issues[0]?.message ?? 'invalid_batch',
+  });
+  return null;
+}
+
 export async function passRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (request, reply) => {
     try {
@@ -73,28 +99,26 @@ export async function passRoutes(app: FastifyInstance) {
   );
 
   app.post(
+    '/batch/preview',
+    { preHandler: [dynamicQrGuard, requireRole('owner', 'tenant', 'resident')] },
+    async (request, reply) => {
+      const body = parseBatchBody(request, reply);
+      if (!body) return;
+
+      const result = await passService.previewPassBatch(getRequester(request), body);
+      if (!result.ok) return sendPassError(reply, result.code);
+      return reply.send(result.data);
+    },
+  );
+
+  app.post(
     '/batch',
     { preHandler: [dynamicQrGuard, requireRole('owner', 'tenant', 'resident')] },
     async (request, reply) => {
-      const parsed = createPassBatchSchema.safeParse(request.body);
-      if (!parsed.success) {
-        const tooBig = parsed.error.issues.some((issue) => issue.code === 'too_big');
-        if (tooBig) {
-          return reply.status(400).send({
-            statusCode: 400,
-            error: 'Pass rejected',
-            message: 'batch_too_large',
-            max: passService.PASS_BATCH_MAX_VISITORS,
-          });
-        }
-        return reply.status(400).send({
-          statusCode: 400,
-          error: 'Bad Request',
-          message: parsed.error.issues[0]?.message ?? 'invalid_batch',
-        });
-      }
+      const body = parseBatchBody(request, reply);
+      if (!body) return;
 
-      const result = await passService.createPassBatch(getRequester(request), parsed.data);
+      const result = await passService.createPassBatch(getRequester(request), body);
       if (!result.ok) return sendPassError(reply, result.code);
       return reply.status(201).send(result.data);
     },

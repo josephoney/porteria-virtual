@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   RiAddLine,
   RiFileCopyLine,
+  RiFileList3Line,
   RiForbidLine,
   RiPencilLine,
   RiQrCodeLine,
@@ -112,6 +113,7 @@ function formatRange(from: string, until: string) {
 }
 
 export function ResidentAuthorizationsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [passes, setPasses] = useState<ResidentPass[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -119,7 +121,13 @@ export function ResidentAuthorizationsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [destinationFilter, setDestinationFilter] = useState('all');
-  const [batchFilter, setBatchFilter] = useState<{ id: string; label: string } | null>(null);
+  const [batchFilter, setBatchFilter] = useState<{ id: string; label: string } | null>(() => {
+    // The bulk result links here with `?batchId=…&batchLabel=…` so the lot
+    // arrives already filtered.
+    const batchId = searchParams.get('batchId');
+    if (!batchId) return null;
+    return { id: batchId, label: searchParams.get('batchLabel') ?? 'Carga masiva' };
+  });
   const [destinations, setDestinations] = useState<DestinationOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -287,8 +295,18 @@ export function ResidentAuthorizationsPage() {
 
   function filterByBatch(pass: ResidentPass) {
     if (!pass.batchId) return;
-    setBatchFilter({ id: pass.batchId, label: pass.batchLabel ?? 'Carga masiva' });
+    const label = pass.batchLabel ?? 'Carga masiva';
+    setBatchFilter({ id: pass.batchId, label });
     setPage(1);
+    setSearchParams({ batchId: pass.batchId, batchLabel: label }, { replace: true });
+  }
+
+  function clearBatchFilter() {
+    setBatchFilter(null);
+    setPage(1);
+    if (searchParams.has('batchId') || searchParams.has('batchLabel')) {
+      setSearchParams({}, { replace: true });
+    }
   }
 
   function clearFilters() {
@@ -296,8 +314,7 @@ export function ResidentAuthorizationsPage() {
     setSearch('');
     setStatusFilter('all');
     setDestinationFilter('all');
-    setBatchFilter(null);
-    setPage(1);
+    clearBatchFilter();
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -308,11 +325,18 @@ export function ResidentAuthorizationsPage() {
         title="Autorizaciones"
         description="Todo lo que autorizaste, con su destino y su ventana de validez."
         actions={
-          <Button asChild>
-            <Link to="/resident/authorizations/new">
-              <RiAddLine /> Autorizar visita
-            </Link>
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/resident/authorizations/bulk">
+                <RiFileList3Line /> Carga masiva
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link to="/resident/authorizations/new">
+                <RiAddLine /> Autorizar visita
+              </Link>
+            </Button>
+          </>
         }
       />
 
@@ -386,10 +410,7 @@ export function ResidentAuthorizationsPage() {
                     type="button"
                     className="text-muted-foreground hover:text-foreground"
                     aria-label="Quitar filtro de lote"
-                    onClick={() => {
-                      setBatchFilter(null);
-                      setPage(1);
-                    }}
+                    onClick={clearBatchFilter}
                   >
                     ×
                   </button>

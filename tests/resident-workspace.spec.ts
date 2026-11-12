@@ -556,3 +556,119 @@ test.describe('resident authorization history', () => {
     }
   });
 });
+
+async function openBulk(page: Page) {
+  await loginAs(page, DEMO_USERS.resident);
+  await expect(page).toHaveURL(/\/resident$/);
+  await page.goto('/resident/authorizations/bulk');
+  await expect(page.getByRole('heading', { level: 1, name: 'Carga masiva' })).toBeVisible();
+}
+
+/** Same Radix caveat as the single form: the destination always starts empty. */
+async function pickBulkDestination(page: Page) {
+  await page.locator('#bulk-destination').click();
+  const home = page.getByRole('option', { name: /A-101/ });
+  if ((await home.count()) > 0) {
+    await home.first().click();
+    return;
+  }
+  await page.locator('[role="option"]:not([aria-disabled="true"])').first().click();
+}
+
+test.describe('resident bulk authorizations', () => {
+  test('blocks the preview without a destination and calls no endpoint', async ({ page }) => {
+    await openBulk(page);
+
+    let batchRequests = 0;
+    page.on('request', (request) => {
+      if (request.url().includes('/api/passes/batch')) batchRequests += 1;
+    });
+
+    await page.locator('#bulk-csv').fill('nombre,apellido,documento\nAna,Torres,30111222');
+    await page.getByRole('button', { name: 'Revisar lote' }).click();
+
+    await expect(page.getByText('Elegí el destino del lote.')).toBeVisible();
+    expect(batchRequests).toBe(0);
+  });
+
+  test('rejects the whole file when a required column is missing', async ({ page }) => {
+    await openBulk(page);
+
+    await page.locator('#bulk-csv').fill('nombre,apellido\nAna,Torres');
+
+    await expect(page.getByText(/Faltan las columnas: documento/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Revisar lote' })).toBeDisabled();
+  });
+
+  test('a file over the limit is rejected before creating anything', async ({ page }) => {
+    await openBulk(page);
+
+    const rows = Array.from({ length: 201 }, (_, index) => `Fila,${index},DOC-${index}`);
+    await page.locator('#bulk-csv').fill(`nombre,apellido,documento\n${rows.join('\n')}`);
+
+    await expect(page.getByText('El archivo tiene 201 filas y el máximo es 200.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Revisar lote' })).toBeDisabled();
+  });
+
+  test('changing the window invalidates the preview', async ({ page }) => {
+    await openBulk(page);
+    await pickBulkDestination(page);
+
+    await page.locator('#bulk-csv').fill('nombre,apellido,documento\nAna,Torres,30111333');
+    await page.getByRole('button', { name: 'Revisar lote' }).click();
+    await expect(page.getByText('Vista previa')).toBeVisible();
+
+    await page.locator('#bulk-valid-until').fill('2030-06-01T10:00');
+    await expect(page.getByText('Vista previa')).toHaveCount(0);
+  });
+
+  test('previews every row, creates the valid ones and links to the batch history', async ({
+    page,
+    request,
+  }) => {
+    const stamp = Date.now();
+    const label = `Carga ${stamp}`;
+    const lastName = `Lote${stamp}`;
+    const repeated = `71${stamp}`;
+    const fresh = `72${stamp}`;
+    const csv = [
+      'nombre,apellido,documento,placa',
+      `Ana,${lastName},${repeated},`,
+      `Beto,${lastName},${fresh},abc123`,
+      `Caro,${lastName},${repeated},`,
+    ].join('\n');
+
+    await openBulk(page);
+    await pickBulkDestination(page);
+    await page.locator('#bulk-label').fill(label);
+    await page.locator('#bulk-csv').fill(csv);
+
+    const previewResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().includes('/api/passes/batch/preview'),
+    );
+    await page.getByRole('button', { name: 'Revisar lote' }).click();
+    expect((await previewResponse).status()).toBe(200);
+
+    await expect(page.getByText('3 filas · 2 válidas · 1 con problemas')).toBeVisible();
+
+    const duplicateRow = page.locator('tbody tr').filter({ hasText: repeated }).last();
+    await expect(duplicateRow.getByText('documento duplicado en el archivo')).toBeVisible();
+
+    try {
+      await page.getByRole('button', { name: 'Crear 2 autorizaciones' }).click();
+
+      await expect(page.getByText('Lote creado', { exact: true })).toBeVisible();
+      await expect(page.getByText(/2 autorizaciones creadas/)).toBeVisible();
+
+      await page.getByRole('link', { name: 'Ver historial del lote' }).click();
+
+      await expect(page).toHaveURL(/batchId=/);
+      await expect(page.getByText(`Lote: ${label}`)).toBeVisible();
+      await expect(page.getByText(/2 autorizaciones/)).toBeVisible();
+    } finally {
+      await revokePasses(request, lastName);
+    }
+  });
+});

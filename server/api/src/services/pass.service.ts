@@ -14,6 +14,7 @@ import {
   type PassBatchRejection,
   type PassBatchRequest,
   type PassBatchResult,
+  type PassBatchPreview,
   type PassBatchVisitorInput,
   type PassLinkResponse,
   type PassQrResponse,
@@ -346,10 +347,25 @@ function rejectVisitor(visitor: PassBatchVisitorInput, reason: string): PassBatc
   };
 }
 
-export async function createPassBatch(
+interface PreparedBatch {
+  personId: string;
+  communityId: string;
+  destination: ResolvedDestination;
+  window: { validFrom: Date; validUntil: Date };
+  batchId: string;
+  batchLabel: string | null;
+  valid: PassBatchVisitorInput[];
+  rejected: PassBatchRejection[];
+}
+
+/**
+ * Validates a batch and splits it into what can be created and what cannot.
+ * The preview and the real insert share this so both report the same reasons.
+ */
+async function prepareBatch(
   requester: PassRequester,
   input: PassBatchRequest,
-): Promise<PassResult<PassBatchResult>> {
+): Promise<PassResult<PreparedBatch>> {
   if (!config.features.dynamicQrEnabled) return { ok: false, code: 'dynamic_qr_disabled' };
   if (!requester.communityId) return { ok: false, code: 'forbidden' };
   if (input.type === PassType.EntryExitRecurring) {
@@ -373,7 +389,6 @@ export async function createPassBatch(
   const window = parseWindow(input.validFrom, input.validUntil);
   if (!window) return { ok: false, code: 'invalid' };
 
-  const batchId = randomUUID();
   const batchLabel = input.batchLabel?.trim() || null;
   const rejected: PassBatchRejection[] = [];
   const seenDocuments = new Set<string>();
@@ -419,6 +434,50 @@ export async function createPassBatch(
     valid.push(visitor);
   }
 
+  return {
+    ok: true,
+    data: {
+      personId,
+      communityId: requester.communityId,
+      destination,
+      window,
+      batchId: randomUUID(),
+      batchLabel,
+      valid,
+      rejected,
+    },
+  };
+}
+
+/** Dry run of a batch: same rules, no insert. */
+export async function previewPassBatch(
+  requester: PassRequester,
+  input: PassBatchRequest,
+): Promise<PassResult<PassBatchPreview>> {
+  const prepared = await prepareBatch(requester, input);
+  if (!prepared.ok) return prepared;
+
+  const { batchLabel, valid, rejected } = prepared.data;
+  return {
+    ok: true,
+    data: {
+      batchLabel,
+      total: valid.length + rejected.length,
+      validCount: valid.length,
+      rejected,
+    },
+  };
+}
+
+export async function createPassBatch(
+  requester: PassRequester,
+  input: PassBatchRequest,
+): Promise<PassResult<PassBatchResult>> {
+  const prepared = await prepareBatch(requester, input);
+  if (!prepared.ok) return prepared;
+  const { personId, communityId, destination, window, batchId, batchLabel, valid, rejected } =
+    prepared.data;
+
   const created: PassBatchCreated[] = [];
 
   if (valid.length > 0) {
@@ -436,7 +495,7 @@ export async function createPassBatch(
           .insert(accessPasses)
           .values({
             id: passId,
-            communityId: requester.communityId as string,
+            communityId,
             locationUnitId: destination.id,
             structureId: destination.structureId,
             createdByPersonId: personId,
@@ -477,7 +536,7 @@ export async function createPassBatch(
     });
 
     // One event for the whole batch keeps the outbox readable.
-    await enqueuePassEvent(requester, 'pass.created', requester.communityId, {
+    await enqueuePassEvent(requester, 'pass.created', communityId, {
       batchId,
       batchLabel,
       locationUnitId: destination.id,

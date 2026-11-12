@@ -16,6 +16,7 @@ import { GuardPanel } from './components/guard/GuardPanel';
 import { ResidentHomePage } from './pages/ResidentHomePage';
 import { ResidentAuthorizationsPage } from './pages/ResidentAuthorizationsPage';
 import { ResidentAuthorizationNewPage } from './pages/ResidentAuthorizationNewPage';
+import { ResidentAuthorizationBulkPage } from './pages/ResidentAuthorizationBulkPage';
 import { ErrorBoundary } from './components/errors/ErrorBoundary';
 import { Button } from './components/ui/button';
 import './App.css';
@@ -278,6 +279,14 @@ function DashboardApp() {
             element={
               <RequireRole role={['owner', 'tenant', 'resident']}>
                 <ResidentAuthorizationNewPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="resident/authorizations/bulk"
+            element={
+              <RequireRole role={['owner', 'tenant', 'resident']}>
+                <ResidentAuthorizationBulkPage />
               </RequireRole>
             }
           />

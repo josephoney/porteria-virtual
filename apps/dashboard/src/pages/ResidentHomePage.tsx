@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { RiAddLine, RiArrowRightLine, RiHistoryLine, RiQrCodeLine } from '@remixicon/react';
+import { RiAddLine, RiArrowRightLine, RiFileList3Line, RiHistoryLine, RiQrCodeLine } from '@remixicon/react';
 import { ApiError, get } from '../lib/apiClient';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -91,7 +91,7 @@ export function ResidentHomePage() {
       )}
 
       {!disabled && !error && (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <Link
             to="/resident/authorizations/new"
             className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40"
@@ -108,6 +108,16 @@ export function ResidentHomePage() {
             <p className="mt-2 text-sm font-medium">Historial</p>
             <p className="text-xs text-muted-foreground">
               Revisá, compartí o revocá lo autorizado.
+            </p>
+          </Link>
+          <Link
+            to="/resident/authorizations/bulk"
+            className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/40"
+          >
+            <RiFileList3Line className="size-5 text-muted-foreground" />
+            <p className="mt-2 text-sm font-medium">Carga masiva</p>
+            <p className="text-xs text-muted-foreground">
+              Autorizá un grupo de visitas con un CSV.
             </p>
           </Link>
         </div>

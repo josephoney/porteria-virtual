@@ -66,13 +66,13 @@
 
 ## 8. Carga masiva
 
-- [ ] 8.1 Crear la página de carga masiva con input de archivo, textarea y descarga de plantilla.
-- [ ] 8.2 Implementar el parser CSV tolerante a mayúsculas y espacios en los encabezados.
-- [ ] 8.3 Validar encabezados, filas, duplicados internos, pases activos y el límite de 200.
-- [ ] 8.4 Implementar la vista previa con válidas, inválidas y motivos por fila.
-- [ ] 8.5 Invalidar la vista previa al cambiar destino o vigencia.
-- [ ] 8.6 Enviar el lote a `POST /api/passes/batch` y mostrar creadas y rechazadas.
-- [ ] 8.7 Enlazar el resultado con el historial filtrado por lote.
+- [x] 8.1 Crear la página de carga masiva con input de archivo, textarea y descarga de plantilla.
+- [x] 8.2 Implementar el parser CSV tolerante a mayúsculas y espacios en los encabezados.
+- [x] 8.3 Validar encabezados, filas, duplicados internos, pases activos y el límite de 200.
+- [x] 8.4 Implementar la vista previa con válidas, inválidas y motivos por fila.
+- [x] 8.5 Invalidar la vista previa al cambiar destino o vigencia.
+- [x] 8.6 Enviar el lote a `POST /api/passes/batch` y mostrar creadas y rechazadas.
+- [x] 8.7 Enlazar el resultado con el historial filtrado por lote.
 
 ## 9. Verificación
 

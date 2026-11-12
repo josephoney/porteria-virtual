@@ -22,6 +22,7 @@ export type {
   PassBatchCreated,
   PassBatchRejection,
   PassBatchResult,
+  PassBatchPreview,
 } from './types/pass.js';
 export type { GuardShift, GuardShiftSegment, GuardShiftWithSegments } from './types/guard-shift.js';
 export type { BitacoraEntry, BitacoraComment } from './types/bitacora.js';

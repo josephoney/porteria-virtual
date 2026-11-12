@@ -514,6 +514,65 @@ describe('pass destinations integration', () => {
     assert.ok(items.every((item) => item.batchLabel === 'Cumpleaños QA'));
   });
 
+  it('previews a batch without creating passes', async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const existingVisitor = `P-EXISTING-${suffix}`;
+    const existing = await request(
+      'POST',
+      '/api/passes',
+      passPayload({ visitorDocument: existingVisitor }),
+    );
+    assert.equal(existing.statusCode, 201, existing.body);
+
+    const validDocument = `P-VALID-${suffix}`;
+    const response = await request(
+      'POST',
+      '/api/passes/batch/preview',
+      batchPayload([
+        { firstName: 'Ana', lastName: `Preview ${suffix}`, document: validDocument },
+        { firstName: 'Ana', lastName: 'Repetida', document: validDocument },
+        { firstName: 'Bruno', lastName: 'Existente', document: existingVisitor },
+      ]),
+    );
+
+    assert.equal(response.statusCode, 200, response.body);
+    const preview = parse(response);
+    assert.equal(preview.total, 3);
+    assert.equal(preview.validCount, 1);
+    assert.equal(preview.batchLabel, 'Cumpleaños QA');
+    assert.deepEqual(
+      preview.rejected.map((row: Json) => row.reason).sort(),
+      [
+        'documento duplicado en el archivo',
+        'ya tiene una autorización activa para ese destino',
+      ].sort(),
+    );
+
+    // The dry run must not touch the database.
+    const stored = await request('GET', `/api/passes?search=${validDocument}`);
+    assert.equal(stored.statusCode, 200, stored.body);
+    assert.equal(parse(stored).length, 0);
+  });
+
+  it('rejects a preview with more than 200 visitors', async () => {
+    const visitors = Array.from({ length: 201 }, (_, index) => ({
+      firstName: 'Preview',
+      lastName: `Fila ${index}`,
+      document: `PREV-${index}`,
+    }));
+
+    const response = await request(
+      'POST',
+      '/api/passes/batch/preview',
+      batchPayload(visitors),
+    );
+
+    assert.equal(response.statusCode, 400, response.body);
+    const body = parse(response);
+    assert.equal(body.message, 'batch_too_large');
+    assert.equal(body.max, 200);
+  });
+
   it('filters the history by search and destination', async () => {
     const search = await request('GET', '/api/passes?search=Carla');
     assert.equal(search.statusCode, 200, search.body);
