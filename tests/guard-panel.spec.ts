@@ -96,4 +96,48 @@ test.describe('guard panel and access bitacora', () => {
     await expect(page.getByRole('columnheader', { name: 'Autorizó', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Agregar novedad', exact: true })).toBeVisible();
   });
+
+  test('polls the bitacora with a single row while a shift is open', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.guard);
+    await expect(page).toHaveURL(/\/guard$/);
+
+    await expect(page.getByText('Turno actual', { exact: true })).toBeVisible();
+    const closeButton = page.getByRole('button', { name: 'Cerrar turno', exact: true });
+    const startShiftButton = page.getByRole('button', { name: 'Iniciar turno', exact: true });
+    await expect(page.getByRole('button', { name: /Iniciar turno|Cerrar turno/ })).toBeVisible();
+
+    // Serial mode leaves the shift closed, but a previous failure could not.
+    if (await closeButton.isVisible()) {
+      page.once('dialog', (dialog) => dialog.accept());
+      await closeButton.click();
+      await expect(startShiftButton).toBeVisible();
+    }
+
+    // The poll asks for one row, so `pageSize=1` tells it apart from the table,
+    // which loads 20.
+    let polls = 0;
+    page.on('request', (request) => {
+      const url = request.url();
+      if (
+        request.method() === 'GET' &&
+        url.includes('/api/bitacora?') &&
+        url.includes('pageSize=1')
+      ) {
+        polls += 1;
+      }
+    });
+
+    await page.getByRole('combobox').first().click();
+    await page.getByRole('option', { name: 'Puerta Principal', exact: true }).click();
+    await startShiftButton.click();
+    await expect(closeButton).toBeVisible();
+
+    // Opening the shift registers the poll and the first tick fires right away,
+    // so this does not wait a full interval.
+    await expect.poll(() => polls, { timeout: 20_000 }).toBeGreaterThan(0);
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await closeButton.click();
+    await expect(startShiftButton).toBeVisible();
+  });
 });

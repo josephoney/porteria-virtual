@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ApiError, get, post } from '../../lib/apiClient';
 import { PageHeader } from '../layout/PageHeader';
@@ -10,6 +10,9 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+
+/** How often the panel asks whether a new access movement was recorded. */
+const BITACORA_POLL_MS = 15_000;
 
 interface CommunityOption {
   id: string;
@@ -107,6 +110,8 @@ export function GuardPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bitacoraToken, setBitacoraToken] = useState(0);
+  /** Last total seen by the poll, used to tell "nothing new" from "new row". */
+  const lastActivityTotal = useRef<number | null>(null);
 
   useEffect(() => {
     setCommunityId(activeMembership?.communityId ?? null);
@@ -213,6 +218,66 @@ export function GuardPanel() {
       cancelled = true;
     };
   }, [isAdmin, communityId, currentAccessPointId]);
+
+  /**
+   * The bitácora is written by the guard app, not by this panel, so the only
+   * way to notice a decision is to ask. Fetching the page itself would move
+   * 13 KB on every tick; instead we ask for a single row and compare the total,
+   * which costs 685 bytes and only triggers the real fetch when it changed.
+   */
+  useEffect(() => {
+    const shiftId = current?.shift?.id ?? null;
+    const community = communityId;
+    const accessPoint = currentAccessPointId;
+    if (!shiftId || !community || !accessPoint) {
+      lastActivityTotal.current = null;
+      return;
+    }
+
+    // Narrow once, outside the callback: TypeScript does not carry the
+    // narrowing of a nullable value into an async closure.
+    const communityKey: string = community;
+    const accessPointKey: string = accessPoint;
+
+    let cancelled = false;
+
+    async function check() {
+      // A hidden tab has nobody looking at it, so skip the tick instead of
+      // spending a request on a screen that is not on screen.
+      if (document.visibilityState !== 'visible') return;
+      const params = new URLSearchParams({
+        communityId: communityKey,
+        accessPointId: accessPointKey,
+        page: '1',
+        pageSize: '1',
+      });
+      try {
+        const result = await get<{ total: number }>(`/api/bitacora?${params.toString()}`);
+        if (cancelled) return;
+        const total = result.data.total;
+        if (lastActivityTotal.current !== null && total !== lastActivityTotal.current) {
+          setBitacoraToken((value) => value + 1);
+        }
+        lastActivityTotal.current = total;
+      } catch {
+        // A failed poll is not worth a banner: the manual button still works and
+        // the next tick retries.
+      }
+    }
+
+    void check();
+    const timer = window.setInterval(() => {
+      void check();
+    }, BITACORA_POLL_MS);
+    // Coming back to the tab should feel instant, not wait for the tick.
+    document.addEventListener('visibilitychange', check);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [current?.shift?.id, communityId, currentAccessPointId]);
 
   const activeAccessPoints = useMemo(
     () => accessPoints.filter((item) => item.active),
