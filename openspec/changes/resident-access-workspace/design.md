@@ -32,7 +32,7 @@ Lo que falta es de modelo y de superficie:
 - Notificar al visitante por canales externos.
 - Reservar amenidades, cobrar o controlar cupos.
 - Cambiar el flujo del guardia ni el escaneo.
-- Construir la app móvil del residente.
+- Construir la app móvil del residente: ya existe como canal aparte y este change no la modifica.
 - Crear un catálogo de lugares paralelo al árbol de ubicaciones.
 
 ## Decisions
@@ -40,6 +40,8 @@ Lo que falta es de modelo y de superficie:
 ### 1. El residente vive en `apps/dashboard`, no en `apps/resident`
 
 `apps/resident` es un stub sin router, sin auth y sin design system. Replicar ahí el shell, el tema y el cliente de API es más caro que agregar una superficie al dashboard, que ya tiene todo eso y comparte sesión.
+
+La app móvil **sigue existiendo** y no se toca: es otro canal, con otro alcance. La app genera un QR por vez; el dashboard agrega historial, acciones sobre el QR y el enlace, y carga masiva. Un residente puede usar los dos, y los pases creados en cualquiera aparecen en ambos lados porque comparten `access_passes`. La web no pide instalar ni migrar a la app, y entrar al dashboard no invalida nada de lo hecho desde el teléfono.
 
 `HomePage` deja de redirigir a `/app-required` para `owner`, `tenant` y `resident`: ahora va a `/resident`. `/app-required` queda solo como salida para roles sin superficie propia.
 

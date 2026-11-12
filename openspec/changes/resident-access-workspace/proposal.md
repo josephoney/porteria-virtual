@@ -54,6 +54,6 @@ Ninguna. `dynamic-pass-creation`, `pass-lifecycle` y `rotating-qr` siguen vivien
 - Notificaciones al visitante por WhatsApp, SMS o email. El enlace se comparte a mano o con el `share` del navegador.
 - Delegación de residentes a terceros (`authorized_by_delegation_id`), que depende de `add-delegated-subusers`.
 - Reserva de amenidades con cupo, horario o cobro. El destino es solo el lugar al que se autoriza el ingreso.
-- App nativa o PWA offline del residente. Este change es la web del dashboard.
+- App nativa o PWA offline del residente. La app móvil ya existe como canal aparte: genera un QR por vez y este change no la modifica. Este change es la web del dashboard, que suma historial y carga masiva.
 - Recurrencia avanzada (`entry_exit_recurring`), que sigue reservada a Phase 2.
 - Reconocimiento facial, biometría o lectura de documentos.

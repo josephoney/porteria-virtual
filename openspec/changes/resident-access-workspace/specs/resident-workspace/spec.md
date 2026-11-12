@@ -29,6 +29,28 @@ The dashboard SHALL let a user with an active `owner`, `tenant`, or `resident` m
 - **THEN** the resident workspace scopes every screen to the selected community and membership
 - **AND** switching context reloads the resident data
 
+### Requirement: Web and mobile channels coexist
+
+The resident workspace SHALL be an additional channel, not a replacement for the mobile app.
+
+#### Scenario: Resident uses both channels
+
+- **WHEN** a resident has used the mobile app before
+- **THEN** signing in to the dashboard does not revoke sessions, links, or passes created from the app
+- **AND** passes created in either channel appear in the dashboard history
+
+#### Scenario: Dashboard capabilities beyond the app
+
+- **WHEN** the resident opens the dashboard
+- **THEN** it offers the authorization history, the bulk upload, and the QR and link actions
+- **AND** none of those capabilities require the mobile app
+
+#### Scenario: No forced channel switch
+
+- **WHEN** the resident signs in to the dashboard
+- **THEN** the workspace does not instruct the user to install, open, or migrate to the mobile app
+- **AND** the entry screen is the workspace itself, not an interstitial
+
 ### Requirement: Resident layout
 
 The resident workspace SHALL render its own navigation, separate from the admin sidebar.

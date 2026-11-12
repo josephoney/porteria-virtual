@@ -84,3 +84,4 @@
 - [ ] 9.6 Ajustar los specs que hoy esperan `/app-required` para residentes.
 - [ ] 9.7 Correr Playwright completo.
 - [ ] 9.8 Aplicar Prettier y validar el change con `openspec validate resident-access-workspace --strict`.
+- [ ] 9.9 Verificar que el dashboard no rompa el canal de la app: un pase creado por API con el mismo usuario sigue visible en el historial y el ingreso web no revoca enlaces ni sesiones.
