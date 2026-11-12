@@ -65,11 +65,11 @@ test.describe('Role-based landing', () => {
     await expect(page.getByRole('heading', { name: 'Guardia', exact: true })).toBeVisible();
   });
 
-  test('resident is sent to the Zima QR Access page', async ({ page }) => {
+  test('resident is sent to the resident workspace', async ({ page }) => {
     await loginAs(page, DEMO_USERS.resident);
 
-    await expect(page).toHaveURL(/\/app-required$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Usá Zima QR Access' })).toBeVisible();
+    await expect(page).toHaveURL(/\/resident$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Mis autorizaciones' })).toBeVisible();
   });
 
   test('multi-context user must pick a membership', async ({ page }) => {
@@ -81,7 +81,7 @@ test.describe('Role-based landing', () => {
 
     await options.first().click();
 
-    await expect(page).toHaveURL(/\/app-required$/);
+    await expect(page).toHaveURL(/\/resident$/);
   });
 });
 

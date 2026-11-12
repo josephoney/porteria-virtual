@@ -13,6 +13,9 @@ import { AdminPanel } from './components/admin/AdminPanel';
 import { AccessPointsPanel } from './components/admin/AccessPointsPanel';
 import { MyOrganizationPage } from './pages/MyOrganizationPage';
 import { GuardPanel } from './components/guard/GuardPanel';
+import { ResidentHomePage } from './pages/ResidentHomePage';
+import { ResidentAuthorizationsPage } from './pages/ResidentAuthorizationsPage';
+import { ResidentAuthorizationNewPage } from './pages/ResidentAuthorizationNewPage';
 import { ErrorBoundary } from './components/errors/ErrorBoundary';
 import { Button } from './components/ui/button';
 import './App.css';
@@ -25,7 +28,7 @@ function HomePage() {
   }
 
   if (activeMembership && ['owner', 'tenant', 'resident'].includes(activeMembership.role)) {
-    return <Navigate to="/app-required" replace />;
+    return <Navigate to="/resident" replace />;
   }
 
   if (activeMembership && ['org_admin', 'community_admin'].includes(activeMembership.role)) {
@@ -251,6 +254,30 @@ function DashboardApp() {
             element={
               <RequireRole role={['org_admin', 'community_admin']}>
                 <AccessPointsPanel />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="resident"
+            element={
+              <RequireRole role={['owner', 'tenant', 'resident']}>
+                <ResidentHomePage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="resident/authorizations"
+            element={
+              <RequireRole role={['owner', 'tenant', 'resident']}>
+                <ResidentAuthorizationsPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="resident/authorizations/new"
+            element={
+              <RequireRole role={['owner', 'tenant', 'resident']}>
+                <ResidentAuthorizationNewPage />
               </RequireRole>
             }
           />

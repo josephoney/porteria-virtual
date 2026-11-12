@@ -16,6 +16,7 @@ import {
   useSidebar,
 } from '../ui/sidebar';
 import {
+  RiAddLine,
   RiBarChart2Line,
   RiBookOpenLine,
   RiBox3Line,
@@ -24,8 +25,10 @@ import {
   RiFootprintLine,
   RiHistoryLine,
   RiGovernmentLine,
+  RiHome5Line,
   RiDashboardLine,
   RiMailLine,
+  RiQrCodeLine,
   RiGroupLine,
   type RemixiconComponentType,
 } from '@remixicon/react';
@@ -36,7 +39,7 @@ interface NavItem {
   icon: RemixiconComponentType;
   roles: string[];
   platformOnly?: boolean;
-  group: 'operation' | 'admin' | 'analysis';
+  group: 'operation' | 'admin' | 'analysis' | 'resident';
   /** Landing route: active only on an exact path match, never on its subroutes. */
   end?: boolean;
 }
@@ -163,6 +166,31 @@ const items: NavItem[] = [
     group: 'admin',
   },
 
+  // Residente
+  {
+    to: '/resident',
+    label: 'Inicio',
+    icon: RiHome5Line,
+    roles: ['owner', 'tenant', 'resident'],
+    group: 'resident',
+    end: true,
+  },
+  {
+    to: '/resident/authorizations',
+    label: 'Autorizaciones',
+    icon: RiQrCodeLine,
+    roles: ['owner', 'tenant', 'resident'],
+    group: 'resident',
+    end: true,
+  },
+  {
+    to: '/resident/authorizations/new',
+    label: 'Autorizar',
+    icon: RiAddLine,
+    roles: ['owner', 'tenant', 'resident'],
+    group: 'resident',
+  },
+
   // Análisis
   {
     to: '/platform/bitacora',
@@ -215,6 +243,7 @@ const groupLabels: Record<NavItem['group'], string> = {
   operation: 'Operación',
   admin: 'Administración',
   analysis: 'Análisis',
+  resident: 'Mi cuenta',
 };
 
 export function AppSidebar() {
@@ -232,7 +261,9 @@ export function AppSidebar() {
     ? ['admin', 'analysis']
     : ['org_admin', 'community_admin'].includes(role)
       ? ['admin', 'operation', 'analysis']
-      : ['operation', 'analysis'];
+      : ['owner', 'tenant', 'resident'].includes(role)
+        ? ['resident']
+        : ['operation', 'analysis'];
 
   const visible = items.filter((item) => {
     if (!user) return false;

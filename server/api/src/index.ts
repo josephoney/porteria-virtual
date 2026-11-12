@@ -1,6 +1,4 @@
-import dotenv from 'dotenv';
-import path from 'path';
-dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
+import './env.js';
 import Fastify, { type FastifyRequest, type FastifyReply } from 'fastify';
 import fjwt from '@fastify/jwt';
 import cors from '@fastify/cors';

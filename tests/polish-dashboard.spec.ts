@@ -120,9 +120,9 @@ test.describe('auth shell', () => {
 
     await options.first().click();
 
-    // Both demo memberships are resident roles, so both land on /app-required.
-    await expect(page).toHaveURL(/\/app-required$/);
-    await expect(page.getByText('Usá Zima QR Access')).toBeVisible();
+    // Both demo memberships are resident roles, so both land on the resident workspace.
+    await expect(page).toHaveURL(/\/resident$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Mis autorizaciones' })).toBeVisible();
     await expect(page.getByText('Elegí tu contexto')).toHaveCount(0);
   });
 });

@@ -37,12 +37,12 @@
 
 ## 5. Workspace del residente
 
-- [ ] 5.1 Quitar la redirección a `/app-required` para `owner`, `tenant` y `resident` en `HomePage`.
-- [ ] 5.2 Agregar las rutas `/resident`, `/resident/authorizations`, `/resident/authorizations/new` y `/resident/authorizations/bulk` con `RequireRole`.
-- [ ] 5.3 Crear `ResidentLayout` con el header existente y un sidebar reducido (Inicio, Autorizaciones, Autorizar).
-- [ ] 5.4 Implementar el inicio con accesos rápidos, autorizaciones vigentes y estado vacío.
-- [ ] 5.5 Mostrar el mensaje neutral cuando el feature flag de QR dinámico está apagado.
-- [ ] 5.6 Verificar la navegación en 390x844 sin scroll horizontal de página.
+- [x] 5.1 Quitar la redirección a `/app-required` para `owner`, `tenant` y `resident` en `HomePage`.
+- [x] 5.2 Agregar las rutas `/resident`, `/resident/authorizations`, `/resident/authorizations/new` y `/resident/authorizations/bulk` con `RequireRole`. (la ruta de carga masiva se agrega con la secci�n 7).
+- [x] 5.3 Crear `ResidentLayout` con el header existente y un sidebar reducido (Inicio, Autorizaciones, Autorizar).
+- [x] 5.4 Implementar el inicio con accesos rápidos, autorizaciones vigentes y estado vacío.
+- [x] 5.5 Mostrar el mensaje neutral cuando el feature flag de QR dinámico está apagado.
+- [x] 5.6 Verificar la navegación en 390x844 sin scroll horizontal de página.
 
 ## 6. Formulario de autorización
 
