@@ -74,6 +74,8 @@ export const accessPasses = pgTable(
     exitAt: timestamp('exit_at', { withTimezone: true }),
     entryCount: integer('entry_count').notNull().default(0),
     exitCount: integer('exit_count').notNull().default(0),
+    batchId: uuid('batch_id'),
+    batchLabel: varchar('batch_label', { length: 80 }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -87,6 +89,7 @@ export const accessPasses = pgTable(
       table.locationUnitId,
       table.createdAt,
     ),
+    batchIdx: index('access_pass_batch_idx').on(table.batchId),
     activeValidUntilIdx: index('access_pass_active_valid_until_idx')
       .on(table.validUntil)
       .where(sql`${table.status} = 'active'`),

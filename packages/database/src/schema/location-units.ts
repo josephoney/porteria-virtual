@@ -24,13 +24,11 @@ export const sectionTypeEnum = pgEnum('section_type', [
   'house',
   'lot',
   'commercial',
+  'common_area',
   'other',
 ]);
 
-export const locationUnitStatusEnum = pgEnum('location_unit_status', [
-  'active',
-  'inactive',
-]);
+export const locationUnitStatusEnum = pgEnum('location_unit_status', ['active', 'inactive']);
 
 export const locationUnits = pgTable(
   'location_units',

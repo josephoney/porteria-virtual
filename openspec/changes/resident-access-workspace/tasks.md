@@ -2,10 +2,10 @@
 
 ## 1. Modelo de datos
 
-- [ ] 1.1 Agregar el valor `common_area` a `sectionTypeEnum` en `packages/database/src/schema/location-units.ts`.
-- [ ] 1.2 Agregar `batch_id` (uuid nullable) y `batch_label` (varchar 80 nullable) a `access_passes` con índice por `batch_id`.
-- [ ] 1.3 Generar y aplicar la migración; correr `pnpm --filter @porteria/database build`.
-- [ ] 1.4 Confirmar que `location_unit_id` y `structure_id` de `access_passes` siguen `NOT NULL`.
+- [x] 1.1 Agregar el valor `common_area` a `sectionTypeEnum` en `packages/database/src/schema/location-units.ts`.
+- [x] 1.2 Agregar `batch_id` (uuid nullable) y `batch_label` (varchar 80 nullable) a `access_passes` con índice por `batch_id`.
+- [x] 1.3 Generar y aplicar la migración; correr `pnpm --filter @porteria/database build`.
+- [x] 1.4 Confirmar que `location_unit_id` y `structure_id` de `access_passes` siguen `NOT NULL`.
 
 ## 2. Tipos compartidos y esquemas
 
