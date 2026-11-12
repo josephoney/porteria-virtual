@@ -226,10 +226,13 @@ export function GuardPanel() {
    * which costs 685 bytes and only triggers the real fetch when it changed.
    */
   useEffect(() => {
-    const shiftId = current?.shift?.id ?? null;
     const community = communityId;
     const accessPoint = currentAccessPointId;
-    if (!shiftId || !community || !accessPoint) {
+    // A guard polls only while a shift is open. An admin does not cover a post,
+    // so there is no shift of their own: the selected community and access
+    // point are enough to keep the board they are watching up to date.
+    const needsShift = isGuard && !current?.shift?.id;
+    if (!community || !accessPoint || needsShift) {
       lastActivityTotal.current = null;
       return;
     }
@@ -238,6 +241,10 @@ export function GuardPanel() {
     // narrowing of a nullable value into an async closure.
     const communityKey: string = community;
     const accessPointKey: string = accessPoint;
+
+    // Start from scratch so switching access point does not compare against the
+    // total of the previous one.
+    lastActivityTotal.current = null;
 
     let cancelled = false;
 
@@ -277,7 +284,7 @@ export function GuardPanel() {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', check);
     };
-  }, [current?.shift?.id, communityId, currentAccessPointId]);
+  }, [current?.shift?.id, communityId, currentAccessPointId, isGuard]);
 
   const activeAccessPoints = useMemo(
     () => accessPoints.filter((item) => item.active),
