@@ -64,6 +64,12 @@ interface AccessBitacoraViewProps {
   communityId?: string | null;
   accessPointId?: string | null;
   compact?: boolean;
+  /**
+   * Bump this value to refetch the current page. It is a deliberate retrigger:
+   * the filters and the pagination stay where the user left them, unlike a
+   * remount, which would reset them.
+   */
+  refreshToken?: number;
 }
 
 const typeLabels: Record<string, string> = {
@@ -111,6 +117,7 @@ export function AccessBitacoraView({
   communityId: fixedCommunityId,
   accessPointId: fixedAccessPointId,
   compact = false,
+  refreshToken = 0,
 }: AccessBitacoraViewProps) {
   const { activeMembership } = useAuth();
   const isOrgAdmin = activeMembership?.role === 'org_admin';
@@ -222,7 +229,9 @@ export function AccessBitacoraView({
 
   useEffect(() => {
     load();
-  }, [load]);
+    // `refreshToken` intentionally retriggers the fetch: the parent asks for
+    // fresh rows after an action taken outside this component.
+  }, [load, refreshToken]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const activeAccessPoints = useMemo(

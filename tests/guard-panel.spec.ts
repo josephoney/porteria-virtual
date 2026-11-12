@@ -44,6 +44,46 @@ test.describe('guard panel and access bitacora', () => {
     await expect(page.getByRole('button', { name: 'Iniciar turno', exact: true })).toBeVisible();
   });
 
+  test('the refresh button reloads the bitacora without reloading the page', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.guard);
+    await expect(page).toHaveURL(/\/guard$/);
+
+    // The bitacora only renders with an open shift, so make sure there is one.
+    // Wait for the panel to finish loading first: `isVisible` is false while the
+    // skeletons are up and would silently skip the start.
+    await expect(page.getByText('Turno actual', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Iniciar turno|Cerrar turno/ })).toBeVisible();
+
+    const startShiftButton = page.getByRole('button', { name: 'Iniciar turno', exact: true });
+    if (await startShiftButton.isVisible()) {
+      await page.getByRole('combobox').first().click();
+      await page.getByRole('option', { name: 'Puerta Principal', exact: true }).click();
+      await startShiftButton.click();
+      await expect(page.getByRole('button', { name: 'Cerrar turno', exact: true })).toBeVisible();
+    }
+
+    let bitacoraRequests = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'GET' && request.url().includes('/api/bitacora?')) {
+        bitacoraRequests += 1;
+      }
+    });
+
+    const before = bitacoraRequests;
+    const refreshButton = page.getByRole('button', { name: 'Actualizar', exact: true });
+    await expect(refreshButton).toBeEnabled();
+    await refreshButton.click();
+
+    // The bug was that the button only refetched the shift, never the table.
+    await expect.poll(() => bitacoraRequests).toBeGreaterThan(before);
+    await expect(refreshButton).toBeEnabled();
+    await expect(page).toHaveURL(/\/guard$/);
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Cerrar turno', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Iniciar turno', exact: true })).toBeVisible();
+  });
+
   test('community admin sees the access bitacora with destination and authorizer', async ({
     page,
   }) => {

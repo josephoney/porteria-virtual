@@ -106,6 +106,7 @@ export function GuardPanel() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bitacoraToken, setBitacoraToken] = useState(0);
 
   useEffect(() => {
     setCommunityId(activeMembership?.communityId ?? null);
@@ -229,6 +230,20 @@ export function GuardPanel() {
     }
   }, [current, selectedAccessPointId, defaultAccessPoint, activeAccessPoints]);
 
+  async function refreshAll() {
+    setBusy(true);
+    setError(null);
+    try {
+      // The bitácora is written by the app, so the only way to see a decision
+      // that was just made is to refetch it: the token below asks the child to
+      // reload the current page.
+      await Promise.all([loadCurrent(), loadHistory()]);
+      setBitacoraToken((value) => value + 1);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function startShift() {
     setBusy(true);
     setError(null);
@@ -305,11 +320,9 @@ export function GuardPanel() {
             : 'Vista de administración de turnos y bitácora por acceso.'
         }
         actions={
-          isGuard ? (
-            <Button variant="outline" onClick={() => loadCurrent()}>
-              Actualizar
-            </Button>
-          ) : undefined
+          <Button variant="outline" onClick={refreshAll} disabled={busy}>
+            {busy ? 'Actualizando…' : 'Actualizar'}
+          </Button>
         }
       />
 
@@ -467,6 +480,7 @@ export function GuardPanel() {
         <AccessBitacoraView
           communityId={communityId}
           accessPointId={currentAccessPointId}
+          refreshToken={bitacoraToken}
           compact
         />
       ) : (
