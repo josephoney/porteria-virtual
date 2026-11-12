@@ -80,8 +80,11 @@ escaneo. Varios guardias pueden cubrir el mismo acceso al mismo tiempo.
 ## Build interno
 
 El APK interno se genera con EAS o un build local de Expo. Requiere configurar
-`android.package` (`com.porteria.zimaqraccess`) y las credenciales de firma. La cámara
-del modo guardia requiere un development build, no Expo Go.
+`android.package` (`com.porteria.zimaqraccess`) y las credenciales de firma.
+
+La cámara del modo guardia funciona en Expo Go: `expo-camera` con `CameraView` y
+`useCameraPermissions` está incluido en el cliente. El development build solo hace falta
+para distribuir la app o para usar módulos nativos que Expo Go no trae.
 
 ## Fuera del MVP
 
