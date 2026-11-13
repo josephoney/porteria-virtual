@@ -8,6 +8,7 @@ import {
   RiQrCodeLine,
 } from '@remixicon/react';
 import { ApiError, get } from '../lib/apiClient';
+import { usePassStream } from '../lib/use-pass-stream';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -59,6 +60,7 @@ export function ResidentHomePage() {
   const [loading, setLoading] = useState(true);
   const [disabled, setDisabled] = useState(false);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,7 +88,16 @@ export function ResidentHomePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
+
+  // A pass used at the gate has to leave this list while the resident is looking
+  // at it, without a reload.
+  usePassStream({
+    enabled: !disabled,
+    onEvent: () => {
+      setReloadKey((value) => value + 1);
+    },
+  });
 
   return (
     <div className="p-6 space-y-6">

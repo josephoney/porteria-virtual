@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import config from '../config.js';
 import { sendPassError } from '../lib/pass-error-status.js';
+import { onPassEvent } from '../lib/pass-bus.js';
 import { requireRole } from '../middlewares/rbac.js';
 import { createPassBatchSchema, createPassSchema, passesQuerySchema } from '../schemas/index.js';
 import * as passService from '../services/pass.service.js';
@@ -61,6 +62,20 @@ function parseBatchBody(request: FastifyRequest, reply: FastifyReply): BatchBody
     message: parsed.error.issues[0]?.message ?? 'invalid_batch',
   });
   return null;
+}
+
+/**
+ * `reply.hijack()` writes the socket by hand, so Fastify never gets a chance to
+ * add the CORS headers. Without them the browser drops an otherwise valid
+ * stream, so they are emitted here for the allowed origins only.
+ */
+function streamCorsHeaders(origin?: string): Record<string, string> {
+  if (!origin || !config.corsOrigins.includes(origin)) return {};
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
+    Vary: 'Origin',
+  };
 }
 
 export async function passRoutes(app: FastifyInstance) {
@@ -155,6 +170,41 @@ export async function passRoutes(app: FastifyInstance) {
     },
   );
 
+  app.get(
+    '/stream',
+    { preHandler: [dynamicQrGuard, requireRole('owner', 'tenant', 'resident')] },
+    async (request, reply) => {
+      const requester = getRequester(request);
+      const personId = await passService.personIdForRequester(requester);
+      if (!personId) return sendPassError(reply, 'forbidden');
+
+      // Take the socket: Fastify must not serialize a response that stays open.
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        ...streamCorsHeaders(request.headers.origin),
+      });
+      reply.raw.write(': connected\n\n');
+
+      // The person comes from the session, never from the query: filtering by a
+      // client supplied id would let one resident watch another's passes.
+      const unsubscribe = onPassEvent((event) => {
+        if (event.personId !== personId) return;
+        reply.raw.write(`event: pass\ndata: ${JSON.stringify(event)}\n\n`);
+      });
+
+      // Proxies drop an idle connection after 30 to 60 seconds.
+      const heartbeat = setInterval(() => reply.raw.write(': ping\n\n'), 25_000);
+
+      request.raw.on('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+      });
+    },
+  );
   app.get(
     '/:id',
     { preHandler: [dynamicQrGuard, requireRole('owner', 'tenant', 'resident')] },

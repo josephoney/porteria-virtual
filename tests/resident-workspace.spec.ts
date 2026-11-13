@@ -740,4 +740,33 @@ test.describe('common area branches', () => {
       await deleteNodeByName(request, name);
     }
   });
+
+  test('a revocation from another session updates the row without reloading', async ({
+    page,
+    request,
+  }) => {
+    const lastName = `Live${Date.now()}`;
+    const created = await createPassViaApi(request, { lastName, document: `LIVE-${Date.now()}` });
+    let pageLoaded = false;
+
+    try {
+      await openHistory(page);
+      pageLoaded = true;
+
+      const row = page.locator('tbody tr').filter({ hasText: lastName });
+      await expect(row).toBeVisible({ timeout: 20_000 });
+      await expect(row).toContainText('Activa');
+
+      // Revoke through the API, as a second tab or the phone would. The open page
+      // must react on its own: that is what the pass stream is for.
+      const token = await residentToken(request);
+      await request.post(`${API_URL}/api/passes/${created.id}/revoke`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      await expect(row).toContainText('Revocada', { timeout: 15_000 });
+    } finally {
+      if (!pageLoaded) await revokePasses(request, lastName);
+    }
+  });
 });

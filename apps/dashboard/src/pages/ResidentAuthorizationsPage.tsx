@@ -12,6 +12,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import type { DestinationOption } from '@porteria/shared';
 import { ApiError, get, post } from '../lib/apiClient';
+import { usePassStream } from '../lib/use-pass-stream';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import {
@@ -240,6 +241,14 @@ export function ResidentAuthorizationsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The guard scans in the app while this page is open, so the row has to move
+  // to "Usada" without the resident touching anything.
+  usePassStream({
+    onEvent: () => {
+      void load();
+    },
+  });
 
   async function copyLink(pass: ResidentPass) {
     if (!pass.shareUrl) return;

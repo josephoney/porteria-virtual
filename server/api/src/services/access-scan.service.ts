@@ -21,6 +21,7 @@ import type {
 } from '@porteria/shared';
 import config from '../config.js';
 import { insertBitacoraEntry } from './bitacora.service.js';
+import { publishPassEvent } from '../lib/pass-bus.js';
 import { buildLocationPath } from './location-path.service.js';
 import { resolveDestinationById } from './pass-destination.service.js';
 import { enqueueEvent } from './outbox.service.js';
@@ -533,6 +534,12 @@ export async function confirmScan(
     throw error;
   }
 
+  // The resident's history should flip on the spot: the guard just opened the
+  // gate for a pass they authorized.
+  if (pass.createdByPersonId) {
+    publishPassEvent({ personId: pass.createdByPersonId, passId: pass.id, status: pass.status });
+  }
+
   return {
     ok: true,
     data: {
@@ -638,6 +645,12 @@ export async function rejectScan(
       return { ok: false, code: 'scan_already_processed' };
     }
     throw error;
+  }
+
+  // A rejection does not change the status, but the owner still wants to know
+  // that someone tried to use the pass.
+  if (pass.createdByPersonId) {
+    publishPassEvent({ personId: pass.createdByPersonId, passId: pass.id, status: pass.status });
   }
 
   return {

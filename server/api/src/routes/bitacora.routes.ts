@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import config from '../config.js';
 import type {
   BitacoraEntryType,
   CreateBitacoraCommentDto,
@@ -39,6 +40,19 @@ function sendError<T>(reply: FastifyReply, result: Extract<BitacoraResult<T>, { 
   const status = result.code === 'not_found' ? 404 : result.code === 'forbidden' ? 403 : 400;
   const error = status === 404 ? 'Not Found' : status === 403 ? 'Forbidden' : 'Bad Request';
   return reply.status(status).send({ statusCode: status, error, message: result.code });
+}
+
+/**
+ * `reply.hijack()` writes the socket by hand, so Fastify never adds the CORS
+ * headers. Without them the browser drops an otherwise valid stream.
+ */
+function streamCorsHeaders(origin?: string): Record<string, string> {
+  if (!origin || !config.corsOrigins.includes(origin)) return {};
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
+    Vary: 'Origin',
+  };
 }
 
 export async function bitacoraRoutes(app: FastifyInstance) {
@@ -120,6 +134,7 @@ export async function bitacoraRoutes(app: FastifyInstance) {
         Connection: 'keep-alive',
         // Caddy and nginx buffer by default, which defeats the whole point.
         'X-Accel-Buffering': 'no',
+        ...streamCorsHeaders(request.headers.origin),
       });
       reply.raw.write(': connected\n\n');
 

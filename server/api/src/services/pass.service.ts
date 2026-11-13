@@ -32,6 +32,7 @@ import {
   type ResolvedDestination,
 } from './pass-destination.service.js';
 import { enqueueEventDefault } from './outbox.service.js';
+import { publishPassEvent } from '../lib/pass-bus.js';
 import { signPassQrToken } from './pass-qr-token.service.js';
 import type { PassResult } from './pass-errors.js';
 
@@ -48,6 +49,11 @@ export interface PassRequester {
   communityId: string | null;
   membershipId: string;
   isPlatformAdmin: boolean;
+}
+
+/** Person behind the session. The pass stream uses it to route events. */
+export function personIdForRequester(requester: PassRequester) {
+  return resolvePersonId(requester);
 }
 
 async function resolvePersonId(requester: PassRequester): Promise<string | null> {
@@ -746,6 +752,15 @@ export async function revokePass(
     .where(eq(accessPasses.id, passId));
 
   await enqueuePassEvent(requester, 'pass.revoked', owned.data.communityId, { passId });
+
+  // Notify the owner so a second tab or another device drops the pass at once.
+  if (owned.data.createdByPersonId) {
+    publishPassEvent({
+      personId: owned.data.createdByPersonId,
+      passId,
+      status: PassStatus.Revoked,
+    });
+  }
 
   return { ok: true, data: { id: passId, status: PassStatus.Revoked } };
 }
