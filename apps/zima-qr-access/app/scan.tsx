@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type {
   AccessPoint,
   BitacoraEntryDto,
@@ -489,56 +489,75 @@ export default function GuardScanScreen() {
             </Card>
           ) : null}
 
-          {scanResult ? (
-            <Card>
-              <Row>
-                <Badge
-                  label={scanResult.authorized ? 'Autorizado' : 'Denegado'}
-                  tone={scanResult.authorized ? 'success' : 'danger'}
-                />
-                <Badge label={actionLabel(scanResult.action)} tone="info" />
-              </Row>
-              <Text style={ui.heading}>
-                {scanResult.visitor.firstName} {scanResult.visitor.lastName}
-              </Text>
-              <Text style={ui.muted}>Documento: {scanResult.visitor.document}</Text>
-              {scanResult.vehiclePlate ? (
-                <Text style={ui.muted}>Vehículo: {scanResult.vehiclePlate}</Text>
-              ) : null}
-              <Text style={ui.muted}>Ubicación: {scanResult.locationPath}</Text>
-              <Text style={ui.muted}>Acceso: {scanResult.accessPointName}</Text>
-              <Text style={ui.muted}>Autoriza: {scanResult.authorizedByName}</Text>
-              <Text style={ui.muted}>
-                Vigencia: {formatDateTime(scanResult.schedule.validFrom)} →{' '}
-                {formatDateTime(scanResult.schedule.validUntil)}
-              </Text>
-              {scanResult.reason ? (
-                <Text style={ui.error}>{reasonText(scanResult.reason)}</Text>
-              ) : null}
+          <Modal
+            visible={Boolean(scanResult)}
+            transparent
+            animationType="fade"
+            onRequestClose={resetScan}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <Pressable
+                  style={styles.modalClose}
+                  onPress={resetScan}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cerrar"
+                >
+                  <Text style={styles.modalCloseText}>X</Text>
+                </Pressable>
+                {scanResult ? (
+                  <Card>
+                    <Row>
+                      <Badge
+                        label={scanResult.authorized ? 'Autorizado' : 'Denegado'}
+                        tone={scanResult.authorized ? 'success' : 'danger'}
+                      />
+                      <Badge label={actionLabel(scanResult.action)} tone="info" />
+                    </Row>
+                    <Text style={ui.heading}>
+                      {scanResult.visitor.firstName} {scanResult.visitor.lastName}
+                    </Text>
+                    <Text style={ui.muted}>Documento: {scanResult.visitor.document}</Text>
+                    {scanResult.vehiclePlate ? (
+                      <Text style={ui.muted}>Vehículo: {scanResult.vehiclePlate}</Text>
+                    ) : null}
+                    <Text style={ui.muted}>Ubicación: {scanResult.locationPath}</Text>
+                    <Text style={ui.muted}>Acceso: {scanResult.accessPointName}</Text>
+                    <Text style={ui.muted}>Autoriza: {scanResult.authorizedByName}</Text>
+                    <Text style={ui.muted}>
+                      Vigencia: {formatDateTime(scanResult.schedule.validFrom)} →{' '}
+                      {formatDateTime(scanResult.schedule.validUntil)}
+                    </Text>
+                    {scanResult.reason ? (
+                      <Text style={ui.error}>{reasonText(scanResult.reason)}</Text>
+                    ) : null}
 
-              {scanResult.authorized && scanResult.scanId && !decision ? (
-                <Row>
-                  <Button label="Confirmar" onPress={() => void onConfirm()} loading={busy} />
-                  <Button
-                    label="Denegar"
-                    variant="danger"
-                    onPress={() => void onReject()}
-                    loading={busy}
-                  />
-                </Row>
-              ) : null}
+                    {scanResult.authorized && scanResult.scanId && !decision ? (
+                      <Row>
+                        <Button label="Confirmar" onPress={() => void onConfirm()} loading={busy} />
+                        <Button
+                          label="Denegar"
+                          variant="danger"
+                          onPress={() => void onReject()}
+                          loading={busy}
+                        />
+                      </Row>
+                    ) : null}
 
-              {decision ? (
-                <Text style={ui.body}>
-                  {decision.status === 'confirmed'
-                    ? 'Acceso confirmado. La bitácora quedó actualizada.'
-                    : 'Acceso rechazado. La bitácora quedó actualizada.'}
-                </Text>
-              ) : null}
+                    {decision ? (
+                      <Text style={ui.body}>
+                        {decision.status === 'confirmed'
+                          ? 'Acceso confirmado. La bitácora quedó actualizada.'
+                          : 'Acceso rechazado. La bitácora quedó actualizada.'}
+                      </Text>
+                    ) : null}
 
-              <Button label="Escanear otro" variant="secondary" onPress={resetScan} />
-            </Card>
-          ) : null}
+                    <Button label="Escanear otro" variant="secondary" onPress={resetScan} />
+                  </Card>
+                ) : null}
+              </View>
+            </View>
+          </Modal>
 
           <CollapsibleSection
             title="Actividad del turno"
@@ -623,6 +642,30 @@ export default function GuardScanScreen() {
 }
 
 const styles = StyleSheet.create({
+  modalBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.lg,
+  },
+  modalClose: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: spacing.sm,
+  },
+  modalCloseText: {
+    color: colors.textMuted,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+
   flash: {
     color: colors.success,
     fontSize: 16,
