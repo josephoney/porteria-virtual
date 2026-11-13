@@ -210,7 +210,7 @@ test.describe('guard panel and access bitacora', () => {
 
     // Shifts have their own tab, so the board hides their events by default: the
     // start of the shift that was just opened must not show here.
-    await expect(page.getByText('Sin turnos', { exact: true })).toBeVisible();
+    await expect(page.getByText('Todos', { exact: true })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'Inicio de turno' })).toHaveCount(0);
 
     page.once('dialog', (dialog) => dialog.accept());

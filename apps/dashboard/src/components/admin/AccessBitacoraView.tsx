@@ -92,21 +92,26 @@ const typeLabels: Record<string, string> = {
 };
 
 /**
- * The board hides the shift events by default: shifts have their own tab and
- * their start and end entries only duplicated that table. Everything else stays,
+ * The board never shows the shift events: shifts have their own tab and their
+ * start and end entries only duplicated that table. Everything else stays,
  * including the manual notes the guard writes during the shift.
  */
 const HIDDEN_EVENT_TYPES = ['shift_start', 'shift_end'];
 
 /**
- * The type filter has three shapes: everything but the shifts, one single event
- * type, or absolutely everything. The API takes one type per request, so the
- * exclusion travels as a comma separated list.
+ * The type filter applies the exclusion on every request and narrows to one
+ * single event type when the user picks one. The exclusion travels as a comma
+ * separated list because the API takes one type per request.
  */
 function applyTypeFilter(params: URLSearchParams, type: string) {
-  if (type === 'without_shifts') params.set('excludeTypes', HIDDEN_EVENT_TYPES.join(','));
-  else if (type !== 'all') params.set('type', type);
+  params.set('excludeTypes', HIDDEN_EVENT_TYPES.join(','));
+  if (type !== 'all') params.set('type', type);
 }
+
+/** The shift events are hidden on this tab, so they are not offered either. */
+const selectableTypeLabels = Object.entries(typeLabels).filter(
+  ([value]) => !HIDDEN_EVENT_TYPES.includes(value),
+);
 
 const typeVariants: Record<
   string,
@@ -154,7 +159,7 @@ export function AccessBitacoraView({
   );
   const [accessPoints, setAccessPoints] = useState<AccessPointOption[]>([]);
   const [accessPointId, setAccessPointId] = useState<string>(fixedAccessPointId ?? 'all');
-  const [type, setType] = useState<string>('without_shifts');
+  const [type, setType] = useState<string>('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [items, setItems] = useState<BitacoraEntryRow[]>([]);
@@ -469,9 +474,8 @@ export function AccessBitacoraView({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="without_shifts">Sin turnos</SelectItem>
               <SelectItem value="all">Todos</SelectItem>
-              {Object.entries(typeLabels).map(([value, label]) => (
+              {selectableTypeLabels.map(([value, label]) => (
                 <SelectItem key={value} value={value}>
                   {label}
                 </SelectItem>
@@ -491,7 +495,7 @@ export function AccessBitacoraView({
           type="button"
           variant="outline"
           onClick={() => {
-            setType('without_shifts');
+            setType('all');
             setFrom('');
             setTo('');
             setAccessPointId(fixedAccessPointId ?? 'all');

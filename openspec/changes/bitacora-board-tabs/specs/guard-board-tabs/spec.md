@@ -32,14 +32,26 @@ The guard board SHALL show the access movements and the shift history in separat
 
 ### Requirement: Access events without the shift noise
 
-The "Ingresos y salidas" tab SHALL hide the shift start and end entries by default, because those events already have their own tab, and SHALL keep every other movement visible.
+The "Ingresos y salidas" tab SHALL never list the shift start and end entries, because those events belong to the "Turnos" tab, and SHALL keep every other movement visible, including the manual notes the guard writes during a shift.
 
-#### Scenario: Default filter hides the shift events
+#### Scenario: The shift events are never listed
 
 - WHEN the user opens the "Ingresos y salidas" tab
-- THEN the type filter reads "Sin turnos"
-- AND `shift_start` and `shift_end` entries are not listed
-- AND the request carries `excludeTypes=shift_start,shift_end`
+- THEN `shift_start` and `shift_end` entries are not listed
+- AND every request carries `excludeTypes=shift_start,shift_end`
+- AND selecting another filter never brings them back
+
+#### Scenario: The filter does not offer them
+
+- WHEN the user opens the type filter
+- THEN the options are "Todos" and the access and manual types only
+- AND "Inicio de turno" and "Fin de turno" are not offered
+
+#### Scenario: Default filter
+
+- WHEN the tab loads
+- THEN the type filter reads "Todos"
+- AND the table lists every entry except the shift events
 
 #### Scenario: Manual notes stay visible
 
@@ -47,16 +59,16 @@ The "Ingresos y salidas" tab SHALL hide the shift start and end entries by defau
 - THEN the entry is listed in the "Ingresos y salidas" tab
 - AND the user does not have to change the filter to see it
 
-#### Scenario: The filter can be widened
+#### Scenario: Narrowing to one type
 
-- WHEN the user selects "Todos"
-- THEN the shift events are listed again
-- AND selecting a single type lists only that type
+- WHEN the user selects a single type
+- THEN only that type is listed
+- AND the shift events are still excluded
 
 #### Scenario: Clearing restores the default
 
 - WHEN the user presses "Limpiar"
-- THEN the type filter returns to "Sin turnos"
+- THEN the type filter returns to "Todos"
 
 ### Requirement: Page size selector
 
