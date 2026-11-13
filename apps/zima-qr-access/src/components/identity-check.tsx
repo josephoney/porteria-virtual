@@ -2,7 +2,12 @@ import { CameraView } from 'expo-camera';
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { confirmIdentityEntry, searchAuthorizations, type IdentityCandidate } from '@/api/access';
+import {
+  confirmIdentityEntry,
+  denyIdentityEntry,
+  searchAuthorizations,
+  type IdentityCandidate,
+} from '@/api/access';
 import { Badge, Button, Divider, ui } from '@/components/ui';
 import { describeBarcode, documentFromBarcode } from '@/lib/cedula';
 import { colors, radius, spacing, typography } from '@/theme';
@@ -104,6 +109,22 @@ export function IdentityCheck({
     }
   }
 
+  async function deny(passId: string, expired: boolean) {
+    setConfirmingId(passId);
+    setError('');
+    try {
+      await denyIdentityEntry(request, passId, expired);
+      setNotice('Acceso denegado y registrado. Listo para el siguiente.');
+      setCandidates(null);
+      setDocument('');
+      setManualOpen(false);
+      onConfirmed();
+    } catch {
+      setError('No se pudo registrar la denegación. Reintentá.');
+    } finally {
+      setConfirmingId(null);
+    }
+  }
   /**
    * The card payload is the whole registry record, not the document. It is parsed
    * and the number is shown in an editable field: the guard sees what will be
@@ -213,16 +234,24 @@ export function IdentityCheck({
             <Text style={ui.muted}>{candidate.destinationPath || candidate.destinationName}</Text>
             <Text style={ui.muted}>{formatWindow(candidate.validFrom, candidate.validUntil)}</Text>
             <Text style={ui.muted}>
-              {candidate.maxUses > 1
-                ? `${remaining} de ${candidate.maxUses} usos disponibles`
-                : 'Un uso disponible'}
+              {remaining} de {candidate.maxUses} usos disponibles
             </Text>
-            <Button
-              label={label}
-              onPress={() => void confirm(candidate.passId, action)}
-              loading={confirmingId === candidate.passId}
-              disabled={consumed || expired || confirmingId !== null}
-            />
+            {consumed || expired ? (
+              <Button
+                label="Denegar acceso"
+                variant="danger"
+                onPress={() => void deny(candidate.passId, expired)}
+                loading={confirmingId === candidate.passId}
+                disabled={confirmingId !== null}
+              />
+            ) : (
+              <Button
+                label={label}
+                onPress={() => void confirm(candidate.passId, action)}
+                loading={confirmingId === candidate.passId}
+                disabled={confirmingId !== null}
+              />
+            )}
           </View>
         );
       })}

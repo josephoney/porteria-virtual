@@ -868,7 +868,11 @@ export async function confirmIdentityEntry(
       details: {
         action,
         identityCheck: true,
-        visitorDocument: pass.visitorDocument,
+        visitor: {
+          firstName: pass.visitorFirstName,
+          lastName: pass.visitorLastName,
+          document: pass.visitorDocument,
+        },
         destinationName: destination?.name ?? null,
         destinationKind: destination?.kind ?? null,
         locationPath: destination?.path ?? null,
@@ -882,4 +886,51 @@ export async function confirmIdentityEntry(
   }
 
   return { ok: true, data: { passId: pass.id, status: nextStatus, bitacoraEntryId } };
+}
+
+/** Records a refused entry without touching the pass, so the attempt is audited. */
+export async function denyIdentityEntry(
+  requester: PassRequester,
+  passId: string,
+  reason: string,
+): Promise<PassResult<{ bitacoraEntryId: string | null }>> {
+  const personId = await resolvePersonId(requester);
+  if (!personId) return { ok: false, code: 'forbidden' };
+
+  const context = await loadOpenShiftContext(personId);
+  if (!context) return { ok: false, code: 'no_active_shift' };
+
+  const [pass] = await db.select().from(accessPasses).where(eq(accessPasses.id, passId)).limit(1);
+  if (!pass) return { ok: false, code: 'not_found' };
+
+  const destination = await resolveDestinationById(pass.locationUnitId);
+  const entry = await insertBitacoraEntry(db, {
+    communityId: context.communityId,
+    accessPointId: context.accessPointId,
+    accessPointName: context.accessPointName,
+    destinationLocationUnitId: pass.locationUnitId,
+    destinationPath: destination?.path ?? (await buildLocationPath(pass.locationUnitId)) ?? '',
+    authorizedByPersonId: pass.authorizedByPersonId,
+    shiftId: context.shiftId,
+    type: 'pass_rejected',
+    source: 'manual_identity',
+    authorPersonId: personId,
+    authorAccountId: requester.accountId ?? null,
+    passId: pass.id,
+    summary: `Acceso denegado a ${pass.visitorFirstName} ${pass.visitorLastName}`,
+    details: {
+      action: 'entry',
+      identityCheck: true,
+      reason,
+      visitor: {
+        firstName: pass.visitorFirstName,
+        lastName: pass.visitorLastName,
+        document: pass.visitorDocument,
+      },
+      destinationName: destination?.name ?? null,
+      destinationKind: destination?.kind ?? null,
+    },
+  });
+
+  return { ok: true, data: { bitacoraEntryId: entry.id } };
 }

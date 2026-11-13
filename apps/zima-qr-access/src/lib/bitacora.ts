@@ -73,7 +73,8 @@ export function toActivityItem(entry: BitacoraEntryDto): ActivityItem {
     id: entry.id,
     movement,
     tone,
-    visitor: name || null,
+    // A shift event has no visitor: the name that matters is the guard who acted.
+    visitor: name || (entry.type.startsWith('shift') ? entry.authorName : null),
     document: textField(visitor?.document),
     vehiclePlate: textField(entry.details.vehiclePlate),
     destination: textField(entry.details.destinationName) ?? entry.destinationPath,

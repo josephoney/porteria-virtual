@@ -571,7 +571,7 @@ export default function GuardScanScreen() {
                 <View key={item.id} style={styles.activityRow}>
                   <Row>
                     <Badge label={item.movement} tone={item.tone} />
-                    <Text style={ui.body}>{item.visitor ?? 'Sin visitante'}</Text>
+                    {item.visitor ? <Text style={ui.body}>{item.visitor}</Text> : null}
                   </Row>
                   <Text style={ui.muted}>
                     {formatTime(item.createdAt)}

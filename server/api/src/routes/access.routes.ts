@@ -6,6 +6,7 @@ import { requireRole } from '../middlewares/rbac.js';
 import { scanDecisionSchema, scanPassSchema, scansQuerySchema } from '../schemas/index.js';
 import {
   confirmIdentityEntry,
+  denyIdentityEntry,
   confirmScan,
   listScans,
   rejectScan,
@@ -78,6 +79,21 @@ export async function accessRoutes(app: FastifyInstance) {
     },
   );
 
+  app.post(
+    '/authorizations/:passId/deny',
+    { preHandler: [dynamicQrGuard, requireRole('guard')] },
+    async (request, reply) => {
+      const { passId } = request.params as { passId: string };
+      const body = (request.body ?? {}) as { reason?: string };
+      const result = await denyIdentityEntry(
+        getRequester(request),
+        passId,
+        body.reason === 'expired' ? 'pass_expired' : 'pass_used',
+      );
+      if (!result.ok) return sendPassError(reply, result.code);
+      return reply.send(result.data);
+    },
+  );
   app.post(
     '/authorizations/:passId/confirm',
     { preHandler: [dynamicQrGuard, requireRole('guard')] },

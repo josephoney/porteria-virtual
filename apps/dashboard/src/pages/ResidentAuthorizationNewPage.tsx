@@ -166,7 +166,7 @@ export function ResidentAuthorizationNewPage() {
         hasVehicle,
         vehiclePlate: hasVehicle ? plate.trim().toUpperCase() : null,
         type,
-      ...(type === 'entry_exit' ? { maxUses: Number(maxUses) || 1 } : {}),
+        ...(type === 'entry_exit' ? { maxUses: Number(maxUses) || 1 } : {}),
         validFrom: new Date(validFrom).toISOString(),
         validUntil: new Date(validUntil).toISOString(),
       });
@@ -366,7 +366,7 @@ export function ResidentAuthorizationNewPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1">
               <Label htmlFor="resident-visitor-document">Documento</Label>
               <Input
@@ -392,24 +392,24 @@ export function ResidentAuthorizationNewPage() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          {type === 'entry_exit' && (
-            <div className="space-y-1 sm:max-w-48">
+            <div className="space-y-1">
               <Label htmlFor="resident-max-uses">Usos permitidos</Label>
               <Input
                 id="resident-max-uses"
                 type="number"
                 min={1}
                 max={20}
-                value={maxUses}
+                value={type === 'entry_only' ? '1' : maxUses}
+                disabled={type === 'entry_only'}
                 onChange={(event) => setMaxUses(event.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Un uso es una entrada y una salida.
+                {type === 'entry_only'
+                  ? 'Un pase de solo ingreso se usa una vez.'
+                  : 'Un uso es una entrada y una salida.'}
               </p>
             </div>
-          )}
+          </div>
 
           {fieldErrors.visitor && (
             <p id="resident-visitor-error" role="alert" className="text-xs text-destructive">
