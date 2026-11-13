@@ -71,7 +71,7 @@ const config = {
     pinLockMinutes: parseInt(process.env.PASS_PIN_LOCK_MINUTES || '15', 10),
     scanPendingTtlSeconds: parseInt(process.env.PASS_SCAN_PENDING_TTL_SECONDS || '120', 10),
     missingExitGraceMinutes: parseInt(process.env.PASS_MISSING_EXIT_GRACE_MINUTES || '15', 10),
-    dailyLimitPerUnit: parseInt(process.env.PASS_DAILY_LIMIT_PER_UNIT || '20', 10),
+    dailyLimitPerUnit: parseInt(process.env.PASS_DAILY_LIMIT_PER_UNIT || '50', 10),
     rateLimits: {
       previewPerMinute: parseInt(process.env.PASS_RATE_LIMIT_PREVIEW || '60', 10),
       bindPerMinute: parseInt(process.env.PASS_RATE_LIMIT_BIND || '20', 10),
