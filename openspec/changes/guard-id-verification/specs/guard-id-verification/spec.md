@@ -40,11 +40,11 @@ The system SHALL require an explicit confirmation from the guard before register
 - THEN no entry is registered
 - AND nothing changes in the pass until the guard confirms one of the listed authorizations
 
-#### Scenario: A used pass is visible before confirming
+#### Scenario: A consumed pass is not offered
 
-- WHEN the listed authorization was already used
-- THEN the row shows that state
-- AND confirming it again fails
+- WHEN the document belongs to a pass that was already consumed
+- THEN the search returns nothing
+- AND the app answers exactly as it does for a document with no authorization
 
 ### Requirement: Identity entries are audited apart
 
