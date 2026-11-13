@@ -93,3 +93,25 @@ The system SHALL limit how many document searches a guard can run.
 - WHEN a guard without an open shift searches a document
 - THEN the search is refused
 - AND the app points the guard to start the shift first
+
+### Requirement: The guard decides between entry and exit
+
+The system SHALL let the guard record either an entry or an exit for a document, and SHALL refuse the impossible combinations.
+
+#### Scenario: Someone already inside cannot enter again
+
+- WHEN the listed authorization shows the visitor is inside
+- THEN the app offers only the exit action
+- AND the API refuses an entry for that person
+
+#### Scenario: Someone outside cannot exit
+
+- WHEN the listed authorization shows the visitor is outside
+- THEN the app offers only the entry action
+- AND the API refuses an exit for that person
+
+#### Scenario: The exit is audited apart
+
+- WHEN the guard records an exit by document
+- THEN the bitacora records a pass exit with its own summary
+- AND the pass stops being active once both movements happened

@@ -77,11 +77,11 @@ export function IdentityCheck({
     }
   }
 
-  async function confirm(passId: string) {
+  async function confirm(passId: string, action: 'entry' | 'exit') {
     setConfirmingId(passId);
     setError('');
     try {
-      await confirmIdentityEntry(request, passId);
+      await confirmIdentityEntry(request, passId, action);
       setNotice('Ingreso registrado. Listo para el siguiente.');
       setCameraOpen(false);
       setCandidates(null);
@@ -93,9 +93,11 @@ export function IdentityCheck({
       setError(
         code === 'pass_used'
           ? 'Esa autorización ya fue usada.'
-          : code === 'not_valid_now'
-            ? 'La autorización no está vigente en este momento.'
-            : 'No se pudo registrar el ingreso. Reintentá.',
+          : code === 'conflict'
+            ? 'Esa persona ya está registrada dentro o fuera, según el caso.'
+            : code === 'not_valid_now'
+              ? 'La autorización no está vigente en este momento.'
+              : 'No se pudo registrar el ingreso. Reintentá.',
       );
     } finally {
       setConfirmingId(null);
@@ -189,22 +191,30 @@ export function IdentityCheck({
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
       {candidates?.map((candidate) => {
-        const used = candidate.status === 'used' || candidate.presenceState === 'inside';
+        const inside = candidate.presenceState === 'inside';
+        // Someone already inside cannot enter again; the guard registers the exit
+        // instead. An entry_only pass that was used has nothing left to do.
+        const exhausted = candidate.status === 'used' && !inside;
+        const action: 'entry' | 'exit' = inside ? 'exit' : 'entry';
+        const label = inside ? 'Registrar salida' : exhausted ? 'Ya ingresó' : 'Registrar entrada';
         return (
           <View key={candidate.passId} style={styles.candidate}>
             <View style={styles.candidateHeader}>
               <Text style={styles.candidateName}>
                 {candidate.visitorFirstName} {candidate.visitorLastName}
               </Text>
-              <Badge label={used ? 'Usada' : 'Activa'} tone={used ? 'warning' : 'success'} />
+              <Badge
+                label={inside ? 'Dentro' : exhausted ? 'Usada' : 'Activa'}
+                tone={inside || exhausted ? 'warning' : 'success'}
+              />
             </View>
             <Text style={ui.muted}>{candidate.destinationPath || candidate.destinationName}</Text>
             <Text style={ui.muted}>{formatWindow(candidate.validFrom, candidate.validUntil)}</Text>
             <Button
-              label={used ? 'Ya ingresó' : 'Confirmar ingreso'}
-              onPress={() => void confirm(candidate.passId)}
+              label={label}
+              onPress={() => void confirm(candidate.passId, action)}
               loading={confirmingId === candidate.passId}
-              disabled={used || confirmingId !== null}
+              disabled={exhausted || confirmingId !== null}
             />
           </View>
         );

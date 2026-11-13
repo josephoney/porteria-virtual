@@ -793,6 +793,7 @@ export async function searchAuthorizationsByDocument(
 export async function confirmIdentityEntry(
   requester: PassRequester,
   passId: string,
+  action: 'entry' | 'exit' = 'entry',
 ): Promise<PassResult<{ passId: string; status: PassStatus; bitacoraEntryId: string | null }>> {
   const personId = await resolvePersonId(requester);
   if (!personId) return { ok: false, code: 'forbidden' };
@@ -803,15 +804,27 @@ export async function confirmIdentityEntry(
   const [pass] = await db.select().from(accessPasses).where(eq(accessPasses.id, passId)).limit(1);
   if (!pass) return { ok: false, code: 'not_found' };
   if (pass.communityId !== context.communityId) return { ok: false, code: 'foreign_community' };
-  if (pass.status === 'used' || pass.status === 'revoked' || pass.presenceState === 'inside') {
-    return { ok: false, code: 'pass_used' };
+  if (pass.status === 'revoked') return { ok: false, code: 'pass_used' };
+  // One person, one presence: two visitors with the same document cannot be
+  // inside at the same time, and an exit cannot be recorded for someone outside.
+  if (action === 'entry' && pass.presenceState === 'inside') {
+    return { ok: false, code: 'conflict' };
   }
+  if (action === 'exit' && pass.presenceState !== 'inside') {
+    return { ok: false, code: 'conflict' };
+  }
+  if (action === 'entry' && pass.status === 'used') return { ok: false, code: 'pass_used' };
   if (pass.status === 'expired') return { ok: false, code: 'pass_expired' };
 
   const now = new Date();
   if (pass.validUntil < now || pass.validFrom > now) return { ok: false, code: 'not_valid_now' };
 
-  const nextStatus: PassStatus = pass.type === 'entry_only' ? 'used' : pass.status;
+  const nextStatus: PassStatus =
+    action === 'entry'
+      ? pass.type === 'entry_only'
+        ? 'used'
+        : pass.status
+      : 'used';
   let bitacoraEntryId: string | null = null;
 
   await db.transaction(async (tx) => {
@@ -835,7 +848,7 @@ export async function confirmIdentityEntry(
       destinationPath: destination?.path ?? (await buildLocationPath(pass.locationUnitId)) ?? '',
       authorizedByPersonId: pass.authorizedByPersonId,
       shiftId: context.shiftId,
-      type: 'pass_entry',
+      type: action === 'entry' ? 'pass_entry' : 'pass_exit',
       source: 'manual_identity',
       authorPersonId: personId,
       authorAccountId: requester.accountId ?? null,
@@ -843,7 +856,7 @@ export async function confirmIdentityEntry(
       passScanId: null,
       summary: `Ingreso por documento de ${pass.visitorFirstName} ${pass.visitorLastName}`,
       details: {
-        action: 'entry',
+        action,
         identityCheck: true,
         visitorDocument: pass.visitorDocument,
         destinationName: destination?.name ?? null,

@@ -46,9 +46,9 @@ export function searchAuthorizations(request: RequestFn, document: string) {
   );
 }
 
-export function confirmIdentityEntry(request: RequestFn, passId: string) {
+export function confirmIdentityEntry(request: RequestFn, passId: string, action: 'entry' | 'exit') {
   return request<{ passId: string; status: string; bitacoraEntryId: string | null }>(
     `/api/access/authorizations/${passId}/confirm`,
-    { method: 'POST' },
+    { method: 'POST', body: { action } },
   );
 }

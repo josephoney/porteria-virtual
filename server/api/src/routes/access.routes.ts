@@ -83,7 +83,12 @@ export async function accessRoutes(app: FastifyInstance) {
     { preHandler: [dynamicQrGuard, requireRole('guard')] },
     async (request, reply) => {
       const { passId } = request.params as { passId: string };
-      const result = await confirmIdentityEntry(getRequester(request), passId);
+      const body = (request.body ?? {}) as { action?: 'entry' | 'exit' };
+      const result = await confirmIdentityEntry(
+        getRequester(request),
+        passId,
+        body.action === 'exit' ? 'exit' : 'entry',
+      );
       if (!result.ok) return sendPassError(reply, result.code);
       return reply.send(result.data);
     },

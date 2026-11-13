@@ -14,6 +14,7 @@
 - [x] 2.2 Registrar `source: 'manual_identity'` y `type: 'pass_entry'`, con el guardia, el turno y el destino.
 - [x] 2.3 Responder `409` si el pase ya fue usado o revocado, y `400` si venció.
 - [x] 2.4 Publicar el evento del bus de pases para que el residente vea el cambio en vivo.
+- [x] 2.5 Aceptar ction en la confirmacion: entrada bloqueada si la persona ya esta adentro, salida bloqueada si esta afuera, y bitacora con pass_exit en la salida.
 
 ## 3. App: la pantalla del guardia
 
@@ -24,6 +25,7 @@
 - [x] 3.4 Mostrar la lista de candidatas con visitante, destino, vigencia y estado, y permitir elegir una.
 - [x] 3.5 Confirmar el ingreso contra el API y refrescar la actividad del turno.
 - [x] 3.6 Mostrar los errores: sin autorizaciones, documento inválido, límite de consultas y pase ya usado.
+- [x] 3.7 El boton de la candidata cambia entre «Registrar entrada» y «Registrar salida» segun la presencia, y se deshabilita cuando el pase ya no tiene movimientos posibles.
 
 ## 4. Verificación
 
