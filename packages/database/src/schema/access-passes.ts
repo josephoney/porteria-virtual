@@ -55,6 +55,8 @@ export const accessPasses = pgTable(
     hasVehicle: boolean('has_vehicle').notNull().default(false),
     vehiclePlate: varchar('vehicle_plate', { length: 20 }),
     type: passTypeEnum('type').notNull(),
+  /** Entry and exit pairs this pass authorizes. Entry-only passes always use 1. */
+  maxUses: integer('max_uses').notNull().default(1),
     validFrom: timestamp('valid_from', { withTimezone: true }).notNull(),
     validUntil: timestamp('valid_until', { withTimezone: true }).notNull(),
     allowedDays: jsonb('allowed_days').$type<number[] | null>(),

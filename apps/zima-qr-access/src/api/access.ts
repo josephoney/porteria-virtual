@@ -33,6 +33,8 @@ export interface IdentityCandidate {
   type: string;
   status: string;
   presenceState: string;
+  maxUses: number;
+  exitCount: number;
   validFrom: string;
   validUntil: string;
   destinationName: string;

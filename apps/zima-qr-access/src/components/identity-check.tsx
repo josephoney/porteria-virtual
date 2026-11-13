@@ -194,7 +194,8 @@ export function IdentityCheck({
         const inside = candidate.presenceState === 'inside';
         // Someone already inside cannot enter again; the guard registers the exit
         // instead. An entry_only pass that was used has nothing left to do.
-        const exhausted = candidate.status === 'used' && !inside;
+        const remaining = Math.max(0, candidate.maxUses - candidate.exitCount);
+        const exhausted = remaining === 0 && !inside;
         const action: 'entry' | 'exit' = inside ? 'exit' : 'entry';
         const label = inside ? 'Registrar salida' : exhausted ? 'Ya ingresó' : 'Registrar entrada';
         return (
@@ -210,6 +211,11 @@ export function IdentityCheck({
             </View>
             <Text style={ui.muted}>{candidate.destinationPath || candidate.destinationName}</Text>
             <Text style={ui.muted}>{formatWindow(candidate.validFrom, candidate.validUntil)}</Text>
+            <Text style={ui.muted}>
+              {candidate.maxUses > 1
+                ? `${remaining} de ${candidate.maxUses} usos disponibles`
+                : 'Un uso disponible'}
+            </Text>
             <Button
               label={label}
               onPress={() => void confirm(candidate.passId, action)}

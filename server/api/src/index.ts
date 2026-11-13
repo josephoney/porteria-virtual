@@ -5,6 +5,7 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { registerMembershipGuard } from './plugins/auth.js';
 import { startOutboxWorker, stopOutboxWorker } from './workers/outbox.worker.js';
+import { startPassAlertsWorker, stopPassAlertsWorker } from './workers/pass-alerts.worker.js';
 import config, { validateConfig } from './config.js';
 import { errorHandler } from './plugins/error-handler.js';
 import { createDb } from '@porteria/database';
@@ -239,7 +240,11 @@ export async function buildApp() {
   await app.register(bitacoraRoutes, { prefix: '/api/bitacora' });
 
   await startOutboxWorker(app.log);
-  app.addHook('onClose', async () => stopOutboxWorker());
+  startPassAlertsWorker();
+  app.addHook('onClose', async () => {
+    stopOutboxWorker();
+    stopPassAlertsWorker();
+  });
 
   return { app, authenticate };
 }

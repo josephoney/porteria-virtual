@@ -110,6 +110,8 @@ export interface PassBatchVisitorInput {
  * visitors, so every pass of the batch differs just in who is authorized.
  */
 export interface PassBatchRequest {
+  /** Entry and exit pairs applied to every pass of the batch. */
+  maxUses?: number;
   destination: string;
   type: PassType;
   validFrom: string;

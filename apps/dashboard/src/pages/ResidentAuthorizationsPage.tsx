@@ -64,6 +64,8 @@ interface ResidentPass {
   status: string;
   /** `inside` means the visitor already went through the gate. */
   presenceState?: string;
+  maxUses?: number;
+  exitCount?: number;
   batchId: string | null;
   batchLabel: string | null;
   shareUrl: string | null;
@@ -543,6 +545,12 @@ export function ResidentAuthorizationsPage() {
                         </TableCell>
                         <TableCell>
                           <Badge variant={STATUS_VARIANTS[state]}>{STATUS_LABELS[state]}</Badge>
+                          {(pass.maxUses ?? 1) > 1 ? (
+                            <Badge variant="secondary">
+                              {Math.max(0, (pass.maxUses ?? 1) - (pass.exitCount ?? 0))} de{' '}
+                              {pass.maxUses} usos
+                            </Badge>
+                          ) : null}
                           {pass.presenceState === 'inside' && state === 'active' ? (
                             <Badge variant="outline">Dentro</Badge>
                           ) : null}

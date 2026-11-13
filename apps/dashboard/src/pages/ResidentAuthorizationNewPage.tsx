@@ -85,6 +85,7 @@ export function ResidentAuthorizationNewPage() {
   const [hasVehicle, setHasVehicle] = useState(false);
   const [plate, setPlate] = useState('');
   const [type, setType] = useState('entry_only');
+  const [maxUses, setMaxUses] = useState('1');
   const [validFrom, setValidFrom] = useState(toLocalInput(now));
   const [validUntil, setValidUntil] = useState(
     toLocalInput(new Date(now.getTime() + 4 * 60 * 60 * 1000)),
@@ -165,6 +166,7 @@ export function ResidentAuthorizationNewPage() {
         hasVehicle,
         vehiclePlate: hasVehicle ? plate.trim().toUpperCase() : null,
         type,
+      ...(type === 'entry_exit' ? { maxUses: Number(maxUses) || 1 } : {}),
         validFrom: new Date(validFrom).toISOString(),
         validUntil: new Date(validUntil).toISOString(),
       });
@@ -391,6 +393,23 @@ export function ResidentAuthorizationNewPage() {
               </Select>
             </div>
           </div>
+
+          {type === 'entry_exit' && (
+            <div className="space-y-1 sm:max-w-48">
+              <Label htmlFor="resident-max-uses">Usos permitidos</Label>
+              <Input
+                id="resident-max-uses"
+                type="number"
+                min={1}
+                max={20}
+                value={maxUses}
+                onChange={(event) => setMaxUses(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Un uso es una entrada y una salida.
+              </p>
+            </div>
+          )}
 
           {fieldErrors.visitor && (
             <p id="resident-visitor-error" role="alert" className="text-xs text-destructive">

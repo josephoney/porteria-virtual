@@ -148,6 +148,13 @@
       "when": 1794593024536,
       "tag": "0020_narrow_tusk",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794600309456,
+      "tag": "0021_free_alex_power",
+      "breakpoints": true
     }
   ]
 }

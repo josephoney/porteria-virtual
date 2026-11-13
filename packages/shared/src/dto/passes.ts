@@ -9,6 +9,8 @@ import type {
 import type { AccessPass } from '../types/pass.js';
 
 export interface CreatePassDto {
+  /** Entry and exit pairs. Ignored for entry-only passes, which always use one. */
+  maxUses?: number;
   locationUnitId: string;
   visitorFirstName: string;
   visitorLastName: string;

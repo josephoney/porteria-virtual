@@ -1,0 +1,1 @@
+ALTER TABLE "access_passes" ADD COLUMN "max_uses" integer DEFAULT 1 NOT NULL;

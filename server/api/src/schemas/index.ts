@@ -187,6 +187,8 @@ const passTypeSchema = z.enum(PassTypeValues as [PassType, ...PassType[]]);
 const passStatusSchema = z.enum(PassStatusValues as [PassStatus, ...PassStatus[]]);
 
 export const createPassSchema = z.object({
+  /** Entry and exit pairs. Ignored for entry-only passes, which always use one. */
+  maxUses: z.coerce.number().int().min(1).max(20).optional(),
   /**
    * Any node of the structure is a valid candidate. Whether it is a home or a
    * common area — and whether the requester may use it — is decided in the
@@ -244,6 +246,7 @@ export const passesQuerySchema = z.object({
  * this array to the `batch_too_large` reason the UI expects.
  */
 export const createPassBatchSchema = z.object({
+  maxUses: z.coerce.number().int().min(1).max(20).optional(),
   destination: z.string().uuid(),
   type: passTypeSchema,
   validFrom: z.string().datetime(),

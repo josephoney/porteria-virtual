@@ -416,12 +416,14 @@ export async function confirmScan(
   }
 
   const nextPresence = scan.action === 'entry' ? 'inside' : 'outside';
+  // A use is a completed pair, so the pass is consumed when the exit count
+  // reaches the declared uses. An entry never consumes on its own.
   const nextStatus: PassStatus =
     scan.action === 'entry'
       ? pass.type === 'entry_only'
         ? 'used'
         : pass.status
-      : pass.type === 'entry_only' || pass.type === 'entry_exit'
+      : pass.type === 'entry_only' || pass.exitCount + 1 >= pass.maxUses
         ? 'used'
         : 'active';
 
@@ -722,6 +724,8 @@ export interface IdentityCandidate {
   type: string;
   status: string;
   presenceState: string;
+  maxUses: number;
+  exitCount: number;
   validFrom: Date;
   validUntil: Date;
   destinationName: string;
@@ -774,6 +778,8 @@ export async function searchAuthorizationsByDocument(
       type: row.type,
       status: row.status,
       presenceState: row.presenceState,
+      maxUses: row.maxUses,
+      exitCount: row.exitCount,
       validFrom: row.validFrom,
       validUntil: row.validUntil,
       destinationName: destination?.name ?? '',
@@ -824,7 +830,9 @@ export async function confirmIdentityEntry(
       ? pass.type === 'entry_only'
         ? 'used'
         : pass.status
-      : pass.type === 'entry_only' ? 'used' : 'active';
+      : pass.type === 'entry_only' || pass.exitCount + 1 >= pass.maxUses
+        ? 'used'
+        : 'active';
   let bitacoraEntryId: string | null = null;
 
   await db.transaction(async (tx) => {

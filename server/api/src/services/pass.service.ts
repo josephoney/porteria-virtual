@@ -216,6 +216,7 @@ export async function createPass(
       vehiclePlate:
         input.hasVehicle && input.vehiclePlate ? input.vehiclePlate.trim().toUpperCase() : null,
       type: input.type,
+      maxUses: input.type === 'entry_only' ? 1 : (input.maxUses ?? 1),
       validFrom,
       validUntil,
       allowedDays: null,
@@ -529,6 +530,7 @@ export async function createPassBatch(
             hasVehicle: plate.length > 0,
             vehiclePlate: plate.length > 0 ? plate : null,
             type: input.type,
+            maxUses: input.type === 'entry_only' ? 1 : (input.maxUses ?? 1),
             validFrom: window.validFrom,
             validUntil: window.validUntil,
             allowedDays: null,
