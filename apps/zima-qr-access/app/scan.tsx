@@ -70,6 +70,7 @@ export default function GuardScanScreen() {
   const [activityError, setActivityError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'idle' | 'change'>('idle');
   const [pickedAccessPointId, setPickedAccessPointId] = useState<string | null>(null);
@@ -288,6 +289,13 @@ export default function GuardScanScreen() {
       const result = await confirmScan(request, scanResult.scanId);
       setDecision(result);
       await refresh();
+      // The guard has a line in front: after the decision the scanner resets by
+      // itself so the next visitor can be scanned without an extra tap.
+      setFlash('Ingreso registrado. Listo para el siguiente.');
+      setTimeout(() => {
+        setFlash(null);
+        resetScan();
+      }, 2500);
     } catch (confirmError) {
       setScanError(errorMessage(confirmError));
     } finally {
@@ -303,6 +311,11 @@ export default function GuardScanScreen() {
       const result = await rejectScan(request, scanResult.scanId);
       setDecision(result);
       await refresh();
+      setFlash('Ingreso rechazado. Listo para el siguiente.');
+      setTimeout(() => {
+        setFlash(null);
+        resetScan();
+      }, 2500);
     } catch (rejectError) {
       setScanError(errorMessage(rejectError));
     } finally {
@@ -463,6 +476,12 @@ export default function GuardScanScreen() {
             <IdentityCheck request={request} onConfirmed={() => void refresh()} />
           </Card>
 
+          {flash ? (
+            <Card>
+              <Text style={styles.flash}>{flash}</Text>
+            </Card>
+          ) : null}
+
           {scanError ? (
             <Card>
               <Text style={ui.error}>{scanError}</Text>
@@ -604,6 +623,11 @@ export default function GuardScanScreen() {
 }
 
 const styles = StyleSheet.create({
+  flash: {
+    color: colors.success,
+    fontSize: 16,
+    fontWeight: '600',
+  },
   cameraWrap: {
     borderRadius: radius.lg,
     overflow: 'hidden',

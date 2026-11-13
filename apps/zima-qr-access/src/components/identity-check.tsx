@@ -4,6 +4,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { confirmIdentityEntry, searchAuthorizations, type IdentityCandidate } from '@/api/access';
 import { Badge, Button, Divider, ui } from '@/components/ui';
+import { describeBarcode, documentFromBarcode } from '@/lib/cedula';
 import { colors, radius, spacing, typography } from '@/theme';
 
 type RequestFn = <T>(
@@ -81,7 +82,8 @@ export function IdentityCheck({
     setError('');
     try {
       await confirmIdentityEntry(request, passId);
-      setNotice('Ingreso registrado.');
+      setNotice('Ingreso registrado. Listo para el siguiente.');
+      setCameraOpen(false);
       setCandidates(null);
       setDocument('');
       setManualOpen(false);
@@ -100,11 +102,25 @@ export function IdentityCheck({
     }
   }
 
+  /**
+   * The card payload is the whole registry record, not the document. It is parsed
+   * and the number is shown in an editable field: the guard sees what will be
+   * verified and can correct it if the card is damaged.
+   */
   function onBarcodeScanned(result: { data: string }) {
     setCameraOpen(false);
-    const value = result.data.replace(/[^0-9a-zA-Z]/g, '');
-    setDocument(value);
-    void search(value);
+    // Until the payload format is confirmed against real cards, the raw value is
+    // logged in development so a wrong guess can be traced back to the source.
+    if (__DEV__) console.log('cedula barcode', describeBarcode(result.data));
+    const extracted = documentFromBarcode(result.data);
+    reset();
+    setManualOpen(true);
+    if (extracted) {
+      setDocument(extracted);
+    } else {
+      setDocument('');
+      setError('No se pudo leer el número en el código. Escribilo a mano.');
+    }
   }
 
   return (
