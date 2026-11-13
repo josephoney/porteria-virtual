@@ -46,10 +46,10 @@
 
 - [x] 6.1 `pnpm --filter @porteria/zima-qr-access typecheck` sin errores.
 - [x] 6.2 `npx prettier --write` sobre los archivos tocados y `git status` con sólo los archivos esperados.
-- [ ] 6.3 Prueba manual en Expo Go: el login muestra el logo blanco sin deformarse y con el nombre accesible.
-- [ ] 6.4 Prueba manual: elegir un acceso distinto del preseleccionado e iniciar turno con el botón verde.
-- [ ] 6.5 Prueba manual: entrar al turno y confirmar que la cámara no está montada hasta tocar «Escanear QR», que «Cancelar» la cierra y que el token manual sigue funcionando.
-- [ ] 6.6 Prueba manual: escanear un pase, confirmar el ingreso y ver el movimiento aparecer en la actividad; rechazar otro y ver el motivo.
-- [ ] 6.7 Prueba manual: cerrar el turno y confirmar que la actividad desaparece de la app y que los movimientos siguen en la bitácora del dashboard.
-- [ ] 6.8 Prueba manual: contraer y expandir «Mis turnos» y la actividad, verificando que el lector de pantalla anuncie el estado.
+- [x] 6.3 Prueba manual en Expo Go: el login muestra el logo blanco sin deformarse y con el nombre accesible.
+- [x] 6.4 Prueba manual: elegir un acceso distinto del preseleccionado e iniciar turno con el botón verde.
+- [x] 6.5 Prueba manual: entrar al turno y confirmar que la cámara no está montada hasta tocar «Escanear QR», que «Cancelar» la cierra y que el token manual sigue funcionando.
+- [x] 6.6 Prueba manual: escanear un pase, confirmar el ingreso y ver el movimiento aparecer en la actividad; rechazar otro y ver el motivo.
+- [x] 6.7 Prueba manual: cerrar el turno y confirmar que la actividad desaparece de la app y que los movimientos siguen en la bitácora del dashboard.
+- [x] 6.8 Prueba manual: contraer y expandir «Mis turnos» y la actividad, verificando que el lector de pantalla anuncie el estado.
 - [x] 6.9 `pnpm exec openspec validate polish-guard-app --strict` sin errores.
