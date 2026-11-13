@@ -28,8 +28,8 @@
 - [x] 4.1 Test de integración: comunidad con límite 2 rechaza la tercera autorización del día con `max: 2`.
 - [x] 4.2 Test de integración: comunidad con el límite deshabilitado acepta más autorizaciones de las que permitiría el número guardado.
 - [x] 4.3 Test de integración: `PASS_DAILY_LIMIT_PER_UNIT=0` desactiva el límite aunque la comunidad lo tenga habilitado.
-- [ ] 4.4 Test de integración: el lote no se ve afectado por el límite de la comunidad.
-- [ ] 4.5 Playwright: crear una comunidad con el límite apagado y verificar que el detalle lo refleja.
+- [x] 4.4 Test de integración: el lote no se ve afectado por el límite de la comunidad.
+- [x] 4.5 Playwright: crear una comunidad con el límite apagado y verificar que el detalle lo refleja.
 - [x] 4.6 `pnpm --filter @porteria/api exec tsc --noEmit` y `pnpm --filter @porteria/dashboard exec tsc --noEmit` sin errores.
 - [x] 4.7 Suite completa de Playwright en verde.
 - [x] 4.8 `pnpm exec openspec validate community-pass-rules --strict`.

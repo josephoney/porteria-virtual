@@ -514,6 +514,62 @@ describe('pass destinations integration', () => {
     assert.ok(items.every((item) => item.batchLabel === 'Cumpleaños QA'));
   });
 
+  it('does not apply the community daily limit to a batch', async () => {
+    // The limit is a rule of the community and it applies to individual
+    // authorizations. A batch is an explicit administrative action with its own
+    // 200 visitor cap, so it must go through even when the unit is at the limit.
+    await db
+      .update(communities)
+      .set({ passDailyLimitEnabled: true, passDailyLimit: 1 })
+      .where(eq(communities.id, communityId));
+
+    try {
+      // Prior tests in this file may have created passes for the same unit, so the
+      // test creates until the limit answers instead of assuming a starting count.
+      let rejected = false;
+      for (let attempt = 0; attempt < 3 && !rejected; attempt += 1) {
+        const single = await request(
+          'POST',
+          '/api/passes',
+          passPayload({ visitorDocument: `B-LIMIT-${randomUUID().slice(0, 8)}` }),
+        );
+        if (single.statusCode === 429) {
+          rejected = true;
+          assert.equal(parse(single).message, 'daily_limit_reached');
+          assert.equal(parse(single).max, 1);
+        } else {
+          assert.equal(single.statusCode, 201, single.body);
+        }
+      }
+      assert.ok(rejected, 'the individual limit should reject before the batch runs');
+
+      const response = await request(
+        'POST',
+        '/api/passes/batch',
+        batchPayload([
+          {
+            firstName: 'Lote',
+            lastName: 'Exento',
+            document: `B-BATCH-${randomUUID().slice(0, 8)}`,
+          },
+          {
+            firstName: 'Lote',
+            lastName: 'Segundo',
+            document: `B-BATCH-${randomUUID().slice(0, 8)}`,
+          },
+        ]),
+      );
+
+      assert.equal(response.statusCode, 201, response.body);
+      assert.equal(parse(response).createdCount, 2);
+    } finally {
+      await db
+        .update(communities)
+        .set({ passDailyLimitEnabled: true, passDailyLimit: 50 })
+        .where(eq(communities.id, communityId));
+    }
+  });
+
   it('previews a batch without creating passes', async () => {
     const suffix = randomUUID().slice(0, 8);
     const existingVisitor = `P-EXISTING-${suffix}`;
@@ -561,11 +617,7 @@ describe('pass destinations integration', () => {
       document: `PREV-${index}`,
     }));
 
-    const response = await request(
-      'POST',
-      '/api/passes/batch/preview',
-      batchPayload(visitors),
-    );
+    const response = await request('POST', '/api/passes/batch/preview', batchPayload(visitors));
 
     assert.equal(response.statusCode, 400, response.body);
     const body = parse(response);

@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { DEMO_USERS, loginAs } from './helpers/auth';
 
+// One test toggles the status of the multi-context user and another signs in as
+// that same user. Running them in parallel turns the toggle into a login failure.
+test.describe.configure({ mode: 'serial' });
+
 test.describe('polished dashboard', () => {
   test('login page shows the brand panel and the signup tab', async ({ page }) => {
     await page.goto('/login');
@@ -31,7 +35,11 @@ test.describe('polished dashboard', () => {
     await expect(page.getByText('Torre Norte')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('Los Álamos')).toBeVisible();
 
-    const toggle = page.getByRole('switch', { name: /usuario multi@porteria.local/ });
+    // The switch is exercised on a user nobody signs in as: toggling the
+    // multi-context account would break the specs that log in with it while this
+    // file runs in parallel.
+    await page.getByLabel('Buscar usuarios por correo, nombre o documento').fill('nuevo');
+    const toggle = page.getByRole('switch', { name: /usuario nuevo@porteria.local/ });
     await expect(toggle).toContainText('Activo');
     await toggle.click();
     await expect(toggle).toContainText('Inactivo');

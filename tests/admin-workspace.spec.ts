@@ -197,4 +197,62 @@ test.describe('Community detail', () => {
     const summary = page.getByText(/torres|pisos|apartamentos|unidades/).first();
     await expect(summary).toBeVisible();
   });
+
+  test('the daily authorization rule can be turned off and survives a reload', async ({ page }) => {
+    // The demo community of this org is used by the geography spec, so the rule
+    // test runs on another organization's community to avoid parallel interference.
+    const ruleCommunity = 'Condominio Los Álamos';
+
+    await loginAndWait(page, DEMO_USERS.orgAdminIndependent, /\/admin$/);
+    await page.goto('/admin/communities');
+
+    await page.getByRole('cell', { name: ruleCommunity, exact: true }).first().click();
+
+    // The rule lives in the same form as the rest of the community. The test
+    // toggles it off and puts it back at the end, because creating a community
+    // here would leave a row behind on every run.
+    const saveRule = async (enabled: boolean) => {
+      await page
+        .getByRole('button', { name: `Editar ${ruleCommunity}`, exact: true })
+        .first()
+        .click();
+
+      const toggle = page.locator('#admin-community-limit-enabled');
+      const limit = page.locator('#admin-community-limit');
+      await expect(toggle).toBeVisible();
+
+      if ((await toggle.isChecked()) !== enabled) await toggle.click();
+      // The number stays visible but disabled while the rule is off, so nobody
+      // has to retype it when the limit comes back.
+      if (enabled) {
+        await expect(limit).toBeEnabled();
+        await limit.fill('50');
+      } else {
+        await expect(limit).toBeDisabled();
+      }
+
+      const saved = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' && response.url().includes('/api/communities/'),
+      );
+      await page.getByRole('button', { name: 'Guardar cambios' }).click();
+      await saved;
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+    };
+
+    const rule = page
+      .locator('dl > div')
+      .filter({ has: page.locator('dt', { hasText: /^límite diario$/i }) })
+      .locator('dd');
+    await expect(rule).toHaveText('50 por unidad');
+
+    try {
+      await saveRule(false);
+      await expect(rule).toHaveText('Sin límite');
+    } finally {
+      await saveRule(true);
+    }
+
+    await expect(rule).toHaveText('50 por unidad');
+  });
 });
