@@ -36,6 +36,7 @@ import {
   Screen,
   ui,
 } from '@/components/ui';
+import { IdentityCheck } from '@/components/identity-check';
 import { reasonText, toActivityItem } from '@/lib/bitacora';
 import { errorMessage } from '@/lib/errors';
 import { formatDateTime, formatTime, roleLabel } from '@/lib/format';
@@ -73,7 +74,6 @@ export default function GuardScanScreen() {
   const [mode, setMode] = useState<'idle' | 'change'>('idle');
   const [pickedAccessPointId, setPickedAccessPointId] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [manualToken, setManualToken] = useState('');
   const [scanResult, setScanResult] = useState<ScanPassResponse | null>(null);
   const [decision, setDecision] = useState<ScanDecisionResponse | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -239,7 +239,6 @@ export default function GuardScanScreen() {
     setDecision(null);
     setScanError(null);
     setScanned(false);
-    setManualToken('');
     setCameraOpen(false);
   };
 
@@ -273,7 +272,6 @@ export default function GuardScanScreen() {
     try {
       const result = await scanPass(request, value);
       setScanResult(result);
-      setManualToken('');
     } catch (scanFailure) {
       setScanError(errorMessage(scanFailure));
     } finally {
@@ -462,20 +460,7 @@ export default function GuardScanScreen() {
                 disabled={busy}
               />
             )}
-            <Divider />
-            <Field
-              label="O ingresá el token manualmente"
-              value={manualToken}
-              onChangeText={setManualToken}
-              autoCapitalize="none"
-              placeholder="Token del QR"
-            />
-            <Button
-              label="Escanear token"
-              onPress={() => void runScan(manualToken)}
-              loading={busy}
-              disabled={busy || !manualToken.trim()}
-            />
+            <IdentityCheck request={request} onConfirmed={() => void refresh()} />
           </Card>
 
           {scanError ? (

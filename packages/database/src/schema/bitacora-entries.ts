@@ -19,7 +19,7 @@ export const bitacoraEntryTypeEnum = pgEnum('bitacora_entry_type', [
   'manual',
 ]);
 
-export const bitacoraSourceEnum = pgEnum('bitacora_source', ['app', 'dashboard', 'system']);
+export const bitacoraSourceEnum = pgEnum('bitacora_source', ['app', 'dashboard', 'system', 'manual_identity']);
 
 export const bitacoraEntries = pgTable(
   'bitacora_entries',

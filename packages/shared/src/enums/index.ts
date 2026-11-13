@@ -218,8 +218,7 @@ export const AccessPointDirection = {
   Both: 'both',
 } as const;
 
-export type AccessPointDirection =
-  (typeof AccessPointDirection)[keyof typeof AccessPointDirection];
+export type AccessPointDirection = (typeof AccessPointDirection)[keyof typeof AccessPointDirection];
 
 export const AccessPointDirectionValues = Object.values(
   AccessPointDirection,
@@ -232,9 +231,7 @@ export const GuardShiftStatus = {
 
 export type GuardShiftStatus = (typeof GuardShiftStatus)[keyof typeof GuardShiftStatus];
 
-export const GuardShiftStatusValues = Object.values(
-  GuardShiftStatus,
-) as GuardShiftStatus[];
+export const GuardShiftStatusValues = Object.values(GuardShiftStatus) as GuardShiftStatus[];
 
 export const BitacoraEntryType = {
   PassEntry: 'pass_entry',
@@ -246,17 +243,16 @@ export const BitacoraEntryType = {
   Manual: 'manual',
 } as const;
 
-export type BitacoraEntryType =
-  (typeof BitacoraEntryType)[keyof typeof BitacoraEntryType];
+export type BitacoraEntryType = (typeof BitacoraEntryType)[keyof typeof BitacoraEntryType];
 
-export const BitacoraEntryTypeValues = Object.values(
-  BitacoraEntryType,
-) as BitacoraEntryType[];
+export const BitacoraEntryTypeValues = Object.values(BitacoraEntryType) as BitacoraEntryType[];
 
 export const BitacoraSource = {
   App: 'app',
   Dashboard: 'dashboard',
   System: 'system',
+  /** A guard opened the gate after checking a document instead of a QR. */
+  ManualIdentity: 'manual_identity',
 } as const;
 
 export type BitacoraSource = (typeof BitacoraSource)[keyof typeof BitacoraSource];

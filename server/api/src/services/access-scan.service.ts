@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import {
   accessPasses,
@@ -707,4 +707,156 @@ export async function listScans(
       total: Number(countRow?.count ?? 0),
     },
   };
+}
+
+/** Documents arrive typed or read from a barcode; both must match the stored one. */
+function normalizeDocument(value: string) {
+  return value.replace(/[^0-9a-zA-Z]/g, '').toLowerCase();
+}
+
+export interface IdentityCandidate {
+  passId: string;
+  visitorFirstName: string;
+  visitorLastName: string;
+  visitorDocument: string;
+  type: string;
+  status: string;
+  presenceState: string;
+  validFrom: Date;
+  validUntil: Date;
+  destinationName: string;
+  destinationPath: string;
+}
+
+/**
+ * Finds the authorizations of a visitor by the document registered on the pass.
+ *
+ * It returns candidates, never a verdict: a document number is public knowledge,
+ * so the decision stays with the guard who is holding the physical card.
+ */
+export async function searchAuthorizationsByDocument(
+  requester: PassRequester,
+  document: string,
+): Promise<PassResult<IdentityCandidate[]>> {
+  const personId = await resolvePersonId(requester);
+  if (!personId) return { ok: false, code: 'forbidden' };
+
+  const context = await loadOpenShiftContext(personId);
+  if (!context) return { ok: false, code: 'no_active_shift' };
+
+  const normalized = normalizeDocument(document);
+  if (normalized.length < 4) return { ok: false, code: 'invalid' };
+
+  const now = new Date();
+  const rows = await db
+    .select()
+    .from(accessPasses)
+    .where(
+      and(
+        eq(accessPasses.communityId, context.communityId),
+        // The stored document may carry dots or spaces: compare the bare digits.
+        sql`regexp_replace(lower(${accessPasses.visitorDocument}), '[^0-9a-z]', '', 'g') = ${normalized}`,
+        gte(accessPasses.validUntil, now),
+        inArray(accessPasses.status, ['active', 'used']),
+      ),
+    )
+    .orderBy(desc(accessPasses.validFrom))
+    .limit(10);
+
+  const candidates: IdentityCandidate[] = [];
+  for (const row of rows) {
+    const destination = await resolveDestinationById(row.locationUnitId);
+    candidates.push({
+      passId: row.id,
+      visitorFirstName: row.visitorFirstName,
+      visitorLastName: row.visitorLastName,
+      visitorDocument: row.visitorDocument,
+      type: row.type,
+      status: row.status,
+      presenceState: row.presenceState,
+      validFrom: row.validFrom,
+      validUntil: row.validUntil,
+      destinationName: destination?.name ?? '',
+      destinationPath: destination?.path ?? '',
+    });
+  }
+
+  return { ok: true, data: candidates };
+}
+
+/**
+ * Registers an entry verified by document instead of by QR.
+ *
+ * The origin is stored as `manual_identity` so the audit can tell these entries
+ * apart from the ones that came from a scan.
+ */
+export async function confirmIdentityEntry(
+  requester: PassRequester,
+  passId: string,
+): Promise<PassResult<{ passId: string; status: PassStatus; bitacoraEntryId: string | null }>> {
+  const personId = await resolvePersonId(requester);
+  if (!personId) return { ok: false, code: 'forbidden' };
+
+  const context = await loadOpenShiftContext(personId);
+  if (!context) return { ok: false, code: 'no_active_shift' };
+
+  const [pass] = await db.select().from(accessPasses).where(eq(accessPasses.id, passId)).limit(1);
+  if (!pass) return { ok: false, code: 'not_found' };
+  if (pass.communityId !== context.communityId) return { ok: false, code: 'foreign_community' };
+  if (pass.status === 'used' || pass.status === 'revoked' || pass.presenceState === 'inside') {
+    return { ok: false, code: 'pass_used' };
+  }
+  if (pass.status === 'expired') return { ok: false, code: 'pass_expired' };
+
+  const now = new Date();
+  if (pass.validUntil < now || pass.validFrom > now) return { ok: false, code: 'not_valid_now' };
+
+  const nextStatus: PassStatus = pass.type === 'entry_only' ? 'used' : pass.status;
+  let bitacoraEntryId: string | null = null;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(accessPasses)
+      .set({
+        presenceState: 'inside',
+        entryAt: now,
+        entryCount: sql`${accessPasses.entryCount} + 1`,
+        status: nextStatus,
+        updatedAt: now,
+      })
+      .where(eq(accessPasses.id, pass.id));
+
+    const destination = await resolveDestinationById(pass.locationUnitId);
+    const entry = await insertBitacoraEntry(tx, {
+      communityId: context.communityId,
+      accessPointId: context.accessPointId,
+      accessPointName: context.accessPointName,
+      destinationLocationUnitId: pass.locationUnitId,
+      destinationPath: destination?.path ?? (await buildLocationPath(pass.locationUnitId)) ?? '',
+      authorizedByPersonId: pass.authorizedByPersonId,
+      shiftId: context.shiftId,
+      type: 'pass_entry',
+      source: 'manual_identity',
+      authorPersonId: personId,
+      authorAccountId: requester.accountId ?? null,
+      passId: pass.id,
+      passScanId: null,
+      summary: `Ingreso por documento de ${pass.visitorFirstName} ${pass.visitorLastName}`,
+      details: {
+        action: 'entry',
+        identityCheck: true,
+        visitorDocument: pass.visitorDocument,
+        destinationName: destination?.name ?? null,
+        destinationKind: destination?.kind ?? null,
+        locationPath: destination?.path ?? null,
+      },
+    });
+    bitacoraEntryId = entry.id;
+  });
+
+  if (pass.createdByPersonId) {
+    publishPassEvent({ personId: pass.createdByPersonId, passId: pass.id, status: nextStatus });
+  }
+
+  return { ok: true, data: { passId: pass.id, status: nextStatus, bitacoraEntryId } };
 }

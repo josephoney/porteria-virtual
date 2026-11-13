@@ -1,0 +1,1 @@
+ALTER TYPE "public"."bitacora_source" ADD VALUE 'manual_identity';

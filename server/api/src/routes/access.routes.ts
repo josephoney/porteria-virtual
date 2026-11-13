@@ -4,7 +4,15 @@ import config from '../config.js';
 import { sendPassError } from '../lib/pass-error-status.js';
 import { requireRole } from '../middlewares/rbac.js';
 import { scanDecisionSchema, scanPassSchema, scansQuerySchema } from '../schemas/index.js';
-import { confirmScan, listScans, rejectScan, scanPass } from '../services/access-scan.service.js';
+import {
+  confirmIdentityEntry,
+  confirmScan,
+  listScans,
+  rejectScan,
+  scanPass,
+  searchAuthorizationsByDocument,
+} from '../services/access-scan.service.js';
+import { isRateLimited } from '../lib/rate-limit.js';
 import type { PassRequester } from '../services/pass.service.js';
 
 function getRequester(request: FastifyRequest): PassRequester {
@@ -42,6 +50,44 @@ export async function accessRoutes(app: FastifyInstance) {
       });
     }
   });
+
+  /**
+   * Document based verification: the guard cannot scan a QR, so the app looks the
+   * authorizations up by the document registered on the pass and the guard picks
+   * one. A document number is public knowledge, so this never opens the gate.
+   */
+  app.get(
+    '/authorizations',
+    { preHandler: [dynamicQrGuard, requireRole('guard')] },
+    async (request, reply) => {
+      const requester = getRequester(request);
+      const document = String((request.query as { document?: string }).document ?? '').trim();
+
+      const key = `guard-document:${requester.personId ?? requester.sub}`;
+      if (isRateLimited(key, 20, 60_000)) {
+        return reply.status(429).send({
+          statusCode: 429,
+          error: 'Too Many Requests',
+          message: 'rate_limited',
+        });
+      }
+
+      const result = await searchAuthorizationsByDocument(requester, document);
+      if (!result.ok) return sendPassError(reply, result.code);
+      return reply.send(result.data);
+    },
+  );
+
+  app.post(
+    '/authorizations/:passId/confirm',
+    { preHandler: [dynamicQrGuard, requireRole('guard')] },
+    async (request, reply) => {
+      const { passId } = request.params as { passId: string };
+      const result = await confirmIdentityEntry(getRequester(request), passId);
+      if (!result.ok) return sendPassError(reply, result.code);
+      return reply.send(result.data);
+    },
+  );
 
   app.post(
     '/scan',

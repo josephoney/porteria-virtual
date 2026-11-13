@@ -141,6 +141,13 @@
       "when": 1794542536780,
       "tag": "0019_volatile_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794593024536,
+      "tag": "0020_narrow_tusk",
+      "breakpoints": true
     }
   ]
 }
