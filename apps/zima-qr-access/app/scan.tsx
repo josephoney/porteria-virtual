@@ -447,7 +447,7 @@ export default function GuardScanScreen() {
           ) : null}
 
           <Card>
-            <Text style={ui.sectionTitle}>Escanear QR</Text>
+            <Text style={ui.sectionTitle}>Registro</Text>
             {cameraOpen ? (
               <>
                 <View style={styles.cameraWrap}>

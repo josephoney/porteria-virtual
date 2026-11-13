@@ -36,10 +36,10 @@ export function IdentityCheck({
   const [cameraOpen, setCameraOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [document, setDocument] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [candidates, setCandidates] = useState<IdentityCandidate[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -87,6 +87,7 @@ export function IdentityCheck({
       setCameraOpen(false);
       setCandidates(null);
       setDocument('');
+      setSuggestions([]);
       setManualOpen(false);
       onConfirmed();
     } catch (err) {
@@ -110,7 +111,7 @@ export function IdentityCheck({
    */
   function onBarcodeScanned(result: { data: string }) {
     setCameraOpen(false);
-    // Until the payload format is confirmed against real cards, the raw value is
+    // Until the payload format is confirmed against more cards, the raw value is
     // logged in development so a wrong guess can be traced back to the source.
     if (__DEV__) console.log('cedula barcode', describeBarcode(result.data));
     const options = documentCandidates(result.data);
@@ -129,19 +130,17 @@ export function IdentityCheck({
     <View style={styles.wrapper}>
       <Divider />
 
-      <View style={styles.actions}>
-        <Button
-          label="Escanear cédula"
-          variant="secondary"
-          onPress={() => {
-            reset();
-            setCameraOpen((open) => !open);
-          }}
-          disabled={searching}
-        />
-      </View>
+      <Button
+        label="Escanear cédula"
+        variant="secondary"
+        onPress={() => {
+          reset();
+          setCameraOpen((open) => !open);
+        }}
+        disabled={searching}
+      />
 
-      {cameraOpen && (
+      {cameraOpen ? (
         <View style={styles.cameraBox}>
           <CameraView
             style={styles.camera}
@@ -149,25 +148,26 @@ export function IdentityCheck({
             barcodeScannerSettings={{ barcodeTypes: ['pdf417'] }}
             onBarcodeScanned={onBarcodeScanned}
           />
-          {suggestions.length > 1 ? (
-            <View style={styles.suggestions}>
-              <Text style={ui.muted}>Si el número no coincide, elegí el correcto:</Text>
-              <View style={styles.chips}>
-                {suggestions.map((option) => (
-                  <Pressable
-                    key={option}
-                    onPress={() => setDocument(option)}
-                    style={[styles.chip, option === document && styles.chipActive]}
-                  >
-                    <Text style={styles.chipText}>{option}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          ) : null}{' '}
           <Button label="Cancelar" variant="ghost" onPress={() => setCameraOpen(false)} />
         </View>
-      )}
+      ) : null}
+
+      {suggestions.length > 1 ? (
+        <View style={styles.suggestions}>
+          <Text style={ui.muted}>Si el número no coincide, elegí el correcto:</Text>
+          <View style={styles.chips}>
+            {suggestions.map((option) => (
+              <Pressable
+                key={option}
+                onPress={() => setDocument(option)}
+                style={[styles.chip, option === document ? styles.chipActive : null]}
+              >
+                <Text style={styles.chipText}>{option}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       {manualOpen ? (
         <View style={styles.manualBox}>
@@ -191,7 +191,7 @@ export function IdentityCheck({
         </View>
       ) : (
         <Button
-          label="Ingresar cédula manualmente"
+          label="Ingresar cédula"
           variant="ghost"
           onPress={() => {
             reset();
@@ -233,30 +233,13 @@ const styles = StyleSheet.create({
   wrapper: {
     gap: spacing.md,
   },
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
   cameraBox: {
     gap: spacing.sm,
   },
   camera: {
-    height: 260,
     borderRadius: radius.lg,
+    height: 260,
     overflow: 'hidden',
-  },
-  manualBox: {
-    gap: spacing.sm,
-  },
-  input: {
-    backgroundColor: colors.surfaceElevated,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    color: colors.text,
-    fontSize: typography.body,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
   },
   suggestions: {
     gap: spacing.sm,
@@ -280,6 +263,19 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.small,
     fontWeight: '600',
+  },
+  manualBox: {
+    gap: spacing.sm,
+  },
+  input: {
+    backgroundColor: colors.surfaceElevated,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    color: colors.text,
+    fontSize: typography.body,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   notice: {
     color: colors.success,
