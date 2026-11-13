@@ -839,9 +839,10 @@ export async function confirmIdentityEntry(
     await tx
       .update(accessPasses)
       .set({
-        presenceState: 'inside',
-        entryAt: now,
-        entryCount: sql`${accessPasses.entryCount} + 1`,
+        presenceState: action === 'entry' ? 'inside' : 'outside',
+        ...(action === 'entry'
+          ? { entryAt: now, entryCount: sql`${accessPasses.entryCount} + 1` }
+          : { exitAt: now, exitCount: sql`${accessPasses.exitCount} + 1` }),
         status: nextStatus,
         updatedAt: now,
       })
@@ -862,7 +863,10 @@ export async function confirmIdentityEntry(
       authorAccountId: requester.accountId ?? null,
       passId: pass.id,
       passScanId: null,
-      summary: `Ingreso por documento de ${pass.visitorFirstName} ${pass.visitorLastName}`,
+      summary:
+        action === 'entry'
+          ? `Ingreso por documento de ${pass.visitorFirstName} ${pass.visitorLastName}`
+          : `Salida por documento de ${pass.visitorFirstName} ${pass.visitorLastName}`,
       details: {
         action,
         identityCheck: true,
