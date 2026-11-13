@@ -91,8 +91,8 @@ export default function ResidentHomeScreen() {
 
       {passes.length === 0 ? (
         <EmptyState
-          title="No tenés pases activos"
-          message="Creá un pase para que tu visita pueda ingresar mostrando un QR dinámico."
+          title="No tienes pases activos"
+          message="Crea un pase para que tu visita pueda ingresar mostrando un QR dinámico."
           action={
             <Button
               label="Crear mi primer pase"

@@ -140,7 +140,7 @@ export function UsersTable() {
     } catch {
       setUsers([]);
       setTotal(0);
-      setFetchError('No se pudieron cargar los usuarios. Reintentá en unos segundos.');
+      setFetchError('No se pudieron cargar los usuarios. Reintenta en unos segundos.');
     } finally {
       setLoading(false);
     }
@@ -765,7 +765,7 @@ export function UsersTable() {
                 }
               >
                 <SelectTrigger id="assignment-community">
-                  <SelectValue placeholder="Elegí una comunidad" />
+                  <SelectValue placeholder="Elige una comunidad" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sin comunidad</SelectItem>

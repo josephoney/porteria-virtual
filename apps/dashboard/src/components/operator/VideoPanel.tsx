@@ -47,24 +47,20 @@ export function VideoPanel({
   useEffect(() => {
     if (remoteRef.current && remoteStream) {
       remoteRef.current.srcObject = remoteStream;
-      remoteRef.current.play().catch((e) =>
-        console.log('[Dash] Remote video play blocked:', e.name),
-      );
+      remoteRef.current
+        .play()
+        .catch((e) => console.log('[Dash] Remote video play blocked:', e.name));
     }
     if (audioRef.current && remoteStream) {
       audioRef.current.srcObject = remoteStream;
-      audioRef.current.play().catch((e) =>
-        console.log('[Dash] Audio play blocked:', e.name),
-      );
+      audioRef.current.play().catch((e) => console.log('[Dash] Audio play blocked:', e.name));
     }
   }, [remoteStream]);
 
   useEffect(() => {
     if (localRef.current && localStream) {
       localRef.current.srcObject = localStream;
-      localRef.current.play().catch((e) =>
-        console.log('[Dash] Local video play blocked:', e.name),
-      );
+      localRef.current.play().catch((e) => console.log('[Dash] Local video play blocked:', e.name));
     }
   }, [localStream]);
 
@@ -108,29 +104,36 @@ export function VideoPanel({
         )}
       </div>
       {!compact && (
-      <div className="video-controls">
-        <div className="vctrl">
-          <button className="vctrl-btn action-green" onClick={onOpenDoor}>🔓</button>
-          <span className="vctrl-label">Abrir</span>
-          {doorRelay && (
-            <span className="vctrl-detail">GPIO {doorRelay.gpioPin}{doorRelay.durationMs ? ` · ${Math.round(doorRelay.durationMs / 1000)}s` : ''}</span>
-          )}
+        <div className="video-controls">
+          <div className="vctrl">
+            <button className="vctrl-btn action-green" onClick={onOpenDoor}>
+              🔓
+            </button>
+            <span className="vctrl-label">Abrir</span>
+            {doorRelay && (
+              <span className="vctrl-detail">
+                GPIO {doorRelay.gpioPin}
+                {doorRelay.durationMs ? ` · ${Math.round(doorRelay.durationMs / 1000)}s` : ''}
+              </span>
+            )}
+          </div>
+          <div className="vctrl">
+            <button
+              className="vctrl-btn"
+              onClick={onToggleMute}
+              style={{ opacity: isMuted ? 0.4 : 1 }}
+            >
+              🎤
+            </button>
+            <span className="vctrl-label">{isMuted ? 'Silenciado' : 'Micrófono'}</span>
+          </div>
+          <div className="vctrl">
+            <button className="vctrl-btn action-red" onClick={onEndCall}>
+              📞
+            </button>
+            <span className="vctrl-label">Colgar</span>
+          </div>
         </div>
-        <div className="vctrl">
-          <button
-            className="vctrl-btn"
-            onClick={onToggleMute}
-            style={{ opacity: isMuted ? 0.4 : 1 }}
-          >
-            🎤
-          </button>
-          <span className="vctrl-label">{isMuted ? 'Silenciado' : 'Micrófono'}</span>
-        </div>
-        <div className="vctrl">
-          <button className="vctrl-btn action-red" onClick={onEndCall}>📞</button>
-          <span className="vctrl-label">Colgar</span>
-        </div>
-      </div>
       )}
       {!compact && relays && relays.length > 0 && (
         <div className="relay-controls">

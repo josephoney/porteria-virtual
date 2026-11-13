@@ -103,7 +103,7 @@ export function ResidentHomePage() {
     <div className="p-6 space-y-6">
       <PageHeader
         title="Mis autorizaciones"
-        description="Autorizá visitas a tu vivienda o a las zonas comunes de la comunidad."
+        description="Autoriza visitas a tu vivienda o a las zonas comunes de la comunidad."
         actions={
           <Button asChild>
             <Link to="/resident/authorizations/new">
@@ -135,19 +135,19 @@ export function ResidentHomePage() {
             to="/resident/authorizations/new"
             icon={<RiQrCodeLine className="size-5" />}
             title="Autorizar una visita"
-            description="Elegí el destino y generá el QR."
+            description="Elige el destino y genera el QR."
           />
           <QuickAction
             to="/resident/authorizations"
             icon={<RiHistoryLine className="size-5" />}
             title="Historial"
-            description="Revisá, compartí o revocá lo autorizado."
+            description="Revisa, comparte o revoca lo autorizado."
           />
           <QuickAction
             to="/resident/authorizations/bulk"
             icon={<RiFileList3Line className="size-5" />}
             title="Carga masiva"
-            description="Autorizá un grupo de visitas con un CSV."
+            description="Autoriza un grupo de visitas con un CSV."
           />
         </div>
       )}

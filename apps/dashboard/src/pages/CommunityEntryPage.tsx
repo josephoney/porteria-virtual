@@ -66,7 +66,7 @@ export function CommunityEntryPage() {
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-extrabold">Comunidad no encontrada</h1>
           <p className="text-sm text-muted-foreground">
-            Verificá el enlace o pedile uno nuevo a la administración.
+            Verifica el enlace o pedile uno nuevo a la administración.
           </p>
         </div>
       </div>
@@ -79,8 +79,8 @@ export function CommunityEntryPage() {
         <div className="text-center space-y-3">
           <h1 className="text-2xl font-extrabold">No se pudo conectar</h1>
           <p className="text-sm text-muted-foreground">
-            No pudimos hablar con el servidor. Revisá que la API esté corriendo en el puerto
-            3000 y reintentá.
+            No pudimos hablar con el servidor. Revisa que la API esté corriendo en el puerto 3000 y
+            reintenta.
           </p>
           <Button variant="outline" onClick={() => setRetryKey((n) => n + 1)}>
             Reintentar

@@ -20,7 +20,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen
             name="context"
-            options={{ title: 'Elegí un contexto', headerBackVisible: false }}
+            options={{ title: 'Elige un contexto', headerBackVisible: false }}
           />
           <Stack.Screen name="no-mode" options={{ title: 'Zima QR Access' }} />
           <Stack.Screen name="home" options={{ title: 'Mis pases' }} />

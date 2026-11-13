@@ -8,12 +8,12 @@ const MESSAGES: Record<string, string> = {
   device_already_bound:
     'Este link ya está vinculado a otro dispositivo. Por seguridad, solo funciona en el primero que lo abrió.',
   not_bound: 'Este dispositivo todavía no está vinculado al pase.',
-  invalid_pin: 'PIN incorrecto. Intentá de nuevo.',
-  pin_locked: 'Demasiados intentos. Esperá 15 minutos antes de volver a probar.',
+  invalid_pin: 'PIN incorrecto. Intenta de nuevo.',
+  pin_locked: 'Demasiados intentos. Espera 15 minutos antes de volver a probar.',
   not_valid_now: 'Estás fuera del horario permitido para este pase.',
   dynamic_qr_disabled: 'El acceso con QR no está habilitado.',
-  invalid_or_expired_token: 'El QR venció. Esperá a que se genere uno nuevo.',
-  request_failed: 'No pudimos completar la operación. Revisá tu conexión e intentá de nuevo.',
+  invalid_or_expired_token: 'El QR venció. Espera a que se genere uno nuevo.',
+  request_failed: 'No pudimos completar la operación. Revisa tu conexión e intenta de nuevo.',
 };
 
 export const FINAL_CODES = new Set([
@@ -29,5 +29,5 @@ export const FINAL_CODES = new Set([
 ]);
 
 export function messageFor(code: string): string {
-  return MESSAGES[code] ?? 'Ocurrió un error inesperado. Intentá de nuevo.';
+  return MESSAGES[code] ?? 'Ocurrió un error inesperado. Intenta de nuevo.';
 }

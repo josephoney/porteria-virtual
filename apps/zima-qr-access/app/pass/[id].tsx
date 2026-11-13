@@ -134,7 +134,7 @@ export default function PassDetailScreen() {
       <Screen>
         <Card>
           <Text style={ui.heading}>No pudimos cargar el pase</Text>
-          <Text style={ui.muted}>{error ?? 'Intentá de nuevo.'}</Text>
+          <Text style={ui.muted}>{error ?? 'Intenta de nuevo.'}</Text>
         </Card>
         <Button label="Reintentar" onPress={() => void loadPass()} />
         <Button label="Volver" variant="ghost" onPress={() => router.back()} />
@@ -185,7 +185,7 @@ export default function PassDetailScreen() {
     if (!url) return;
 
     await Share.share({
-      message: `${pass.visitorFirstName} ${pass.visitorLastName} tiene un pase para ${pass.locationPath}. Abrí el link: ${url}`,
+      message: `${pass.visitorFirstName} ${pass.visitorLastName} tiene un pase para ${pass.locationPath}. Abre el link: ${url}`,
     });
   };
 
@@ -193,11 +193,11 @@ export default function PassDetailScreen() {
     const url = await ensureShareUrl();
     if (!url) return;
     await Clipboard.setStringAsync(url);
-    Alert.alert('Link copiado', 'Ya podés pegarlo en WhatsApp o donde quieras.');
+    Alert.alert('Link copiado', 'Ya puedes pegarlo en WhatsApp o donde quieras.');
   };
 
   const onRevoke = () => {
-    Alert.alert('Revocar pase', 'El visitante ya no podrá ingresar. ¿Confirmás?', [
+    Alert.alert('Revocar pase', 'El visitante ya no podrá ingresar. ¿Confirmas?', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Revocar',
@@ -233,7 +233,7 @@ export default function PassDetailScreen() {
               setActing(true);
               try {
                 await regenerate();
-                Alert.alert('Link regenerado', 'Ya podés compartir el nuevo link.');
+                Alert.alert('Link regenerado', 'Ya puedes compartir el nuevo link.');
               } catch (regenerateError) {
                 Alert.alert('Error', errorMessage(regenerateError));
               } finally {
@@ -292,7 +292,7 @@ export default function PassDetailScreen() {
               </View>
               <Text style={styles.qrHint}>Se actualiza en {seconds}s</Text>
               <Text style={ui.muted}>
-                Mostrá este QR al guardia. Se renueva solo; no compartas una captura.
+                Muestra este QR al guardia. Se renueva solo; no compartas una captura.
               </Text>
             </>
           ) : (

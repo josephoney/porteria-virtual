@@ -111,7 +111,7 @@ export function InvitePage() {
           {isAuthenticated ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Ya iniciaste sesión. Aceptá la invitación con tu cuenta actual.
+                Ya iniciaste sesión. Acepta la invitación con tu cuenta actual.
               </p>
               <Button className="w-full" onClick={handleExistingAccount} disabled={loading}>
                 {loading ? 'Aceptando…' : 'Aceptar con mi cuenta'}
@@ -152,11 +152,11 @@ export function InvitePage() {
           )}
 
           <p className="text-xs text-muted-foreground text-center">
-            ¿Ya tenés cuenta?{' '}
+            ¿Ya tienes cuenta?{' '}
             <Link to="/login" className="underline">
-              Iniciá sesión
+              Inicia sesión
             </Link>{' '}
-            y volvé a abrir este enlace.
+            y vuelve a abrir este enlace.
           </p>
         </CardContent>
       </Card>

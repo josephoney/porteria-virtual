@@ -16,7 +16,7 @@ export function PinForm({ preview, busy, error, locked, onSubmit }: PinFormProps
     <main className="page">
       <section className="card">
         <p className="eyebrow">{preview.communityName}</p>
-        <h1>Ingresá el PIN</h1>
+        <h1>Ingresa el PIN</h1>
         <p className="lead">El residente te compartió un PIN de 4 dígitos para abrir este pase.</p>
 
         <form
@@ -44,7 +44,9 @@ export function PinForm({ preview, busy, error, locked, onSubmit }: PinFormProps
           </button>
         </form>
 
-        <p className="hint">Si no tenés el PIN, pedile al residente que te lo comparta de nuevo.</p>
+        <p className="hint">
+          Si no tienes el PIN, pedile al residente que te lo comparta de nuevo.
+        </p>
       </section>
     </main>
   );

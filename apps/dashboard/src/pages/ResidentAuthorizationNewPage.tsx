@@ -53,14 +53,14 @@ function formatWindow(from: string, until: string) {
 function destinationErrorFor(code: string): string | null {
   switch (code) {
     case 'destination_inactive':
-      return 'Ese destino se archivó y ya no recibe autorizaciones. Elegí otro.';
+      return 'Ese destino se archivó y ya no recibe autorizaciones. Elige otro.';
     case 'not_found':
     case 'foreign_community':
-      return 'No encontramos ese destino en tu comunidad. Elegí otro.';
+      return 'No encontramos ese destino en tu comunidad. Elige otro.';
     case 'forbidden':
-      return 'No podés autorizar visitas a ese destino.';
+      return 'No puedes autorizar visitas a ese destino.';
     case 'invalid':
-      return 'Ese destino no acepta autorizaciones. Elegí una vivienda o una zona común.';
+      return 'Ese destino no acepta autorizaciones. Elige una vivienda o una zona común.';
     default:
       return null;
   }
@@ -124,22 +124,22 @@ export function ResidentAuthorizationNewPage() {
     const next: Partial<Record<FieldKey, string>> = {};
 
     if (!destinationId) {
-      next.destination = 'Elegí a dónde autorizás la visita.';
+      next.destination = 'Elige a dónde autorizas la visita.';
     }
     if (!firstName.trim() || !lastName.trim() || !document.trim()) {
-      next.visitor = 'Completá nombre, apellido y documento del visitante.';
+      next.visitor = 'Completa nombre, apellido y documento del visitante.';
     }
 
     const from = new Date(validFrom);
     const until = new Date(validUntil);
     if (Number.isNaN(from.getTime()) || Number.isNaN(until.getTime())) {
-      next.window = 'Completá la fecha y hora de la vigencia.';
+      next.window = 'Completa la fecha y hora de la vigencia.';
     } else if (until.getTime() <= from.getTime()) {
       next.window = 'La vigencia debe terminar después de empezar.';
     }
 
     if (hasVehicle && !plate.trim()) {
-      next.vehicle = 'Ingresá la placa del vehículo.';
+      next.vehicle = 'Ingresa la placa del vehículo.';
     }
 
     setFieldErrors(next);
@@ -208,7 +208,7 @@ export function ResidentAuthorizationNewPage() {
     <div className="p-6 space-y-6">
       <PageHeader
         title="Autorizar visita"
-        description="Elegí el destino, cargá los datos del visitante y definí la ventana de validez."
+        description="Elige el destino, carga los datos del visitante y define la ventana de validez."
       />
 
       <ol className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -230,9 +230,9 @@ export function ResidentAuthorizationNewPage() {
       {step === 'review' ? (
         <section className="max-w-2xl space-y-4">
           <div className="rounded-4xl border border-border bg-card p-6">
-            <h2 className="text-base font-semibold">Revisá la autorización</h2>
+            <h2 className="text-base font-semibold">Revisa la autorización</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Si está todo bien, confirmá. Podés volver para cambiar cualquier dato.
+              Si está todo bien, confirma. Puedes volver para cambiar cualquier dato.
             </p>
 
             <DetailGrid className="mt-4">
@@ -301,7 +301,7 @@ export function ResidentAuthorizationNewPage() {
                 aria-label="Destino"
                 aria-invalid={Boolean(fieldErrors.destination)}
               >
-                <SelectValue placeholder="Elegí un destino">
+                <SelectValue placeholder="Elige un destino">
                   {selectedDestination?.path}
                 </SelectValue>
               </SelectTrigger>
@@ -516,18 +516,18 @@ export function ResidentAuthorizationNewPage() {
 function messageForError(err: unknown, code: string) {
   switch (code) {
     case 'daily_limit_reached':
-      return 'Esta unidad alcanzó el límite de autorizaciones por hoy. Probá de nuevo mañana.';
+      return 'Esta unidad alcanzó el límite de autorizaciones por hoy. Prueba de nuevo mañana.';
     case 'recurring_not_available':
     case 'allowed_days_reserved':
       return 'Ese tipo de autorización todavía no está disponible desde la web.';
     case 'rate_limited':
-      return 'Demasiados intentos seguidos. Esperá un minuto y volvé a intentar.';
+      return 'Demasiados intentos seguidos. Espera un minuto y vuelve a intentar.';
     case 'dynamic_qr_disabled':
       return 'Las autorizaciones con QR están desactivadas en esta comunidad.';
     default:
       if (err instanceof ApiError && err.message && !/^[a-z_]+$/.test(err.message)) {
         return err.message;
       }
-      return 'No se pudo crear la autorización. Reintentá en unos segundos.';
+      return 'No se pudo crear la autorización. Reintenta en unos segundos.';
   }
 }

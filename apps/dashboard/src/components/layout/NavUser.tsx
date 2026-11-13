@@ -31,11 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from '../ui/sidebar';
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '../ui/sidebar';
 
 function initials(name: string): string {
   return name
@@ -77,23 +73,19 @@ export function NavUser() {
     <>
       <SidebarMenu>
         <SidebarMenuItem>
-        <DropdownMenu>
-          <SidebarMenuButton asChild size="lg" className="data-[state=open]:bg-sidebar-accent">
-            <DropdownMenuTrigger className="flex w-full items-center gap-2">
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarFallback className="rounded-lg">
-                  {initials(user.name)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {user.email}
-                </span>
-              </div>
-              <RiMoreLine className="ml-auto size-4" />
-            </DropdownMenuTrigger>
-          </SidebarMenuButton>
+          <DropdownMenu>
+            <SidebarMenuButton asChild size="lg" className="data-[state=open]:bg-sidebar-accent">
+              <DropdownMenuTrigger className="flex w-full items-center gap-2">
+                <Avatar className="h-8 w-8 rounded-lg">
+                  <AvatarFallback className="rounded-lg">{initials(user.name)}</AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-medium">{user.name}</span>
+                  <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                </div>
+                <RiMoreLine className="ml-auto size-4" />
+              </DropdownMenuTrigger>
+            </SidebarMenuButton>
             <DropdownMenuContent
               side="right"
               align="end"
@@ -104,9 +96,7 @@ export function NavUser() {
                 <div className="flex flex-col gap-1">
                   <span className="text-sm font-medium">{user.name}</span>
                   <span className="text-xs text-muted-foreground">{user.email}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {activeContext}
-                  </span>
+                  <span className="text-[11px] text-muted-foreground">{activeContext}</span>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -166,9 +156,7 @@ export function NavUser() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cuenta</DialogTitle>
-            <DialogDescription>
-              Información de la cuenta y del contexto activo.
-            </DialogDescription>
+            <DialogDescription>Información de la cuenta y del contexto activo.</DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12 rounded-xl">
@@ -202,7 +190,7 @@ export function NavUser() {
             </DialogDescription>
           </DialogHeader>
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No tenés notificaciones pendientes.
+            No tienes notificaciones pendientes.
           </p>
           <DialogFooter>
             <DialogClose asChild>

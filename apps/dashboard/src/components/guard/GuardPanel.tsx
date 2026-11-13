@@ -447,7 +447,7 @@ export function GuardPanel() {
               }}
             >
               <SelectTrigger className="w-64">
-                <SelectValue placeholder="Seleccioná una comunidad" />
+                <SelectValue placeholder="Selecciona una comunidad" />
               </SelectTrigger>
               <SelectContent>
                 {communities.map((community) => (
@@ -529,14 +529,14 @@ export function GuardPanel() {
             ) : isGuard ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  No tenés un turno abierto. Elegí el acceso donde vas a estar.
+                  No tienes un turno abierto. Elige el acceso donde vas a estar.
                 </p>
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="space-y-1">
                     <Label>Acceso</Label>
                     <Select value={selectedAccessPointId} onValueChange={setSelectedAccessPointId}>
                       <SelectTrigger className="w-56">
-                        <SelectValue placeholder="Seleccioná un acceso" />
+                        <SelectValue placeholder="Selecciona un acceso" />
                       </SelectTrigger>
                       <SelectContent>
                         {activeAccessPoints.map((item) => (
@@ -554,7 +554,7 @@ export function GuardPanel() {
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Como administrador podés ver los turnos activos y la bitácora, pero no iniciar un
+                Como administrador puedes ver los turnos activos y la bitácora, pero no iniciar un
                 turno propio.
               </p>
             )}
@@ -595,7 +595,7 @@ export function GuardPanel() {
             />
           ) : (
             <div className="rounded-4xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-              Seleccioná un acceso para ver su bitácora.
+              Selecciona un acceso para ver su bitácora.
             </div>
           )}
         </TabsContent>

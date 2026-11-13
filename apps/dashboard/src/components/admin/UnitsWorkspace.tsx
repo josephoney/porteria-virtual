@@ -222,7 +222,7 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
   if (communities.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
-        Todavía no hay comunidades. Creá una en Comunidades para definir su estructura.
+        Todavía no hay comunidades. Crea una en Comunidades para definir su estructura.
       </div>
     );
   }
@@ -240,7 +240,7 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
       <div className="flex flex-wrap items-center gap-3">
         <Select value={communityId} onValueChange={setCommunityId}>
           <SelectTrigger className="w-64" aria-label="Comunidad">
-            <SelectValue placeholder="Elegí una comunidad" />
+            <SelectValue placeholder="Elige una comunidad" />
           </SelectTrigger>
           <SelectContent>
             {communities.map((community) => (
@@ -278,7 +278,7 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
           <div>
             <h3 className="text-sm font-semibold">Sin estructura definida</h3>
             <p className="text-sm text-muted-foreground">
-              Definí los niveles de la comunidad para empezar a cargar sus elementos.
+              Define los niveles de la comunidad para empezar a cargar sus elementos.
             </p>
           </div>
           <Button onClick={() => setStructureFormOpen(true)}>Definir estructura</Button>
@@ -320,7 +320,7 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
         open={structureFormOpen}
         onOpenChange={setStructureFormOpen}
         title={structure ? 'Editar estructura' : 'Definir estructura'}
-        description="Definí los niveles y los nombres de la jerarquía de la comunidad."
+        description="Define los niveles y los nombres de la jerarquía de la comunidad."
         hideTrigger
       >
         <StructureForm

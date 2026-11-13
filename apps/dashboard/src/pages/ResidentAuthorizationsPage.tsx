@@ -174,7 +174,7 @@ export function ResidentAuthorizationsPage() {
           void loadQr(passId);
         }, delay);
       } catch {
-        setQrError('No pudimos generar el QR. Cerrá el diálogo y revisá el estado del pase.');
+        setQrError('No pudimos generar el QR. Cierra el diálogo y revisa el estado del pase.');
         stopQrTimer();
       } finally {
         setQrLoading(false);
@@ -283,7 +283,7 @@ export function ResidentAuthorizationsPage() {
         setNotice(`Enlace nuevo de ${visitorName(pass)} generado. El anterior dejó de funcionar.`);
       }
     } catch {
-      setNotice('No se pudo regenerar el enlace. Probá de nuevo en unos segundos.');
+      setNotice('No se pudo regenerar el enlace. Prueba de nuevo en unos segundos.');
     } finally {
       setBusyId(null);
     }
@@ -301,7 +301,7 @@ export function ResidentAuthorizationsPage() {
       setNotice(`Autorización de ${visitorName(revokePass)} revocada.`);
       setRevokePass(null);
     } catch {
-      setRevokeError('No se pudo revocar la autorización. Probá de nuevo.');
+      setRevokeError('No se pudo revocar la autorización. Prueba de nuevo.');
     } finally {
       setRevoking(false);
     }
@@ -478,7 +478,7 @@ export function ResidentAuthorizationsPage() {
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {search || statusFilter !== 'all' || destinationFilter !== 'all' || batchFilter
-                  ? 'Probá limpiando los filtros.'
+                  ? 'Prueba limpiando los filtros.'
                   : 'Cuando autorices una visita, va a quedar registrada acá.'}
               </p>
               <Button asChild variant="outline" className="mt-4">

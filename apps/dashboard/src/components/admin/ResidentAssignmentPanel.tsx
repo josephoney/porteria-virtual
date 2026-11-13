@@ -139,7 +139,7 @@ export function ResidentAssignmentPanel({ unitId, unitName }: ResidentAssignment
           <Label htmlFor="resident-user">Usuario</Label>
           <Select value={residentUserId} onValueChange={setResidentUserId}>
             <SelectTrigger id="resident-user" className="w-full" aria-label="Usuario a asociar">
-              <SelectValue placeholder="Elegí un usuario" />
+              <SelectValue placeholder="Elige un usuario" />
             </SelectTrigger>
             <SelectContent>
               {users.map((option) => (
@@ -154,7 +154,7 @@ export function ResidentAssignmentPanel({ unitId, unitName }: ResidentAssignment
           <Label htmlFor="resident-relationship">Relación</Label>
           <Select value={relationship} onValueChange={setRelationship}>
             <SelectTrigger id="resident-relationship" className="w-full" aria-label="Relación">
-              <SelectValue placeholder="Elegí la relación" />
+              <SelectValue placeholder="Elige la relación" />
             </SelectTrigger>
             <SelectContent>
               {RELATIONSHIPS.map((value) => (

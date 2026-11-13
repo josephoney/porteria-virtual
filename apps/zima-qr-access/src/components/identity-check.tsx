@@ -56,7 +56,7 @@ export function IdentityCheck({
   async function search(value: string) {
     const clean = value.trim();
     if (clean.length < 4) {
-      setError('Escribí el número de cédula completo.');
+      setError('Escribe el número de cédula completo.');
       return;
     }
 
@@ -72,10 +72,10 @@ export function IdentityCheck({
       const code = (err as { body?: { message?: string } })?.body?.message;
       setError(
         code === 'rate_limited'
-          ? 'Hiciste muchas consultas seguidas. Esperá un minuto y reintentá.'
+          ? 'Hiciste muchas consultas seguidas. Espera un minuto y reintenta.'
           : code === 'no_active_shift'
-            ? 'Necesitás un turno abierto para verificar autorizaciones.'
-            : 'No se pudo verificar la cédula. Revisá la conexión y reintentá.',
+            ? 'Necesitas un turno abierto para verificar autorizaciones.'
+            : 'No se pudo verificar la cédula. Revisa la conexión y reintenta.',
       );
     } finally {
       setSearching(false);
@@ -102,7 +102,7 @@ export function IdentityCheck({
             ? 'Esa persona ya está registrada dentro o fuera, según el caso.'
             : code === 'not_valid_now'
               ? 'La autorización no está vigente en este momento.'
-              : 'No se pudo registrar el ingreso. Reintentá.',
+              : 'No se pudo registrar el ingreso. Reintenta.',
       );
     } finally {
       setConfirmingId(null);
@@ -120,7 +120,7 @@ export function IdentityCheck({
       setManualOpen(false);
       onConfirmed();
     } catch {
-      setError('No se pudo registrar la denegación. Reintentá.');
+      setError('No se pudo registrar la denegación. Reintenta.');
     } finally {
       setConfirmingId(null);
     }

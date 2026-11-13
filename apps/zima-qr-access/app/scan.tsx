@@ -210,7 +210,7 @@ export default function GuardScanScreen() {
 
   const onEnd = () => {
     if (!activeShift) return;
-    Alert.alert('Cerrar turno', '¿Confirmás el cierre del turno?', [
+    Alert.alert('Cerrar turno', '¿Confirmas el cierre del turno?', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Cerrar turno',
@@ -254,7 +254,7 @@ export default function GuardScanScreen() {
       const next = await requestPermission();
       if (!next.granted) {
         setScanError(
-          'Necesitamos permiso de cámara para escanear el QR. Podés ingresar el token manualmente.',
+          'Necesitamos permiso de cámara para escanear el QR. Puedes ingresar el token manualmente.',
         );
         return;
       }
@@ -355,7 +355,7 @@ export default function GuardScanScreen() {
       {!activeShift ? (
         <Card>
           <Text style={ui.sectionTitle}>Iniciar turno</Text>
-          <Text style={ui.muted}>Elegí el punto de acceso donde vas a cubrir el turno.</Text>
+          <Text style={ui.muted}>Elige el punto de acceso donde vas a cubrir el turno.</Text>
           {!communityId ? (
             <Text style={ui.error}>Tu usuario no tiene una comunidad asignada.</Text>
           ) : null}

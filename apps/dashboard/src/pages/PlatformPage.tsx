@@ -604,8 +604,8 @@ export function PlatformPage() {
                 title={editingOrganizationId ? 'Editar organización' : 'Nueva organización'}
                 description={
                   editingOrganizationId
-                    ? 'Actualizá el nombre y el administrador de la organización.'
-                    : 'Creá una organización para agrupar comunidades.'
+                    ? 'Actualiza el nombre y el administrador de la organización.'
+                    : 'Crea una organización para agrupar comunidades.'
                 }
                 hideTrigger
               >
@@ -931,7 +931,7 @@ export function PlatformPage() {
                 open={formDialog === 'communities'}
                 onOpenChange={(open) => setFormDialog(open ? 'communities' : null)}
                 title="Nueva comunidad"
-                description="Asociá una comunidad a una organización existente."
+                description="Asocia una comunidad a una organización existente."
                 triggerLabel="Crear comunidad"
                 hidden
               >
@@ -1113,7 +1113,7 @@ export function PlatformPage() {
                 open={formDialog === 'invitations'}
                 onOpenChange={(open) => setFormDialog(open ? 'invitations' : null)}
                 title="Nueva invitación"
-                description="Invitá a una persona a la plataforma."
+                description="Invita a una persona a la plataforma."
                 triggerLabel="Invitar"
               >
                 <form onSubmit={createInvitation} className="flex flex-wrap items-end gap-2">

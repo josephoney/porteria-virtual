@@ -16,7 +16,7 @@ test.describe('polished dashboard', () => {
 
     await page.getByRole('tab', { name: 'Crear cuenta' }).click();
     await expect(page.locator('#invite-token')).toBeVisible();
-    await expect(page.getByText(/pedísela al administrador de tu comunidad/)).toBeVisible();
+    await expect(page.getByText(/pidesela al administrador de tu comunidad/)).toBeVisible();
   });
 
   test('admin filters users, sees one row per community and toggles status', async ({ page }) => {
@@ -121,7 +121,7 @@ test.describe('auth shell', () => {
   }) => {
     await loginAs(page, DEMO_USERS.multiContext);
 
-    await expect(page.getByText('Elegí tu contexto')).toBeVisible();
+    await expect(page.getByText('Elige tu contexto')).toBeVisible();
 
     const options = page.getByRole('button', { name: /owner|resident/i });
     await expect(options).toHaveCount(2);
@@ -131,6 +131,6 @@ test.describe('auth shell', () => {
     // Both demo memberships are resident roles, so both land on the resident workspace.
     await expect(page).toHaveURL(/\/resident$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Mis autorizaciones' })).toBeVisible();
-    await expect(page.getByText('Elegí tu contexto')).toHaveCount(0);
+    await expect(page.getByText('Elige tu contexto')).toHaveCount(0);
   });
 });

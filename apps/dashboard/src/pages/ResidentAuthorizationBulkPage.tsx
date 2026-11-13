@@ -296,22 +296,22 @@ function batchErrorFor(code: string | undefined): string {
     case 'batch_too_large':
       return `El archivo supera el máximo de ${MAX_VISITORS} autorizaciones por lote.`;
     case 'destination_inactive':
-      return 'Ese destino se archivó y ya no recibe autorizaciones. Elegí otro.';
+      return 'Ese destino se archivó y ya no recibe autorizaciones. Elige otro.';
     case 'not_found':
     case 'foreign_community':
-      return 'No encontramos ese destino en tu comunidad. Elegí otro.';
+      return 'No encontramos ese destino en tu comunidad. Elige otro.';
     case 'forbidden':
-      return 'No podés autorizar visitas a ese destino.';
+      return 'No puedes autorizar visitas a ese destino.';
     case 'invalid':
       return 'Ese destino no acepta autorizaciones porque todavía tiene divisiones.';
     case 'daily_limit_reached':
       return 'Se alcanzó el límite de autorizaciones de hoy para esa vivienda.';
     case 'rate_limited':
-      return 'Hiciste demasiados intentos seguidos. Esperá unos segundos y reintentá.';
+      return 'Hiciste demasiados intentos seguidos. Espera unos segundos y reintenta.';
     case 'dynamic_qr_disabled':
       return 'Las autorizaciones con QR están desactivadas en tu comunidad.';
     default:
-      return 'No pudimos procesar el lote. Reintentá en unos segundos.';
+      return 'No pudimos procesar el lote. Reintenta en unos segundos.';
   }
 }
 
@@ -372,7 +372,7 @@ export function ResidentAuthorizationBulkPage() {
         if (err instanceof ApiError && err.status === 404) {
           setDisabled(true);
         } else {
-          setLoadError('No pudimos cargar los destinos. Reintentá en unos segundos.');
+          setLoadError('No pudimos cargar los destinos. Reintenta en unos segundos.');
         }
       } finally {
         if (active) setLoading(false);
@@ -402,12 +402,12 @@ export function ResidentAuthorizationBulkPage() {
   function validate(): boolean {
     const errors: typeof fieldErrors = {};
 
-    if (!destinationId) errors.destination = 'Elegí el destino del lote.';
+    if (!destinationId) errors.destination = 'Elige el destino del lote.';
 
     const from = new Date(validFrom).getTime();
     const until = new Date(validUntil).getTime();
     if (Number.isNaN(from) || Number.isNaN(until)) {
-      errors.window = 'Completá la vigencia del lote.';
+      errors.window = 'Completa la vigencia del lote.';
     } else if (until <= from) {
       errors.window = 'La vigencia debe terminar después de empezar.';
     }
@@ -415,7 +415,7 @@ export function ResidentAuthorizationBulkPage() {
     if (parsed?.error) errors.file = parsed.error;
     else if (parsed?.limitError) errors.file = parsed.limitError;
     else if (!parsed || parsed.rows.length === 0) {
-      errors.file = 'Cargá un archivo o pegá las filas del lote.';
+      errors.file = 'Carga un archivo o pega las filas del lote.';
     }
 
     setFieldErrors(errors);
@@ -517,7 +517,7 @@ export function ResidentAuthorizationBulkPage() {
       <div className="p-6 space-y-6">
         <PageHeader
           title="Carga masiva"
-          description="Resultado del lote que acabás de autorizar."
+          description="Resultado del lote que acabas de autorizar."
         />
 
         <section className="space-y-4">
@@ -583,7 +583,7 @@ export function ResidentAuthorizationBulkPage() {
     <div className="p-6 space-y-6">
       <PageHeader
         title="Carga masiva"
-        description="Autorizá varias visitas a la vez con un archivo CSV para un mismo destino."
+        description="Autoriza varias visitas a la vez con un archivo CSV para un mismo destino."
         actions={
           <Button variant="outline" asChild>
             <Link to="/resident/authorizations">Volver al historial</Link>
@@ -638,7 +638,7 @@ export function ResidentAuthorizationBulkPage() {
                   aria-label="Destino del lote"
                   aria-invalid={Boolean(fieldErrors.destination)}
                 >
-                  <SelectValue placeholder="Elegí un destino">
+                  <SelectValue placeholder="Elige un destino">
                     {selectedDestination?.path}
                   </SelectValue>
                 </SelectTrigger>
@@ -782,7 +782,7 @@ export function ResidentAuthorizationBulkPage() {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="bulk-csv">O pegá las filas acá</Label>
+              <Label htmlFor="bulk-csv">O pega las filas acá</Label>
               <textarea
                 id="bulk-csv"
                 value={csvText}
@@ -810,7 +810,7 @@ export function ResidentAuthorizationBulkPage() {
             {parsed && !parsed.error && !parsed.limitError && (
               <p className="text-xs text-muted-foreground">
                 {parsed.rows.length === 0
-                  ? 'El archivo solo tiene los encabezados. Agregá al menos una fila.'
+                  ? 'El archivo solo tiene los encabezados. Agrega al menos una fila.'
                   : `${parsed.rows.length} ${
                       parsed.rows.length === 1 ? 'fila leída' : 'filas leídas'
                     } · ${visitors.length} para autorizar.`}
@@ -899,7 +899,7 @@ export function ResidentAuthorizationBulkPage() {
                 </Button>
                 {validCount === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    Ninguna fila quedó válida. Corregí el archivo y volvé a revisar el lote.
+                    Ninguna fila quedó válida. Corrige el archivo y vuelve a revisar el lote.
                   </p>
                 )}
               </div>

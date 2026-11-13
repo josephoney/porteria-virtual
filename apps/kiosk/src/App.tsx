@@ -67,13 +67,21 @@ function KioskContent() {
     const s = ctxSocketRef.current;
     if (!s) return;
 
-    function onRegistered() { kioskRef.current.setStatusDot('connected'); }
+    function onRegistered() {
+      kioskRef.current.setStatusDot('connected');
+    }
     function onCallWaiting({ callId }: { callId: string }) {
       callIdRef.current = callId;
       kioskRef.current.startCall(callId);
       setDebugMsg(`${new Date().toLocaleTimeString()} ← call:waiting ${callId}`);
     }
-    async function onCallAccepted({ callId, operatorName }: { callId: string; operatorName: string }) {
+    async function onCallAccepted({
+      callId,
+      operatorName,
+    }: {
+      callId: string;
+      operatorName: string;
+    }) {
       if (!s) return;
       kioskRef.current.acceptCall(operatorName);
       await webRTCRef.current.createAndSendOffer(s, callId);
@@ -84,9 +92,13 @@ function KioskContent() {
     async function onIceCandidate({ candidate }: { candidate: RTCIceCandidateInit }) {
       await webRTCRef.current.handleIceCandidate(candidate);
     }
-    function onDoorOpen() { setDoorFlashTrigger((n) => n + 1); }
+    function onDoorOpen() {
+      setDoorFlashTrigger((n) => n + 1);
+    }
     function onCallEnded({ callId, reason }: { callId?: string; reason?: string }) {
-      setDebugMsg(`${new Date().toLocaleTimeString()} ← call:ended ${callId} (${reason || 'no reason'}) currentId:${callIdRef.current}`);
+      setDebugMsg(
+        `${new Date().toLocaleTimeString()} ← call:ended ${callId} (${reason || 'no reason'}) currentId:${callIdRef.current}`,
+      );
       if (callId && callIdRef.current !== null && callIdRef.current !== callId) {
         setDebugMsg((d) => d + ' IGNORED (stale)');
         return;
@@ -125,12 +137,30 @@ function KioskContent() {
       {kiosk.screen === 'idle' && (
         <>
           <IdleScreen onCall={doCall} deviceSummary={webRTC.deviceSummary} />
-          <div style={{ fontSize: 11, color: isConnected ? '#00e5a0' : '#ff3b5c', marginTop: 8, letterSpacing: 1 }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: isConnected ? '#00e5a0' : '#ff3b5c',
+              marginTop: 8,
+              letterSpacing: 1,
+            }}
+          >
             {isConnected ? '✓ Conectado' : '✗ Desconectado'}
           </div>
         </>
       )}
-      <div style={{ position: 'fixed', bottom: 8, left: 8, fontSize: 10, color: '#5a6172', fontFamily: 'monospace', maxWidth: '90vw', wordBreak: 'break-all' }}>
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 8,
+          left: 8,
+          fontSize: 10,
+          color: '#5a6172',
+          fontFamily: 'monospace',
+          maxWidth: '90vw',
+          wordBreak: 'break-all',
+        }}
+      >
         {debugMsg}
       </div>
       {kiosk.screen === 'calling' && <CallingScreen onCancel={doCancel} />}

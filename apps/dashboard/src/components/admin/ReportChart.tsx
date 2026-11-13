@@ -1,4 +1,15 @@
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 
 interface ChartProps {
   data: Record<string, unknown>[];
@@ -11,7 +22,15 @@ interface ChartProps {
 export function ReportChart({ data, type, xKey, yKeys, height = 250 }: ChartProps) {
   if (data.length === 0) {
     return (
-      <p style={{ color: 'var(--color-muted-foreground)', fontFamily: 'var(--font-mono)', fontSize: 13, textAlign: 'center', padding: 40 }}>
+      <p
+        style={{
+          color: 'var(--color-muted-foreground)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 13,
+          textAlign: 'center',
+          padding: 40,
+        }}
+      >
         Sin datos para el período seleccionado
       </p>
     );
@@ -25,7 +44,11 @@ export function ReportChart({ data, type, xKey, yKeys, height = 250 }: ChartProp
       <Chart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
         <XAxis dataKey={xKey} stroke="var(--color-muted-foreground)" tick={{ fontSize: 12 }} />
-        <YAxis stroke="var(--color-muted-foreground)" tick={{ fontSize: 12 }} allowDecimals={false} />
+        <YAxis
+          stroke="var(--color-muted-foreground)"
+          tick={{ fontSize: 12 }}
+          allowDecimals={false}
+        />
         <Tooltip
           contentStyle={{
             fontFamily: 'var(--font-mono)',
@@ -38,7 +61,14 @@ export function ReportChart({ data, type, xKey, yKeys, height = 250 }: ChartProp
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         {yKeys.map((k) => (
-          <DataComponent key={k.key} dataKey={k.key} name={k.name} fill={k.color} stroke={k.color} radius={type === 'bar' ? 4 : undefined} />
+          <DataComponent
+            key={k.key}
+            dataKey={k.key}
+            name={k.name}
+            fill={k.color}
+            stroke={k.color}
+            radius={type === 'bar' ? 4 : undefined}
+          />
         ))}
       </Chart>
     </ResponsiveContainer>

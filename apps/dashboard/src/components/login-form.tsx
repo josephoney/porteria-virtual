@@ -69,7 +69,7 @@ export function LoginForm({
     setError('');
     const token = extractInviteToken(inviteToken);
     if (!token) {
-      setError('Pedí una invitación al administrador de tu comunidad.');
+      setError('Pide una invitación al administrador de tu comunidad.');
       return;
     }
     navigate(`/invite/${encodeURIComponent(token)}`);
@@ -94,8 +94,8 @@ export function LoginForm({
       <div className={cn('flex flex-col gap-6', className)} {...props}>
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Elegí tu contexto</CardTitle>
-            <CardDescription>Tenés más de una comunidad u organización asignada</CardDescription>
+            <CardTitle className="text-xl">Elige tu contexto</CardTitle>
+            <CardDescription>Tienes más de una comunidad u organización asignada</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-2">
@@ -173,8 +173,8 @@ export function LoginForm({
           </CardTitle>
           <CardDescription>
             {mode === 'login'
-              ? 'Ingresá tus credenciales para acceder al panel'
-              : 'Ingresá el código de invitación que te compartió tu comunidad'}
+              ? 'Ingresa tus credenciales para acceder al panel'
+              : 'Ingresa el código de invitación que te compartió tu comunidad'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -242,13 +242,13 @@ export function LoginForm({
                     id="invite-token"
                     value={inviteToken}
                     onChange={(e) => setInviteToken(e.target.value)}
-                    placeholder="Pegá el código o el enlace"
+                    placeholder="Pega el código o el enlace"
                     aria-invalid={Boolean(error)}
                     aria-describedby={error ? 'signup-error' : undefined}
                     required
                   />
                   <FieldDescription>
-                    Si no tenés una invitación, pedísela al administrador de tu comunidad.
+                    Si no tienes una invitación, pidesela al administrador de tu comunidad.
                   </FieldDescription>
                 </Field>
                 {error && (

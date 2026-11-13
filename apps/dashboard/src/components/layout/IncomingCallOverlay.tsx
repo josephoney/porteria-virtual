@@ -15,7 +15,8 @@ interface ToastCall {
 }
 
 export function IncomingCallOverlay() {
-  const { socket, pendingCalls, activeCall, setActiveCall, removePendingCall, stopRing, addLog } = useSocket();
+  const { socket, pendingCalls, activeCall, setActiveCall, removePendingCall, stopRing, addLog } =
+    useSocket();
   const webRTC = useWebRTC();
 
   const [toastCall, setToastCall] = useState<ToastCall | null>(null);
@@ -49,7 +50,10 @@ export function IncomingCallOverlay() {
   }, [webRTC.localStream]);
 
   useEffect(() => {
-    if (pendingCalls.size === 0) { setToastCall(null); return; }
+    if (pendingCalls.size === 0) {
+      setToastCall(null);
+      return;
+    }
     const latest = Array.from(pendingCalls.values()).pop();
     if (latest) setToastCall(latest);
     const t = setTimeout(() => setToastCall(null), 30000);
@@ -58,9 +62,24 @@ export function IncomingCallOverlay() {
 
   useEffect(() => {
     if (!socket) return;
-    const onOffer = async ({ callId, offer }: { callId: string; offer: RTCSessionDescriptionInit }) => { await webRTCRef.current.handleOffer(socket, callId, offer); };
-    const onIceCandidate = async ({ candidate }: { candidate: RTCIceCandidateInit }) => { await webRTCRef.current.handleIceCandidate(candidate); };
-    const onCallEnded = () => { activeCallIdRef.current = null; webRTCRef.current.cleanupPeer(); setActiveCall(null); setMinimized(false); };
+    const onOffer = async ({
+      callId,
+      offer,
+    }: {
+      callId: string;
+      offer: RTCSessionDescriptionInit;
+    }) => {
+      await webRTCRef.current.handleOffer(socket, callId, offer);
+    };
+    const onIceCandidate = async ({ candidate }: { candidate: RTCIceCandidateInit }) => {
+      await webRTCRef.current.handleIceCandidate(candidate);
+    };
+    const onCallEnded = () => {
+      activeCallIdRef.current = null;
+      webRTCRef.current.cleanupPeer();
+      setActiveCall(null);
+      setMinimized(false);
+    };
     socket.on('webrtc:offer', onOffer);
     socket.on('webrtc:ice-candidate', onIceCandidate);
     socket.on('call:ended', onCallEnded);
@@ -71,18 +90,21 @@ export function IncomingCallOverlay() {
     };
   }, [socket]);
 
-  const handleAcceptCall = useCallback(async (callId: string) => {
-    const call = pendingCalls.get(callId);
-    if (!call) return;
-    stopRing();
-    await webRTCRef.current.getLocalStream();
-    socket?.emit('call:accept', { callId, kioskId: call.kioskId });
-    activeCallIdRef.current = callId;
-    setActiveCall({ ...call });
-    removePendingCall(callId);
-    setMinimized(false);
-    setToastCall(null);
-  }, [socket, pendingCalls, setActiveCall, removePendingCall, stopRing]);
+  const handleAcceptCall = useCallback(
+    async (callId: string) => {
+      const call = pendingCalls.get(callId);
+      if (!call) return;
+      stopRing();
+      await webRTCRef.current.getLocalStream();
+      socket?.emit('call:accept', { callId, kioskId: call.kioskId });
+      activeCallIdRef.current = callId;
+      setActiveCall({ ...call });
+      removePendingCall(callId);
+      setMinimized(false);
+      setToastCall(null);
+    },
+    [socket, pendingCalls, setActiveCall, removePendingCall, stopRing],
+  );
 
   const handleEndCall = useCallback(() => {
     const cid = activeCallIdRef.current;
@@ -101,20 +123,30 @@ export function IncomingCallOverlay() {
     addLogRef.current('DOOR', `Puerta abierta: ${activeCall.kioskName}`);
   }, [socket, activeCall]);
 
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    e.preventDefault();
-    setDragging(true);
-    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
-  }, [pos]);
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest('button')) return;
+      e.preventDefault();
+      setDragging(true);
+      dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
+    },
+    [pos],
+  );
 
   useEffect(() => {
     if (!dragging) return;
-    const onMove = (e: MouseEvent) => setPos({ x: dragRef.current.origX + e.clientX - dragRef.current.startX, y: dragRef.current.origY + e.clientY - dragRef.current.startY });
+    const onMove = (e: MouseEvent) =>
+      setPos({
+        x: dragRef.current.origX + e.clientX - dragRef.current.startX,
+        y: dragRef.current.origY + e.clientY - dragRef.current.startY,
+      });
     const onUp = () => setDragging(false);
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
   }, [dragging]);
 
   const resetPos = () => {
@@ -131,14 +163,31 @@ export function IncomingCallOverlay() {
       {/* ── Incoming call toast ── */}
       {toastCall && !activeCall && (
         <div className="fixed top-20 right-6 z-[10000] bg-card border border-border rounded-lg shadow-lg p-5 min-w-[300px]">
-          <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Llamada entrante</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
+            Llamada entrante
+          </p>
           <p className="text-lg font-bold mb-1">{toastCall.kioskName}</p>
           {toastCall.visitor?.known && (
-            <p className="text-sm text-muted-foreground mb-3">Visitante: {toastCall.visitor.name}</p>
+            <p className="text-sm text-muted-foreground mb-3">
+              Visitante: {toastCall.visitor.name}
+            </p>
           )}
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => handleAcceptCall(toastCall.callId)}>Contestar</Button>
-            <Button variant="outline" size="sm" onClick={() => { socket?.emit('call:end', { callId: toastCall.callId }); removePendingCall(toastCall.callId); stopRing(); setToastCall(null); }}>Ignorar</Button>
+            <Button size="sm" onClick={() => handleAcceptCall(toastCall.callId)}>
+              Contestar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                socket?.emit('call:end', { callId: toastCall.callId });
+                removePendingCall(toastCall.callId);
+                stopRing();
+                setToastCall(null);
+              }}
+            >
+              Ignorar
+            </Button>
           </div>
         </div>
       )}
@@ -156,19 +205,47 @@ export function IncomingCallOverlay() {
               <span className="text-sm font-semibold">{activeCall.kioskName}</span>
             </div>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="sm" onClick={handleOpenDoor}>🚪 Abrir</Button>
+              <Button variant="ghost" size="sm" onClick={handleOpenDoor}>
+                🚪 Abrir
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => webRTC.toggleMute()}>
                 {webRTC.isMuted ? '🔇' : '🎤'}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => { setMinimized(true); resetPos(); }}>─</Button>
-              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={handleEndCall}>✕</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setMinimized(true);
+                  resetPos();
+                }}
+              >
+                ─
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={handleEndCall}
+              >
+                ✕
+              </Button>
             </div>
           </div>
           <div className="relative bg-black min-h-[360px]">
-            <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-[360px] object-contain bg-black" />
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className="w-full h-[360px] object-contain bg-black"
+            />
             {webRTC.localStream && (
-              <video ref={localVideoRef} autoPlay playsInline muted
-                className="absolute bottom-2 right-2 w-[140px] h-[100px] object-cover rounded-lg border-2 border-ring bg-black" />
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="absolute bottom-2 right-2 w-[140px] h-[100px] object-cover rounded-lg border-2 border-ring bg-black"
+              />
             )}
           </div>
         </div>
@@ -179,7 +256,10 @@ export function IncomingCallOverlay() {
         <Badge
           className="fixed bottom-4 right-4 z-[10000] px-3 py-2 text-sm cursor-pointer border border-primary"
           variant="secondary"
-          onClick={() => { setMinimized(false); resetPos(); }}
+          onClick={() => {
+            setMinimized(false);
+            resetPos();
+          }}
         >
           📹 {activeCall.kioskName}
         </Badge>

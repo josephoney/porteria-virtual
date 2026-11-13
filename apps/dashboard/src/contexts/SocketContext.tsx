@@ -1,4 +1,12 @@
-import { createContext, useState, useEffect, useRef, useContext, useCallback, type ReactNode } from 'react';
+import {
+  createContext,
+  useState,
+  useEffect,
+  useRef,
+  useContext,
+  useCallback,
+  type ReactNode,
+} from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { CONFIG } from '../config';
@@ -68,7 +76,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [kiosks, setKiosks] = useState<KioskInfo[]>([]);
   const [pendingCalls, setPendingCalls] = useState<Map<string, CallInfo>>(new Map());
   const [activeCall, setActiveCall] = useState<CallInfo | null>(null);
-  const [eventLog, setEventLog] = useState<Array<{ type: string; message: string; timestamp: Date }>>([]);
+  const [eventLog, setEventLog] = useState<
+    Array<{ type: string; message: string; timestamp: Date }>
+  >([]);
   const socketRef = useRef<Socket | null>(null);
 
   const addLog = (type: string, message: string) => {
@@ -88,7 +98,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     try {
       const saved = localStorage.getItem('ringtone');
       if (saved && getRingtoneDefinition(saved)) return saved;
-    } catch { /* localStorage unavailable */ }
+    } catch {
+      /* localStorage unavailable */
+    }
     return DEFAULT_RINGTONE_ID;
   });
 
@@ -97,7 +109,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     setSelectedRingtoneId(id);
     try {
       localStorage.setItem('ringtone', id);
-    } catch { /* localStorage unavailable */ }
+    } catch {
+      /* localStorage unavailable */
+    }
   }, []);
 
   const previewRingtone = useCallback((id: string) => {
@@ -106,9 +120,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Ring sound using ringtone player
-  const ringPlayerRef = useRef<{ start: () => boolean; stop: () => void } | null>(
-    null,
-  );
+  const ringPlayerRef = useRef<{ start: () => boolean; stop: () => void } | null>(null);
   const selectedRingtoneIdRef = useRef(selectedRingtoneId);
   selectedRingtoneIdRef.current = selectedRingtoneId;
 
@@ -131,7 +143,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const isPlatformContext = Boolean(user?.isPlatformAdmin && activeMembership?.id === 'platform');
   const isOperational = Boolean(
     activeMembership &&
-      ['operator', 'guard', 'community_admin', 'org_admin'].includes(activeMembership.role),
+    ['operator', 'guard', 'community_admin', 'org_admin'].includes(activeMembership.role),
   );
 
   useEffect(() => {
@@ -165,7 +177,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         next.set(call.callId, { ...call, timestamp: Date.now() });
         return next;
       });
-      addLog('CALL', `Llamada entrante: ${call.kioskName}${call.visitor?.known ? ' — ' + call.visitor.name : ''}`);
+      addLog(
+        'CALL',
+        `Llamada entrante: ${call.kioskName}${call.visitor?.known ? ' — ' + call.visitor.name : ''}`,
+      );
       startRing();
     });
 

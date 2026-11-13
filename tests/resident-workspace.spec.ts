@@ -173,7 +173,7 @@ test.describe('resident workspace', () => {
     await page.getByRole('button', { name: 'Revisar autorización' }).click();
 
     await expect(
-      page.getByRole('heading', { level: 2, name: 'Revisá la autorización' }),
+      page.getByRole('heading', { level: 2, name: 'Revisa la autorización' }),
     ).toBeVisible();
     await expect(page.getByText('QA Confirmación')).toBeVisible();
     await expect(page.getByText('99000111')).toBeVisible();
@@ -202,7 +202,7 @@ test.describe('resident workspace', () => {
 
     await expect(page.getByText('La vigencia debe terminar después de empezar.')).toBeVisible();
     await expect(
-      page.getByRole('heading', { level: 2, name: 'Revisá la autorización' }),
+      page.getByRole('heading', { level: 2, name: 'Revisa la autorización' }),
     ).toHaveCount(0);
   });
 
@@ -255,7 +255,7 @@ test.describe('resident workspace', () => {
 
       await page.getByRole('button', { name: 'Revisar autorización' }).click();
       await expect(
-        page.getByRole('heading', { level: 2, name: 'Revisá la autorización' }),
+        page.getByRole('heading', { level: 2, name: 'Revisa la autorización' }),
       ).toBeVisible();
 
       // The admin archives the zone while the resident is on the summary step.
@@ -265,7 +265,7 @@ test.describe('resident workspace', () => {
       await page.getByRole('button', { name: 'Confirmar y autorizar' }).click();
 
       await expect(
-        page.getByText('Ese destino se archivó y ya no recibe autorizaciones. Elegí otro.'),
+        page.getByText('Ese destino se archivó y ya no recibe autorizaciones. Elige otro.'),
       ).toBeVisible();
       // The form came back with the visitor data still there.
       await expect(page.locator('#resident-visitor-first')).toHaveValue('QA');
@@ -587,7 +587,7 @@ test.describe('resident bulk authorizations', () => {
     await page.locator('#bulk-csv').fill('nombre,apellido,documento\nAna,Torres,30111222');
     await page.getByRole('button', { name: 'Revisar lote' }).click();
 
-    await expect(page.getByText('Elegí el destino del lote.')).toBeVisible();
+    await expect(page.getByText('Elige el destino del lote.')).toBeVisible();
     expect(batchRequests).toBe(0);
   });
 

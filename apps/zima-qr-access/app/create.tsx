@@ -64,7 +64,7 @@ export default function CreatePassScreen() {
       return;
     }
     if (!firstName.trim() || !lastName.trim() || !document.trim()) {
-      setError('Completá nombre, apellido y documento del visitante.');
+      setError('Completa nombre, apellido y documento del visitante.');
       return;
     }
 
@@ -79,7 +79,7 @@ export default function CreatePassScreen() {
       return;
     }
     if ((timeFrom && !timeTo) || (!timeFrom && timeTo)) {
-      setError('Completá desde y hasta, o dejá la ventana diaria vacía.');
+      setError('Completa desde y hasta, o deja la ventana diaria vacía.');
       return;
     }
     if (timeFrom && timeTo && timeFrom >= timeTo) {
@@ -87,7 +87,7 @@ export default function CreatePassScreen() {
       return;
     }
     if (hasVehicle && !plate.trim()) {
-      setError('Ingresá la patente del vehículo.');
+      setError('Ingresa la patente del vehículo.');
       return;
     }
     if (pin && !/^\d{4}$/.test(pin)) {
@@ -154,7 +154,7 @@ export default function CreatePassScreen() {
         <View style={styles.switchRow}>
           <View style={styles.switchText}>
             <Text style={ui.sectionTitle}>Vehículo</Text>
-            <Text style={ui.muted}>Mostrá la patente al guardia.</Text>
+            <Text style={ui.muted}>Muestra la patente al guardia.</Text>
           </View>
           <Switch
             value={hasVehicle}

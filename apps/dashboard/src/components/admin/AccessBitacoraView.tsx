@@ -439,7 +439,7 @@ export function AccessBitacoraView({
               }}
             >
               <SelectTrigger className="w-56">
-                <SelectValue placeholder="Seleccioná una comunidad" />
+                <SelectValue placeholder="Selecciona una comunidad" />
               </SelectTrigger>
               <SelectContent>
                 {communities.map((community) => (
@@ -642,7 +642,7 @@ export function AccessBitacoraView({
           <DialogHeader>
             <DialogTitle>Detalle del movimiento</DialogTitle>
             <DialogDescription>
-              La entrada original no se puede editar. Podés agregar un comentario.
+              La entrada original no se puede editar. Puedes agregar un comentario.
             </DialogDescription>
           </DialogHeader>
           {detailLoading || !selected ? (
@@ -736,7 +736,7 @@ export function AccessBitacoraView({
               <Label>Acceso</Label>
               <Select value={manualAccessPointId} onValueChange={setManualAccessPointId}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Seleccioná un acceso" />
+                  <SelectValue placeholder="Selecciona un acceso" />
                 </SelectTrigger>
                 <SelectContent>
                   {activeAccessPoints.map((item) => (

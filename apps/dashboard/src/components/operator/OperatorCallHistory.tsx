@@ -73,11 +73,11 @@ export function OperatorCallHistory() {
               key={c.id}
               className="flex items-center gap-2 py-1.5 px-2 text-xs border-b border-border last:border-0"
             >
-              <span className="flex-1 font-semibold text-foreground">
-                {c.kioskName || '--'}
-              </span>
+              <span className="flex-1 font-semibold text-foreground">{c.kioskName || '--'}</span>
               <span className="font-mono text-muted-foreground">{formatTime(c.startedAt)}</span>
-              <span className={`font-semibold text-[10px] uppercase tracking-wider ${statusColors[c.status] || 'text-muted-foreground'}`}>
+              <span
+                className={`font-semibold text-[10px] uppercase tracking-wider ${statusColors[c.status] || 'text-muted-foreground'}`}
+              >
                 {statusLabels[c.status] || c.status}
               </span>
             </div>

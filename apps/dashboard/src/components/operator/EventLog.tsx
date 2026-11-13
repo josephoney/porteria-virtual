@@ -30,7 +30,10 @@ export function EventLog() {
             <span className="text-muted-foreground text-[10px] flex-shrink-0">
               {e.timestamp.toLocaleTimeString('es-CO')}
             </span>
-            <Badge variant={typeVariant[e.type] || 'outline'} className="text-[9px] px-1.5 py-0 flex-shrink-0">
+            <Badge
+              variant={typeVariant[e.type] || 'outline'}
+              className="text-[9px] px-1.5 py-0 flex-shrink-0"
+            >
               {e.type}
             </Badge>
             <span className="text-foreground">{e.message}</span>

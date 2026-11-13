@@ -1,11 +1,5 @@
 import { Badge } from '../ui/badge';
-import {
-  Card,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '../ui/card';
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card';
 
 export interface SectionCardItem {
   label: string;
@@ -28,12 +22,8 @@ export function SectionCards({ items }: { items: SectionCardItem[] }) {
           </CardHeader>
           {(item.description || item.trend) && (
             <CardFooter className="flex-col items-start gap-1.5 text-sm">
-              {item.trend && (
-                <Badge variant={item.trendVariant ?? 'outline'}>{item.trend}</Badge>
-              )}
-              {item.description && (
-                <p className="text-muted-foreground">{item.description}</p>
-              )}
+              {item.trend && <Badge variant={item.trendVariant ?? 'outline'}>{item.trend}</Badge>}
+              {item.description && <p className="text-muted-foreground">{item.description}</p>}
             </CardFooter>
           )}
         </Card>

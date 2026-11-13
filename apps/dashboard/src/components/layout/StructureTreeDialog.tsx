@@ -153,7 +153,7 @@ export function StructureTreeDialog({
           <DialogHeader>
             <DialogTitle>{editingStructure ? 'Editar estructura' : 'Crear estructura'}</DialogTitle>
             <DialogDescription>
-              Definí la cantidad de niveles y el nombre de cada uno.
+              Define la cantidad de niveles y el nombre de cada uno.
             </DialogDescription>
           </DialogHeader>
           {!structure && (

@@ -53,7 +53,7 @@ export function PreviewCard({ preview, busy, error, onBind }: PreviewCardProps) 
           {busy ? 'Vinculando…' : 'Mostrar mi QR'}
         </button>
         <p className="hint">
-          Este link se vincula a este dispositivo. Si lo abrís en otro, no va a funcionar.
+          Este link se vincula a este dispositivo. Si lo abres en otro, no va a funcionar.
         </p>
       </section>
     </main>

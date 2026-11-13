@@ -54,7 +54,9 @@ export function CallQueue({ pendingCalls, onAccept }: CallQueueProps) {
                       />
                     )}
                     <div>
-                      <div className="text-xs font-semibold text-foreground">{call.visitor.name}</div>
+                      <div className="text-xs font-semibold text-foreground">
+                        {call.visitor.name}
+                      </div>
                       <div className="text-[10px] tracking-wide text-primary">
                         Reconocido {Math.round(call.visitor.similarity * 100)}%
                       </div>

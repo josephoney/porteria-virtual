@@ -25,7 +25,10 @@ interface EventsResponse {
   pageSize: number;
 }
 
-const badgeVariant: Record<string, 'default' | 'secondary' | 'warning' | 'outline' | 'destructive'> = {
+const badgeVariant: Record<
+  string,
+  'default' | 'secondary' | 'warning' | 'outline' | 'destructive'
+> = {
   'call.started': 'warning',
   'call.ended': 'secondary',
   'call.missed': 'destructive',
@@ -54,7 +57,14 @@ const eventLabel: Record<string, string> = {
 };
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(iso).toLocaleString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 export function BitacoraView() {
@@ -76,31 +86,66 @@ export function BitacoraView() {
       const result = await get<EventsResponse>(`/api/events?${params}`);
       setEvents(result.data.data);
       setTotal(result.data.total);
-    } catch { setEvents([]); setTotal(0); } finally { setLoading(false); }
+    } catch {
+      setEvents([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
   }, [page, filters]);
 
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
 
   const totalPages = Math.ceil(total / pageSize);
 
   return (
     <div className="space-y-4">
       <div className="flex gap-3 flex-wrap">
-        <Select value={filters.eventType} onValueChange={(v) => { setFilters((f) => ({ ...f, eventType: v })); setPage(1); }}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Todos los tipos" /></SelectTrigger>
+        <Select
+          value={filters.eventType}
+          onValueChange={(v) => {
+            setFilters((f) => ({ ...f, eventType: v }));
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Todos los tipos" />
+          </SelectTrigger>
           <SelectContent>
             {EventTypeValues.map((t) => (
-              <SelectItem key={t} value={t}>{eventLabel[t] || t}</SelectItem>
+              <SelectItem key={t} value={t}>
+                {eventLabel[t] || t}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Input type="date" value={filters.from} onChange={(e) => { setFilters((f) => ({ ...f, from: e.target.value })); setPage(1); }} className="w-40" />
-        <Input type="date" value={filters.to} onChange={(e) => { setFilters((f) => ({ ...f, to: e.target.value })); setPage(1); }} className="w-40" />
+        <Input
+          type="date"
+          value={filters.from}
+          onChange={(e) => {
+            setFilters((f) => ({ ...f, from: e.target.value }));
+            setPage(1);
+          }}
+          className="w-40"
+        />
+        <Input
+          type="date"
+          value={filters.to}
+          onChange={(e) => {
+            setFilters((f) => ({ ...f, to: e.target.value }));
+            setPage(1);
+          }}
+          className="w-40"
+        />
       </div>
 
       {loading ? (
         <div className="space-y-2">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
         </div>
       ) : events.length === 0 ? (
         <p className="text-muted-foreground text-sm font-mono">No se encontraron eventos</p>
@@ -118,18 +163,28 @@ export function BitacoraView() {
             <TableBody>
               {events.map((ev) => (
                 <>
-                  <TableRow key={ev.id} className="cursor-pointer" onClick={() => setExpandedId(expandedId === ev.id ? null : ev.id)}>
+                  <TableRow
+                    key={ev.id}
+                    className="cursor-pointer"
+                    onClick={() => setExpandedId(expandedId === ev.id ? null : ev.id)}
+                  >
                     <TableCell>{formatDateTime(ev.createdAt)}</TableCell>
                     <TableCell>
-                      <Badge variant={badgeVariant[ev.eventType] || 'outline'}>{eventLabel[ev.eventType] || ev.eventType}</Badge>
+                      <Badge variant={badgeVariant[ev.eventType] || 'outline'}>
+                        {eventLabel[ev.eventType] || ev.eventType}
+                      </Badge>
                     </TableCell>
                     <TableCell>{ev.actorName || ev.actorRole || '—'}</TableCell>
-                    <TableCell className="truncate max-w-[200px]">{JSON.stringify(ev.metadata).substring(0, 60)}</TableCell>
+                    <TableCell className="truncate max-w-[200px]">
+                      {JSON.stringify(ev.metadata).substring(0, 60)}
+                    </TableCell>
                   </TableRow>
                   {expandedId === ev.id && (
                     <TableRow>
                       <TableCell colSpan={4} className="bg-muted/30">
-                        <pre className="text-xs font-mono whitespace-pre-wrap m-0">{JSON.stringify(ev.metadata, null, 2)}</pre>
+                        <pre className="text-xs font-mono whitespace-pre-wrap m-0">
+                          {JSON.stringify(ev.metadata, null, 2)}
+                        </pre>
                       </TableCell>
                     </TableRow>
                   )}
@@ -139,9 +194,25 @@ export function BitacoraView() {
           </Table>
 
           <div className="flex items-center justify-center gap-2 text-sm font-mono">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>← Anterior</Button>
-            <span className="text-muted-foreground">Pág. {page} de {totalPages}</span>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Siguiente →</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              ← Anterior
+            </Button>
+            <span className="text-muted-foreground">
+              Pág. {page} de {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Siguiente →
+            </Button>
           </div>
         </>
       )}

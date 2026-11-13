@@ -26,24 +26,22 @@ export function InCallScreen({
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
-      remoteVideoRef.current.play().catch((e) =>
-        console.log('[Kiosk] Remote video play blocked:', e.name),
-      );
+      remoteVideoRef.current
+        .play()
+        .catch((e) => console.log('[Kiosk] Remote video play blocked:', e.name));
     }
     if (audioRef.current && remoteStream) {
       audioRef.current.srcObject = remoteStream;
-      audioRef.current.play().catch((e) =>
-        console.log('[Kiosk] Audio play blocked:', e.name),
-      );
+      audioRef.current.play().catch((e) => console.log('[Kiosk] Audio play blocked:', e.name));
     }
   }, [remoteStream]);
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
-      localVideoRef.current.play().catch((e) =>
-        console.log('[Kiosk] Local video play blocked:', e.name),
-      );
+      localVideoRef.current
+        .play()
+        .catch((e) => console.log('[Kiosk] Local video play blocked:', e.name));
     }
   }, [localStream]);
 

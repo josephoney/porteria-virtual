@@ -78,7 +78,7 @@ export function CallHistoryTable() {
     } catch {
       setCalls([]);
       setTotal(0);
-      setError('No se pudieron cargar las llamadas. Reintentá en unos segundos.');
+      setError('No se pudieron cargar las llamadas. Reintenta en unos segundos.');
     } finally {
       setLoading(false);
     }

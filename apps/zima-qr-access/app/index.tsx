@@ -29,7 +29,7 @@ export default function LoginScreen() {
 
   const onSubmit = async () => {
     if (!email.trim() || !password) {
-      setError('Completá email y contraseña.');
+      setError('Completa email y contraseña.');
       return;
     }
 

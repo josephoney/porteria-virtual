@@ -34,7 +34,7 @@ function ErrorFallback({ error, title, fullPage, onRetry }: ErrorFallbackProps) 
         <div className="space-y-2">
           <h1 className="font-heading text-lg font-bold tracking-tight text-foreground">{title}</h1>
           <p className="text-sm text-muted-foreground">
-            Algo falló al mostrar esta pantalla. Podés reintentar o recargar la página.
+            Algo falló al mostrar esta pantalla. Puedes reintentar o recargar la página.
           </p>
         </div>
 

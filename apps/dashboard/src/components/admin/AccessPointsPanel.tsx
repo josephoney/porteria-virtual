@@ -206,7 +206,7 @@ export function AccessPointsPanel() {
             <Label>Comunidad</Label>
             <Select value={communityId ?? ''} onValueChange={(value) => setCommunityId(value)}>
               <SelectTrigger className="w-64">
-                <SelectValue placeholder="Seleccioná una comunidad" />
+                <SelectValue placeholder="Selecciona una comunidad" />
               </SelectTrigger>
               <SelectContent>
                 {communities.map((community) => (
@@ -237,7 +237,7 @@ export function AccessPointsPanel() {
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-4xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          Todavía no hay accesos. Creá el primero para poder iniciar turnos.
+          Todavía no hay accesos. Crea el primero para poder iniciar turnos.
         </div>
       ) : (
         <div className="rounded-4xl border border-border bg-card">

@@ -376,7 +376,7 @@ export function AdminPanel() {
         (result) => result.status === 'rejected',
       )
     ) {
-      setError('No se pudo cargar parte de la información. Reintentá en unos segundos.');
+      setError('No se pudo cargar parte de la información. Reintenta en unos segundos.');
     }
 
     setLoading(false);
@@ -715,8 +715,8 @@ export function AdminPanel() {
                 title={editingCommunityId ? 'Editar comunidad' : 'Nueva comunidad'}
                 description={
                   editingCommunityId
-                    ? 'Actualizá los datos de la comunidad.'
-                    : 'Creá una comunidad dentro de tu organización.'
+                    ? 'Actualiza los datos de la comunidad.'
+                    : 'Crea una comunidad dentro de tu organización.'
                 }
                 hideTrigger
               >
@@ -914,7 +914,7 @@ export function AdminPanel() {
                         }
                       />
                       <p className="text-xs text-muted-foreground">
-                        Entre 1 y 500. Desactivá el límite para no restringir.
+                        Entre 1 y 500. Desactiva el límite para no restringir.
                       </p>
                     </div>
                   </div>
@@ -1268,7 +1268,7 @@ export function AdminPanel() {
           <DialogHeader>
             <DialogTitle>Invitar administrador de comunidad</DialogTitle>
             <DialogDescription>
-              Asigná un community admin a {adminInviteCommunity?.name}.
+              Asigna un community admin a {adminInviteCommunity?.name}.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={inviteCommunityAdmin} className="space-y-4">

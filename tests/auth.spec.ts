@@ -75,7 +75,7 @@ test.describe('Role-based landing', () => {
   test('multi-context user must pick a membership', async ({ page }) => {
     await loginAs(page, DEMO_USERS.multiContext);
 
-    await expect(page.locator('[data-slot="card-title"]')).toHaveText('Elegí tu contexto');
+    await expect(page.locator('[data-slot="card-title"]')).toHaveText('Elige tu contexto');
     const options = page.locator('[data-slot="card-content"] button');
     await expect(options).toHaveCount(2);
 

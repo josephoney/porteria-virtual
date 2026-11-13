@@ -134,7 +134,7 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
         </dl>
 
         <p className="hint">
-          Mostrá este QR en la portería. Se renueva automáticamente cada 24 segundos.
+          Muestra este QR en la portería. Se renueva automáticamente cada 24 segundos.
         </p>
       </section>
     </main>

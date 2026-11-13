@@ -168,7 +168,7 @@ export function MyOrganizationPage() {
     <div className="space-y-6 p-6">
       <PageHeader
         title="Mi Organización"
-        description="Completá los datos de contacto, legales y la bienvenida de tu organización."
+        description="Completa los datos de contacto, legales y la bienvenida de tu organización."
       />
 
       {error && (

@@ -11,9 +11,18 @@ import type { DailyReport, WeeklyReport, MonthlyReport, CallStats } from '@porte
 
 type Period = 'daily' | 'weekly' | 'monthly';
 
-function todayStr(): string { return new Date().toISOString().slice(0, 10); }
-function weekMonday(): string { const d = new Date(); const day = d.getDay(); d.setDate(d.getDate() - day + (day === 0 ? -6 : 1)); return d.toISOString().slice(0, 10); }
-function thisMonth(): string { return new Date().toISOString().slice(0, 7); }
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function weekMonday(): string {
+  const d = new Date();
+  const day = d.getDay();
+  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
+  return d.toISOString().slice(0, 10);
+}
+function thisMonth(): string {
+  return new Date().toISOString().slice(0, 7);
+}
 
 export function ReportsPanel() {
   const { user } = useAuth();
@@ -66,25 +75,42 @@ export function ReportsPanel() {
   async function fetchReport() {
     setError('');
     if (isPlatformAdmin && !organizationId) {
-      setError('Seleccioná una organización para cargar los reportes.');
+      setError('Selecciona una organización para cargar los reportes.');
       return;
     }
     setLoading(true);
     const orgQuery = isPlatformAdmin ? `&organizationId=${organizationId}` : '';
     const communityQuery = communityId ? `&communityId=${communityId}` : '';
     try {
-      if (period === 'daily') { const d = await get<DailyReport>(`/api/reports/daily?date=${date}${orgQuery}${communityQuery}`); setData(d.data); }
-      else if (period === 'weekly') { const w = await get<WeeklyReport>(`/api/reports/weekly?week=${week}${orgQuery}${communityQuery}`); setData(w.data); }
-      else { const m = await get<MonthlyReport>(`/api/reports/monthly?month=${month}${orgQuery}${communityQuery}`); setData(m.data); }
+      if (period === 'daily') {
+        const d = await get<DailyReport>(
+          `/api/reports/daily?date=${date}${orgQuery}${communityQuery}`,
+        );
+        setData(d.data);
+      } else if (period === 'weekly') {
+        const w = await get<WeeklyReport>(
+          `/api/reports/weekly?week=${week}${orgQuery}${communityQuery}`,
+        );
+        setData(w.data);
+      } else {
+        const m = await get<MonthlyReport>(
+          `/api/reports/monthly?month=${month}${orgQuery}${communityQuery}`,
+        );
+        setData(m.data);
+      }
       const from = period === 'weekly' ? week : period === 'monthly' ? `${month}-01` : date;
-      const cs = await get<CallStats>(`/api/reports/call-stats?from=${from}&to=${date}${orgQuery}${communityQuery}`);
+      const cs = await get<CallStats>(
+        `/api/reports/call-stats?from=${from}&to=${date}${orgQuery}${communityQuery}`,
+      );
       setCallStats(cs.data);
     } catch (err) {
       console.error('Failed to fetch report', err);
       setError('No se pudieron cargar los reportes para el alcance seleccionado.');
       setData(null);
       setCallStats(null);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -113,9 +139,30 @@ export function ReportsPanel() {
                 ))}
               </select>
             )}
-            {period === 'daily' && <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />}
-            {period === 'weekly' && <Input type="date" value={week} onChange={(e) => setWeek(e.target.value)} className="w-44" />}
-            {period === 'monthly' && <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />}
+            {period === 'daily' && (
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-44"
+              />
+            )}
+            {period === 'weekly' && (
+              <Input
+                type="date"
+                value={week}
+                onChange={(e) => setWeek(e.target.value)}
+                className="w-44"
+              />
+            )}
+            {period === 'monthly' && (
+              <Input
+                type="month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                className="w-44"
+              />
+            )}
             <select
               aria-label="Comunidad"
               className="h-9 px-2 rounded border border-border bg-card text-foreground font-mono text-[11px] outline-none focus:border-ring"
@@ -145,8 +192,8 @@ export function ReportsPanel() {
       {!data && !loading && !error && (
         <p className="text-sm text-muted-foreground">
           {isPlatformAdmin && !organizationId
-            ? 'Seleccioná una organización para ver reportes globales.'
-            : 'Elegí un período y presioná Cargar para ver los reportes.'}
+            ? 'Selecciona una organización para ver reportes globales.'
+            : 'Elige un período y presiona Cargar para ver los reportes.'}
         </p>
       )}
 
@@ -156,29 +203,62 @@ export function ReportsPanel() {
             <MetricCard label="Llamadas" value={String(callStats.totalCalls)} />
             <MetricCard label="Atendidas" value={String(callStats.answeredCount)} />
             <MetricCard label="Perdidas" value={String(callStats.missedCount)} />
-            {'totalDoorOpens' in data && <MetricCard label="Puertas" value={String(data.totalDoorOpens)} />}
+            {'totalDoorOpens' in data && (
+              <MetricCard label="Puertas" value={String(data.totalDoorOpens)} />
+            )}
             {'totals' in data && <MetricCard label="Puertas" value={String(data.totals.doors)} />}
           </div>
 
           <div>
             <h4 className="font-sans text-base font-bold mb-3">
-              {period === 'daily' ? 'Llamadas por Hora' : period === 'weekly' ? 'Tendencia Diaria' : 'Por Semana'}
+              {period === 'daily'
+                ? 'Llamadas por Hora'
+                : period === 'weekly'
+                  ? 'Tendencia Diaria'
+                  : 'Por Semana'}
             </h4>
             {period === 'daily' && 'callsByHour' in data && (
-              <ReportChart data={data.callsByHour} type="bar" xKey="hour" yKeys={[{ key: 'count', name: 'Llamadas', color: 'var(--color-secondary)' }]} />
+              <ReportChart
+                data={data.callsByHour}
+                type="bar"
+                xKey="hour"
+                yKeys={[{ key: 'count', name: 'Llamadas', color: 'var(--color-secondary)' }]}
+              />
             )}
             {period === 'weekly' && 'days' in data && (
               <ReportChart
-                data={(data as WeeklyReport).days.map((d) => ({ day: d.date.slice(5), Llamadas: d.totalCalls, Atendidas: d.answeredCalls, Perdidas: d.missedCalls, Puertas: d.doorOpens }))}
-                type="line" xKey="day"
-                yKeys={[{ key: 'Llamadas', name: 'Llamadas', color: 'var(--color-secondary)' }, { key: 'Atendidas', name: 'Atendidas', color: 'var(--color-primary)' }, { key: 'Puertas', name: 'Puertas', color: 'var(--color-warning)' }]}
+                data={(data as WeeklyReport).days.map((d) => ({
+                  day: d.date.slice(5),
+                  Llamadas: d.totalCalls,
+                  Atendidas: d.answeredCalls,
+                  Perdidas: d.missedCalls,
+                  Puertas: d.doorOpens,
+                }))}
+                type="line"
+                xKey="day"
+                yKeys={[
+                  { key: 'Llamadas', name: 'Llamadas', color: 'var(--color-secondary)' },
+                  { key: 'Atendidas', name: 'Atendidas', color: 'var(--color-primary)' },
+                  { key: 'Puertas', name: 'Puertas', color: 'var(--color-warning)' },
+                ]}
               />
             )}
             {period === 'monthly' && 'weeks' in data && (
               <ReportChart
-                data={(data as MonthlyReport).weeks.map((w) => ({ week: w.weekStart.slice(5), Llamadas: w.totalCalls, Atendidas: w.answeredCalls, Perdidas: w.missedCalls, Puertas: w.doorOpens }))}
-                type="bar" xKey="week"
-                yKeys={[{ key: 'Llamadas', name: 'Llamadas', color: 'var(--color-secondary)' }, { key: 'Atendidas', name: 'Atendidas', color: 'var(--color-primary)' }, { key: 'Puertas', name: 'Puertas', color: 'var(--color-warning)' }]}
+                data={(data as MonthlyReport).weeks.map((w) => ({
+                  week: w.weekStart.slice(5),
+                  Llamadas: w.totalCalls,
+                  Atendidas: w.answeredCalls,
+                  Perdidas: w.missedCalls,
+                  Puertas: w.doorOpens,
+                }))}
+                type="bar"
+                xKey="week"
+                yKeys={[
+                  { key: 'Llamadas', name: 'Llamadas', color: 'var(--color-secondary)' },
+                  { key: 'Atendidas', name: 'Atendidas', color: 'var(--color-primary)' },
+                  { key: 'Puertas', name: 'Puertas', color: 'var(--color-warning)' },
+                ]}
               />
             )}
           </div>
@@ -189,7 +269,11 @@ export function ReportsPanel() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Día</TableHead><TableHead>Llamadas</TableHead><TableHead>Atendidas</TableHead><TableHead>Perdidas</TableHead><TableHead>Puertas</TableHead>
+                    <TableHead>Día</TableHead>
+                    <TableHead>Llamadas</TableHead>
+                    <TableHead>Atendidas</TableHead>
+                    <TableHead>Perdidas</TableHead>
+                    <TableHead>Puertas</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -226,7 +310,9 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <Card>
       <CardHeader className="pb-1 pt-4 px-4">
-        <CardTitle className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{label}</CardTitle>
+        <CardTitle className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+          {label}
+        </CardTitle>
       </CardHeader>
       <CardContent className="pb-4 px-4">
         <p className="font-sans text-2xl font-extrabold">{value}</p>

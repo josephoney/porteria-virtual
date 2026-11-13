@@ -43,9 +43,9 @@ export default function ContextScreen() {
       <View style={styles.brand}>
         <ZimaLogo height={44} />
       </View>
-      <Text style={ui.heading}>Elegí con qué membresía entrar</Text>
+      <Text style={ui.heading}>Elige con qué membresía entrar</Text>
       <Text style={ui.muted}>
-        Tenés más de un contexto activo. La app va a usar el rol y la unidad de la membresía que
+        Tienes más de un contexto activo. La app va a usar el rol y la unidad de la membresía que
         elijas.
       </Text>
 
