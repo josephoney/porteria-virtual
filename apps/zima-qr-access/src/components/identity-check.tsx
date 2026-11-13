@@ -191,13 +191,14 @@ export function IdentityCheck({
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
       {candidates?.map((candidate) => {
-        const inside = candidate.presenceState === 'inside';
-        // Someone already inside cannot enter again; the guard registers the exit
-        // instead. An entry_only pass that was used has nothing left to do.
         const remaining = Math.max(0, candidate.maxUses - candidate.exitCount);
-        const exhausted = remaining === 0 && !inside;
+        const expired = new Date(candidate.validUntil).getTime() < Date.now();
+        const consumed = remaining === 0 || candidate.status === 'used';
+        // A pass with nothing left or past its window is only informative: the
+        // guard sees it as used or expired and gets no action.
+        const inside = candidate.presenceState === 'inside' && !consumed && !expired;
         const action: 'entry' | 'exit' = inside ? 'exit' : 'entry';
-        const label = inside ? 'Registrar salida' : exhausted ? 'Ya ingresó' : 'Registrar entrada';
+        const label = inside ? 'Registrar salida' : 'Registrar entrada';
         return (
           <View key={candidate.passId} style={styles.candidate}>
             <View style={styles.candidateHeader}>
@@ -205,8 +206,8 @@ export function IdentityCheck({
                 {candidate.visitorFirstName} {candidate.visitorLastName}
               </Text>
               <Badge
-                label={inside ? 'Dentro' : exhausted ? 'Usada' : 'Activa'}
-                tone={inside || exhausted ? 'warning' : 'success'}
+                label={expired ? 'Vencido' : consumed ? 'Usado' : inside ? 'Dentro' : 'Activa'}
+                tone={expired || consumed ? 'danger' : inside ? 'warning' : 'success'}
               />
             </View>
             <Text style={ui.muted}>{candidate.destinationPath || candidate.destinationName}</Text>
@@ -220,7 +221,7 @@ export function IdentityCheck({
               label={label}
               onPress={() => void confirm(candidate.passId, action)}
               loading={confirmingId === candidate.passId}
-              disabled={exhausted || confirmingId !== null}
+              disabled={consumed || expired || confirmingId !== null}
             />
           </View>
         );
