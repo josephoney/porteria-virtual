@@ -39,7 +39,7 @@ export function FormDialog({
           </DialogTrigger>
         </div>
       )}
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}

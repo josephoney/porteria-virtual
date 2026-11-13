@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gte, inArray, isNull, lte, notInArray } from 'drizzle-orm';
+import { publishBitacoraEvent } from '../lib/bitacora-bus.js';
 import { createDb } from '@porteria/database';
 import {
   accessPoints,
@@ -112,6 +113,14 @@ export async function insertBitacoraEntry(
       details: input.details ?? {},
     })
     .returning();
+  // Every write goes through here, so this is the one place that needs to notify
+  // the open boards.
+  publishBitacoraEvent({
+    communityId: row.communityId,
+    entryId: row.id,
+    type: row.type,
+    createdAt: row.createdAt.toISOString(),
+  });
   return row;
 }
 

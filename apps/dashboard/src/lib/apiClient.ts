@@ -35,6 +35,18 @@ export function configureApiClient(config: {
   onLogout = config.onLogout;
 }
 
+export function apiBaseUrl(): string {
+  return CONFIG.API_URL;
+}
+
+/**
+ * The access token the client is using. Needed by the bitacora stream, which
+ * cannot use `EventSource` because it does not accept an Authorization header.
+ */
+export function currentAccessToken(): string | null {
+  return getToken();
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -92,11 +104,7 @@ async function request<T>(
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
-    throw new ApiError(
-      errorBody.message || `HTTP ${res.status}`,
-      res.status,
-      errorBody,
-    );
+    throw new ApiError(errorBody.message || `HTTP ${res.status}`, res.status, errorBody);
   }
 
   if (res.status === 204) {
@@ -144,11 +152,7 @@ async function retryRequest<T>(
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
-    throw new ApiError(
-      errorBody.message || `HTTP ${res.status}`,
-      res.status,
-      errorBody,
-    );
+    throw new ApiError(errorBody.message || `HTTP ${res.status}`, res.status, errorBody);
   }
 
   if (res.status === 204) {
@@ -190,10 +194,7 @@ export async function assetObjectUrl(id: string): Promise<string | null> {
   return URL.createObjectURL(blob);
 }
 
-export async function upload<T>(
-  path: string,
-  formData: FormData,
-): Promise<ApiResponse<T>> {
+export async function upload<T>(path: string, formData: FormData): Promise<ApiResponse<T>> {
   const token = getToken();
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -205,11 +206,7 @@ export async function upload<T>(
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
-    throw new ApiError(
-      errorBody.message || `HTTP ${res.status}`,
-      res.status,
-      errorBody,
-    );
+    throw new ApiError(errorBody.message || `HTTP ${res.status}`, res.status, errorBody);
   }
 
   const data = await res.json();

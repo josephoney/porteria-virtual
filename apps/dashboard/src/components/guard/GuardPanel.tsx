@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ApiError, get, post } from '../../lib/apiClient';
+import { useBitacoraStream } from '../../lib/use-bitacora-stream';
 import { PageHeader } from '../layout/PageHeader';
 import { AccessBitacoraView } from '../admin/AccessBitacoraView';
 import { Button } from '../ui/button';
@@ -331,6 +332,20 @@ export function GuardPanel() {
       setBusy(false);
     }
   }
+
+  /**
+   * The stream announces every new bitacora entry of the community. Opening or
+   * closing a shift writes one, and so does a scan, so the history below refreshes
+   * without waiting for the fallback poll or the manual button.
+   */
+  useBitacoraStream({
+    communityId,
+    onEntry: (event) => {
+      if (event.type === 'shift_start' || event.type === 'shift_end') {
+        void loadHistory();
+      }
+    },
+  });
 
   async function startShift() {
     setBusy(true);

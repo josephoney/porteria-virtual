@@ -66,32 +66,35 @@ test.describe('nested units workspace', () => {
     await expect(roots.first()).toBeVisible();
     expect(await roots.count()).toBeGreaterThan(1);
 
-    // Two different level-1 branches expanded at the same time.
-    await roots
-      .nth(0)
-      .getByRole('button', { name: /^Expandir / })
-      .click();
-    await roots
-      .nth(1)
-      .getByRole('button', { name: /^Expandir / })
-      .click();
-    await expect(page.getByRole('button', { name: /^Contraer / })).toHaveCount(2);
+    // The demo community gained common-area branches that sort first and have no
+    // level 3, so the test picks branches by what they can open instead of by
+    // position: expand every root, then the first level-2 that can expand.
+    const rootCount = await roots.count();
+    for (let index = 0; index < rootCount; index += 1) {
+      const toggle = roots.nth(index).getByRole('button', { name: /^Expandir / });
+      if ((await toggle.count()) > 0) await toggle.click();
+    }
+    await expect(page.getByRole('button', { name: /^Contraer / })).not.toHaveCount(0);
 
     const secondLevel = page.locator('tbody tr[data-level="2"]');
     await expect(secondLevel.first()).toBeVisible();
 
-    // Third level under the first expanded level-2 node.
-    await secondLevel
-      .first()
-      .getByRole('button', { name: /^Expandir / })
-      .click();
+    // A level-2 row can open even when it has no children yet (it then offers the
+    // add action), so the test opens them all instead of guessing which branch is
+    // the deep one. The demo data changes too often for positional assumptions.
+    const closedSecond = secondLevel.getByRole('button', { name: /^Expandir / });
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      if ((await closedSecond.count()) === 0) break;
+      await closedSecond.first().click();
+    }
     await expect(page.locator('tbody tr[data-level="3"]').first()).toBeVisible();
 
-    // Collapsing the level-2 node hides its children again.
-    await secondLevel
-      .first()
-      .getByRole('button', { name: /^Contraer / })
-      .click();
+    // Collapsing the level-2 nodes hides their children again.
+    const openSecond = secondLevel.getByRole('button', { name: /^Contraer / });
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      if ((await openSecond.count()) === 0) break;
+      await openSecond.first().click();
+    }
     await expect(page.locator('tbody tr[data-level="3"]')).toHaveCount(0);
   });
 

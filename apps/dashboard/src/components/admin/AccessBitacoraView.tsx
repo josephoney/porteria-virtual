@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ApiError, get, post } from '../../lib/apiClient';
+import { useBitacoraStream } from '../../lib/use-bitacora-stream';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
@@ -61,7 +62,9 @@ interface BitacoraDetail extends BitacoraEntryRow {
 }
 
 /** How often the board asks whether a new movement was recorded. */
-const BITACORA_POLL_MS = 15_000;
+// Events arrive through the stream; this is only the fallback in case one is
+// missed, so it can be slow.
+const BITACORA_POLL_MS = 30_000;
 
 interface AccessBitacoraViewProps {
   communityId?: string | null;
@@ -314,6 +317,18 @@ export function AccessBitacoraView({
       document.removeEventListener('visibilitychange', check);
     };
   }, [poll, communityId, accessPointId, type, from, to, load]);
+
+  /**
+   * Live updates: every new entry of the community reloads the visible page, so
+   * the table reacts to a scan or a shift change without waiting for the fallback
+   * poll below.
+   */
+  useBitacoraStream({
+    communityId,
+    onEntry: () => {
+      void load();
+    },
+  });
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 

@@ -5,6 +5,7 @@ import type {
   CreateBitacoraEntryDto,
 } from '@porteria/shared';
 import { requireRole } from '../middlewares/rbac.js';
+import { onBitacoraEvent } from '../lib/bitacora-bus.js';
 import {
   bitacoraQuerySchema,
   createBitacoraCommentSchema,
@@ -74,6 +75,66 @@ export async function bitacoraRoutes(app: FastifyInstance) {
       const result = await listBitacora(getRequester(request), query);
       if (!result.ok) return sendError(reply, result);
       return reply.send(result.data);
+    },
+  );
+
+  /**
+   * Server-Sent Events for the boards. The guard app writes the bitacora, so a
+   * dashboard that only polls is always behind; this pushes the notice as soon as
+   * the row lands. The client keeps a slow polling fallback for when the stream
+   * cannot stay open.
+   */
+  app.get(
+    '/stream',
+    { preHandler: [requireRole('guard', 'community_admin', 'org_admin')] },
+    async (request, reply) => {
+      const query = request.query as { communityId?: string };
+      const requester = getRequester(request);
+      const communityId = query.communityId ?? requester.communityId;
+
+      if (!communityId) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'communityId is required',
+        });
+      }
+      if (
+        !requester.isPlatformAdmin &&
+        requester.communityId &&
+        requester.communityId !== communityId
+      ) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: 'Forbidden',
+          message: 'forbidden',
+        });
+      }
+
+      // Take the socket: Fastify must not try to serialize a response that is
+      // already open and will be written to by the bus.
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        // Caddy and nginx buffer by default, which defeats the whole point.
+        'X-Accel-Buffering': 'no',
+      });
+      reply.raw.write(': connected\n\n');
+
+      const unsubscribe = onBitacoraEvent((event) => {
+        if (event.communityId !== communityId) return;
+        reply.raw.write(`event: entry\ndata: ${JSON.stringify(event)}\n\n`);
+      });
+
+      // Proxies drop an idle connection after 30 to 60 seconds.
+      const heartbeat = setInterval(() => reply.raw.write(': ping\n\n'), 25_000);
+
+      request.raw.on('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+      });
     },
   );
 
