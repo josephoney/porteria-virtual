@@ -62,6 +62,8 @@ interface ResidentPass {
   validFrom: string;
   validUntil: string;
   status: string;
+  /** `inside` means the visitor already went through the gate. */
+  presenceState?: string;
   batchId: string | null;
   batchLabel: string | null;
   shareUrl: string | null;
@@ -541,6 +543,9 @@ export function ResidentAuthorizationsPage() {
                         </TableCell>
                         <TableCell>
                           <Badge variant={STATUS_VARIANTS[state]}>{STATUS_LABELS[state]}</Badge>
+                          {pass.presenceState === 'inside' && state === 'active' ? (
+                            <Badge variant="outline">Dentro</Badge>
+                          ) : null}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
