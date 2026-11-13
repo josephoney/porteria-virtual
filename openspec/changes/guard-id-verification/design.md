@@ -35,9 +35,15 @@ La respuesta es una lista de autorizaciones activas y vigentes de esa cédula en
 
 Misma regla que el escaneo: sin turno no hay responsable. Un ingreso verificado por documento sin guardia identificado es basura desde el punto de vista de la auditoría, que es justamente para lo que sirve este registro.
 
-### 5. El PDF417 se lee con la misma cámara, en un modo explícito
+### 5. La cédula se escanea primero; tipearla es el último recurso
 
-`expo-camera` soporta `pdf417` en `barcodeTypes`, y la cédula amarilla lo lleva al dorso. La pantalla ofrece "Escanear QR" y "Escanear cédula" por separado en vez de aceptar ambos formatos en un solo modo: el guardia sabe qué tiene en la mano, y separar los modos evita que un QR leído se interprete como número de documento.
+`expo-camera` soporta `pdf417` en `barcodeTypes`, y la cédula amarilla lo lleva al dorso. La pantalla ofrece las vías en orden de comodidad y de confianza:
+
+1. **Escanear QR**: la vía normal, el visitante trae el pase.
+2. **Escanear cédula**: la alternativa cuando no hay QR. La cámara lee el PDF417 y llena el número sin que nadie lo tipee, lo que evita errores de transcripción.
+3. **Ingresar cédula manualmente**: último recurso, para una cédula rayada, un código ilegible o un documento que no tiene código de barras. Queda detrás de un control secundario para no competir visualmente con el escaneo.
+
+Tipear un número de ocho a diez dígitos con guantes, de noche y con una fila esperando es una fuente de errores. Por eso el campo no está a la vista: aparece sólo si el guardia lo pide.
 
 El contenido del código se usa **sólo** para llenar el campo. Igual hace falta tocar "Verificar autorización" y confirmar una candidata.
 

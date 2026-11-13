@@ -17,9 +17,10 @@
 
 ## 3. App: la pantalla del guardia
 
-- [ ] 3.1 Reemplazar el bloque de token manual por dos botones de escaneo: «Escanear QR» y «Escanear cédula».
+- [ ] 3.1 Reemplazar el bloque de token manual por la jerarquía de tres vías: «Escanear QR» como acción principal, «Escanear cédula» al lado y «Ingresar cédula manualmente» como control secundario que revela el campo.
 - [ ] 3.2 Configurar la cámara con `barcodeTypes: ['qr']` en un modo y `['pdf417']` en el otro, cerrando la cámara al leer o cancelar.
-- [ ] 3.3 Agregar la sección «O ingresa número de cédula manualmente» con campo numérico y botón «Verificar autorización» deshabilitado con el campo vacío.
+- [ ] 3.3 Dejar el campo de cédula oculto hasta que el guardia pida tipearla, y mantener deshabilitado «Verificar autorización» con el campo vacío.
+- [ ] 3.4 Al leer el PDF417, llenar el campo y seguir mostrando el botón de verificación: el escaneo no autoriza por sí solo.
 - [ ] 3.4 Mostrar la lista de candidatas con visitante, destino, vigencia y estado, y permitir elegir una.
 - [ ] 3.5 Confirmar el ingreso contra el API y refrescar la actividad del turno.
 - [ ] 3.6 Mostrar los errores: sin autorizaciones, documento inválido, límite de consultas y pase ya usado.

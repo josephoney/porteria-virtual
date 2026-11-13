@@ -6,6 +6,13 @@
 
 The guard SHALL be able to find the authorizations of a visitor by the document registered on the pass, when no QR is available.
 
+#### Scenario: The order of the options
+
+- WHEN the guard opens the scan screen
+- THEN the primary action is scanning the QR of the pass
+- AND scanning the identity card is offered next to it
+- AND typing the document is offered last, behind a secondary control
+
 #### Scenario: A valid document lists its authorizations
 
 - WHEN the guard enters the document of a visitor with an active authorization
