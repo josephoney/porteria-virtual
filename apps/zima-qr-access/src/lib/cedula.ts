@@ -1,16 +1,22 @@
 /**
- * The barcode on the back of a Colombian ID card does not contain the document
- * number alone: it carries the whole registry record — dates, names, paddings,
- * sometimes as one long run of digits. Comparing that payload against the number
- * the resident typed can never match, so the number has to be pulled out of it.
+ * The barcode on the back of a Colombian ID card carries the whole registry
+ * record, not the document number alone, so the payload can never be compared
+ * against what the resident typed.
  *
- * The record starts with a `PubDSK_1` prefix followed by padding and the number.
- * Since the padding varies between batches of cards, this reads the digit string
- * and picks the first window that looks like a document: no leading zero, and not
- * a date. The caller shows the guess in an editable field, so a wrong pick costs
- * the guard a correction, not a failed check.
+ * A real sample starts like this:
+ *
+ *   020438301150A         02...
+ *   └┘└────────┘
+ *    │      └── document, padded to ten digits
+ *    └── two digit record type
+ *
+ * The document is the ten digit field after the prefix, with the zero padding
+ * removed. If a card ever disagrees, the caller shows the guess in an editable
+ * field, so the guard fixes it instead of hitting a wall.
  */
-const DOCUMENT_LENGTHS = [10, 9, 8, 7, 6] as const;
+const RECORD_PREFIX_LENGTH = 2;
+const DOCUMENT_FIELD_LENGTH = 10;
+const MIN_DOCUMENT_LENGTH = 6;
 
 function looksLikeDate(value: string) {
   if (value.length !== 8) return false;
@@ -25,20 +31,33 @@ export function documentFromBarcode(payload: string): string {
   const digits = payload.replace(/\D/g, '');
   if (!digits) return '';
 
-  for (const size of DOCUMENT_LENGTHS) {
+  // Documented layout: type prefix, then the document padded to ten digits.
+  if (digits.length >= RECORD_PREFIX_LENGTH + MIN_DOCUMENT_LENGTH) {
+    const field = digits.slice(RECORD_PREFIX_LENGTH, RECORD_PREFIX_LENGTH + DOCUMENT_FIELD_LENGTH);
+    const document = field.replace(/^0+/, '');
+    if (document.length >= MIN_DOCUMENT_LENGTH) return document;
+  }
+
+  // Fallback for a card that does not follow the layout: first plausible window.
+  for (const size of [10, 9, 8, 7, 6] as const) {
     for (let start = 0; start + size <= digits.length; start += 1) {
       const window = digits.slice(start, start + size);
-      if (window.startsWith('0')) continue;
       if (looksLikeDate(window)) continue;
-      return window;
+      const document = window.replace(/^0+/, '');
+      if (document.length >= MIN_DOCUMENT_LENGTH) return document;
     }
   }
 
   return '';
 }
 
-/** Kept for the guard: shows the raw payload while the format is being tuned. */
+/** Kept for the guard: shows the raw shape while a card format is being checked. */
 export function describeBarcode(payload: string) {
   const digits = payload.replace(/\D/g, '');
-  return { length: payload.length, digits: digits.length, head: payload.slice(0, 24) };
+  return {
+    length: payload.length,
+    digits: digits.length,
+    head: payload.slice(0, 24),
+    digitsHead: digits.slice(0, 20),
+  };
 }
