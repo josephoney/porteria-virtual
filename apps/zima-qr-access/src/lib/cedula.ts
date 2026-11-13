@@ -58,6 +58,6 @@ export function describeBarcode(payload: string) {
     length: payload.length,
     digits: digits.length,
     head: payload.slice(0, 24),
-    digitsHead: digits.slice(0, 20),
+    digitsAll: digits,
   };
 }
