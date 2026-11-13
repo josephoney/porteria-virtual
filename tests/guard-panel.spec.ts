@@ -208,6 +208,11 @@ test.describe('guard panel and access bitacora', () => {
     // On the first page the back arrow has nowhere to go.
     await expect(page.getByRole('button', { name: 'Página anterior' })).toBeDisabled();
 
+    // Shifts have their own tab, so the board hides their events by default: the
+    // start of the shift that was just opened must not show here.
+    await expect(page.getByText('Sin turnos', { exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Inicio de turno' })).toHaveCount(0);
+
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Cerrar turno', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Iniciar turno', exact: true })).toBeVisible();

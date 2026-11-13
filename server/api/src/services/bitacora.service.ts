@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNull, lte, notInArray } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import {
   accessPoints,
@@ -64,6 +64,10 @@ export interface BitacoraQuery {
   accessPointId?: string;
   shiftId?: string;
   type?: BitacoraEntryType;
+  /** Comma separated list of entry types, used to request the access group at once. */
+  types?: string;
+  /** Comma separated list of entry types to leave out, used to hide the shift events. */
+  excludeTypes?: string;
   from?: string;
   to?: string;
   page: number;
@@ -277,6 +281,26 @@ export async function listBitacora(
   }
   if (query.shiftId) conditions.push(eq(bitacoraEntries.shiftId, query.shiftId));
   if (query.type) conditions.push(eq(bitacoraEntries.type, query.type));
+  if (query.types) {
+    const allowed = bitacoraEntries.type.enumValues;
+    const types = query.types
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value): value is (typeof allowed)[number] =>
+        (allowed as readonly string[]).includes(value),
+      );
+    if (types.length > 0) conditions.push(inArray(bitacoraEntries.type, types));
+  }
+  if (query.excludeTypes) {
+    const allowed = bitacoraEntries.type.enumValues;
+    const excluded = query.excludeTypes
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value): value is (typeof allowed)[number] =>
+        (allowed as readonly string[]).includes(value),
+      );
+    if (excluded.length > 0) conditions.push(notInArray(bitacoraEntries.type, excluded));
+  }
   if (query.from) conditions.push(gte(bitacoraEntries.createdAt, new Date(query.from)));
   if (query.to) conditions.push(lte(bitacoraEntries.createdAt, new Date(query.to)));
 

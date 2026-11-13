@@ -320,6 +320,17 @@ export const bitacoraQuerySchema = z.object({
   accessPointId: z.string().uuid().optional(),
   shiftId: z.string().uuid().optional(),
   type: z.enum(BitacoraEntryTypeValues as [string, ...string[]]).optional(),
+  /**
+   * Comma separated list of entry types. The board groups the access events and
+   * asks for them at once, because the guard already has a separate tab for the
+   * shifts and their start/end entries only duplicate that table.
+   */
+  types: z.string().optional(),
+  /**
+   * Comma separated list of entry types to leave out. The board hides the shift
+   * events by default, because the shifts have their own tab.
+   */
+  excludeTypes: z.string().optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   page: z.coerce.number().int().min(1).default(1),

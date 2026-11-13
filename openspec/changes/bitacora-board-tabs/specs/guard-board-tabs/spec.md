@@ -30,6 +30,34 @@ The guard board SHALL show the access movements and the shift history in separat
 - THEN each tab exposes its role and the selected state
 - AND the panel is associated with the tab that controls it
 
+### Requirement: Access events without the shift noise
+
+The "Ingresos y salidas" tab SHALL hide the shift start and end entries by default, because those events already have their own tab, and SHALL keep every other movement visible.
+
+#### Scenario: Default filter hides the shift events
+
+- WHEN the user opens the "Ingresos y salidas" tab
+- THEN the type filter reads "Sin turnos"
+- AND `shift_start` and `shift_end` entries are not listed
+- AND the request carries `excludeTypes=shift_start,shift_end`
+
+#### Scenario: Manual notes stay visible
+
+- WHEN a guard adds a manual entry during a shift
+- THEN the entry is listed in the "Ingresos y salidas" tab
+- AND the user does not have to change the filter to see it
+
+#### Scenario: The filter can be widened
+
+- WHEN the user selects "Todos"
+- THEN the shift events are listed again
+- AND selecting a single type lists only that type
+
+#### Scenario: Clearing restores the default
+
+- WHEN the user presses "Limpiar"
+- THEN the type filter returns to "Sin turnos"
+
 ### Requirement: Page size selector
 
 Both tables SHALL let the user choose how many rows to see, with the options 10, 35 and 50.

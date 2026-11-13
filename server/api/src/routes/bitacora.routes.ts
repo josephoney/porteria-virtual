@@ -64,6 +64,8 @@ export async function bitacoraRoutes(app: FastifyInstance) {
         accessPointId: parsed.accessPointId,
         shiftId: parsed.shiftId,
         type: parsed.type as BitacoraEntryType | undefined,
+        types: parsed.types,
+        excludeTypes: parsed.excludeTypes,
         from: parsed.from,
         to: parsed.to,
         page: parsed.page,

@@ -91,6 +91,23 @@ const typeLabels: Record<string, string> = {
   manual: 'Manual',
 };
 
+/**
+ * The board hides the shift events by default: shifts have their own tab and
+ * their start and end entries only duplicated that table. Everything else stays,
+ * including the manual notes the guard writes during the shift.
+ */
+const HIDDEN_EVENT_TYPES = ['shift_start', 'shift_end'];
+
+/**
+ * The type filter has three shapes: everything but the shifts, one single event
+ * type, or absolutely everything. The API takes one type per request, so the
+ * exclusion travels as a comma separated list.
+ */
+function applyTypeFilter(params: URLSearchParams, type: string) {
+  if (type === 'without_shifts') params.set('excludeTypes', HIDDEN_EVENT_TYPES.join(','));
+  else if (type !== 'all') params.set('type', type);
+}
+
 const typeVariants: Record<
   string,
   'default' | 'secondary' | 'warning' | 'destructive' | 'outline'
@@ -137,7 +154,7 @@ export function AccessBitacoraView({
   );
   const [accessPoints, setAccessPoints] = useState<AccessPointOption[]>([]);
   const [accessPointId, setAccessPointId] = useState<string>(fixedAccessPointId ?? 'all');
-  const [type, setType] = useState<string>('all');
+  const [type, setType] = useState<string>('without_shifts');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [items, setItems] = useState<BitacoraEntryRow[]>([]);
@@ -220,7 +237,7 @@ export function AccessBitacoraView({
       communityId,
     });
     if (accessPointId !== 'all') params.set('accessPointId', accessPointId);
-    if (type !== 'all') params.set('type', type);
+    applyTypeFilter(params, type);
     if (from) params.set('from', new Date(`${from}T00:00:00`).toISOString());
     if (to) params.set('to', new Date(`${to}T23:59:59`).toISOString());
     try {
@@ -263,7 +280,7 @@ export function AccessBitacoraView({
       if (document.visibilityState !== 'visible') return;
       const params = new URLSearchParams({ page: '1', pageSize: '1', communityId: community });
       if (accessPointId !== 'all') params.set('accessPointId', accessPointId);
-      if (type !== 'all') params.set('type', type);
+      applyTypeFilter(params, type);
       if (from) params.set('from', new Date(`${from}T00:00:00`).toISOString());
       if (to) params.set('to', new Date(`${to}T23:59:59`).toISOString());
       try {
@@ -452,6 +469,7 @@ export function AccessBitacoraView({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="without_shifts">Sin turnos</SelectItem>
               <SelectItem value="all">Todos</SelectItem>
               {Object.entries(typeLabels).map(([value, label]) => (
                 <SelectItem key={value} value={value}>
@@ -473,7 +491,7 @@ export function AccessBitacoraView({
           type="button"
           variant="outline"
           onClick={() => {
-            setType('all');
+            setType('without_shifts');
             setFrom('');
             setTo('');
             setAccessPointId(fixedAccessPointId ?? 'all');

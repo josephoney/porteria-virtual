@@ -6,6 +6,8 @@
 - [x] 1.2 Envolver las dos tablas de `GuardPanel` en una `Card` con `Tabs`: «Ingresos y salidas» (bitácora) y «Turnos» (historial).
 - [x] 1.3 Dejar «Ingresos y salidas» como pestaña por defecto y asegurar que la otra no se muestra hasta seleccionarla (Radix la deja montada y oculta, así que la aserción del test es de visibilidad).
 - [x] 1.4 Mantener el estado de página y tamaño de cada tabla independiente mientras el componente sigue montado.
+- [x] 1.5 Agregar el filtro `types` y `excludeTypes` a `GET /api/bitacora` para que el tablero pida varios tipos o excluya algunos en una sola request.
+- [x] 1.6 Dejar el filtro de tipo en �Sin turnos� por defecto: oculta `shift_start` y `shift_end`, que ya tienen su pestaña, y mantiene visibles las novedades manuales.
 
 ## 2. Paginación de la bitácora
 
