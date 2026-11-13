@@ -21,6 +21,7 @@ const REASON_TEXTS: Record<string, string> = {
   out_of_schedule: 'El pase está fuera del horario permitido.',
   wrong_direction: 'El sentido del escaneo no coincide con este acceso.',
   token_already_used: 'Ese QR ya fue usado.',
+  denied_by_guard: 'El guardia denegó el acceso.',
 };
 
 /** One shared wording for the denial reasons, used by the scan result too. */

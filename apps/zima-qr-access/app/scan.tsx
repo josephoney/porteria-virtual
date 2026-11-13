@@ -520,7 +520,7 @@ export default function GuardScanScreen() {
                 <Row>
                   <Button label="Confirmar" onPress={() => void onConfirm()} loading={busy} />
                   <Button
-                    label="Rechazar"
+                    label="Denegar"
                     variant="danger"
                     onPress={() => void onReject()}
                     loading={busy}

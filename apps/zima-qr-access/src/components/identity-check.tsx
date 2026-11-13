@@ -109,11 +109,11 @@ export function IdentityCheck({
     }
   }
 
-  async function deny(passId: string, expired: boolean) {
+  async function deny(passId: string, reason: 'expired' | 'used' | 'denied') {
     setConfirmingId(passId);
     setError('');
     try {
-      await denyIdentityEntry(request, passId, expired);
+      await denyIdentityEntry(request, passId, reason);
       setNotice('Acceso denegado y registrado. Listo para el siguiente.');
       setCandidates(null);
       setDocument('');
@@ -219,7 +219,7 @@ export function IdentityCheck({
         // guard sees it as used or expired and gets no action.
         const inside = candidate.presenceState === 'inside' && !consumed && !expired;
         const action: 'entry' | 'exit' = inside ? 'exit' : 'entry';
-        const label = inside ? 'Registrar salida' : 'Registrar entrada';
+        const label = inside ? 'Registrar salida' : 'Confirmar ingreso';
         return (
           <View key={candidate.passId} style={styles.candidate}>
             <View style={styles.candidateHeader}>
@@ -238,19 +238,27 @@ export function IdentityCheck({
             </Text>
             {consumed || expired ? (
               <Button
-                label="Denegar acceso"
+                label="Denegar"
                 variant="danger"
-                onPress={() => void deny(candidate.passId, expired)}
+                onPress={() => void deny(candidate.passId, expired ? 'expired' : 'used')}
                 loading={confirmingId === candidate.passId}
                 disabled={confirmingId !== null}
               />
             ) : (
-              <Button
-                label={label}
-                onPress={() => void confirm(candidate.passId, action)}
-                loading={confirmingId === candidate.passId}
-                disabled={confirmingId !== null}
-              />
+              <View style={styles.actions}>
+                <Button
+                  label={label}
+                  onPress={() => void confirm(candidate.passId, action)}
+                  loading={confirmingId === candidate.passId}
+                  disabled={confirmingId !== null}
+                />
+                <Button
+                  label="Denegar"
+                  variant="danger"
+                  onPress={() => void deny(candidate.passId, 'denied')}
+                  disabled={confirmingId !== null}
+                />
+              </View>
             )}
           </View>
         );
@@ -287,6 +295,10 @@ const styles = StyleSheet.create({
   notice: {
     color: colors.success,
     fontSize: typography.small,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   candidate: {
     backgroundColor: colors.surfaceElevated,

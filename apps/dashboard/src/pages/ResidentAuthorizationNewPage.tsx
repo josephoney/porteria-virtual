@@ -252,6 +252,14 @@ export function ResidentAuthorizationNewPage() {
                 value={type === 'entry_exit' ? 'Ingreso y egreso' : 'Solo ingreso'}
               />
               <DetailField
+                label="Usos"
+                value={
+                  type === 'entry_exit'
+                    ? `${maxUses} ${Number(maxUses) === 1 ? 'uso' : 'usos'}`
+                    : 'Un solo uso'
+                }
+              />
+              <DetailField
                 label="Vehículo"
                 value={hasVehicle ? plate.trim().toUpperCase() : 'No ingresa en vehículo'}
               />
@@ -405,7 +413,7 @@ export function ResidentAuthorizationNewPage() {
               />
               <p className="text-xs text-muted-foreground">
                 {type === 'entry_only'
-                  ? 'Un pase de solo ingreso se usa una vez.'
+                  ? 'Pase de ingreso, un solo uso'
                   : 'Un uso es una entrada y una salida.'}
               </p>
             </div>

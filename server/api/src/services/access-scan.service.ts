@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import {
   accessPasses,
@@ -759,6 +759,7 @@ export async function searchAuthorizationsByDocument(
         eq(accessPasses.communityId, context.communityId),
         // The stored document may carry dots or spaces: compare the bare digits.
         sql`regexp_replace(lower(${accessPasses.visitorDocument}), '[^0-9a-z]', '', 'g') = ${normalized}`,
+        gte(accessPasses.validUntil, new Date()),
         inArray(accessPasses.status, ['active', 'used']),
       ),
     )

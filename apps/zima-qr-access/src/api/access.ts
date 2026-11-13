@@ -56,9 +56,13 @@ export function confirmIdentityEntry(request: RequestFn, passId: string, action:
 }
 
 /** Records a refused entry so the attempt stays audited and the app can reset. */
-export function denyIdentityEntry(request: RequestFn, passId: string, expired: boolean) {
+export function denyIdentityEntry(
+  request: RequestFn,
+  passId: string,
+  reason: 'expired' | 'used' | 'denied',
+) {
   return request<{ bitacoraEntryId: string | null }>(`/api/access/authorizations/${passId}/deny`, {
     method: 'POST',
-    body: { reason: expired ? 'expired' : 'used' },
+    body: { reason },
   });
 }

@@ -88,7 +88,11 @@ export async function accessRoutes(app: FastifyInstance) {
       const result = await denyIdentityEntry(
         getRequester(request),
         passId,
-        body.reason === 'expired' ? 'pass_expired' : 'pass_used',
+        body.reason === 'expired'
+          ? 'pass_expired'
+          : body.reason === 'used'
+            ? 'pass_used'
+            : 'denied_by_guard',
       );
       if (!result.ok) return sendPassError(reply, result.code);
       return reply.send(result.data);
