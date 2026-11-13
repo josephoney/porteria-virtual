@@ -3,24 +3,19 @@
  * record, not the document number alone, so the payload can never be compared
  * against what the resident typed.
  *
- * Two real samples, with their numbers confirmed:
+ * Both generations end the same way: the document is the tail of the digit run
+ * that sits right before the surnames.
  *
- *   Yellow card, 10 digits. After the `PubDSK_1` prefix comes a long digit run
- *   and then the surnames, so the document is the tail of that run:
+ *   10 digits:  PubDSK_1 … 850801501141526205 … PEDRAZA GUTIERREZ JUAN
+ *                             └───────┬──────┘
+ *                               1141526205
  *
- *     PubDSK_1 ... 850801501141526205 ... PEDRAZA GUTIERREZ JUAN MIGUEL
- *                      └────────────┘
- *                        └────────┬──┘
- *                         1141526205
+ *   8 digits:   020438301150A 02… 1111253 000 80136371 PEDRAZA CRUZ JOSE
+ *                                            └──────┘
+ *                                             80136371
  *
- *   Yellow card, 8 digits. No prefix, and the document sits after padding zeros:
- *
- *     0204383011500295...1253 000 80136371 01982103...
- *                              └─┘└──────┘
- *
- * Lengths vary between generations, so the readings are ordered by confidence and
- * the rest are offered as alternatives. The guard confirms against the physical
- * card; nothing is authorized from the guess.
+ * Reading backwards from the surnames is stable across batches of cards; counting
+ * offsets from the prefix is not.
  */
 const MIN_DOCUMENT_LENGTH = 6;
 const MAX_DOCUMENT_LENGTH = 10;
@@ -34,15 +29,15 @@ function looksLikeDate(value: string) {
 }
 
 /**
- * Cards with the `PubDSK` prefix put the document at the end of the digit run
- * that sits right before the surnames. Reading from the surnames backwards is
- * safer than counting offsets from the prefix, which changes between batches.
+ * Digits immediately before the first word of the record, taking the last ten and
+ * dropping the zero padding.
  */
 function documentBeforeSurnames(payload: string): string | null {
+  // The `PubDSK` prefix is letters too: start after it when it is present.
   const marker = /PubDSK_?1?/i.exec(payload);
-  if (!marker) return null;
+  const from = marker ? marker.index + marker[0].length : 0;
+  const rest = payload.slice(from);
 
-  const rest = payload.slice(marker.index + marker[0].length);
   const letters = /[A-Za-zÁÉÍÓÚÑÜ]{4,}/.exec(rest);
   if (!letters) return null;
 
@@ -56,50 +51,32 @@ function documentBeforeSurnames(payload: string): string | null {
   const run = rest.slice(start + 1, end + 1);
   if (run.length < 8) return null;
 
-  return run.slice(-MAX_DOCUMENT_LENGTH);
+  const value = run.slice(-MAX_DOCUMENT_LENGTH).replace(/^0+/, '');
+  return value.length >= MIN_DOCUMENT_LENGTH ? value : null;
 }
 
-/** Candidate document numbers, ordered from most to least likely. */
-export function documentCandidates(payload: string): string[] {
-  const found: string[] = [];
-  const add = (raw: string | null) => {
-    if (!raw) return;
-    const value = raw.replace(/^0+/, '');
-    if (value.length < MIN_DOCUMENT_LENGTH) return;
-    if (looksLikeDate(value)) return;
-    if (found.includes(value)) return;
-    found.push(value);
-  };
-
-  const beforeSurnames = documentBeforeSurnames(payload);
-  add(beforeSurnames);
-  if (beforeSurnames && beforeSurnames.length > 8) add(beforeSurnames.slice(0, 8));
-
-  const digits = payload.replace(/\D/g, '');
-
+/** Fallback for a card whose record has no names: digits after padding zeros. */
+function documentAfterPadding(digits: string): string | null {
   const padding = /0{3,}/g;
   let match: RegExpExecArray | null;
-  while ((match = padding.exec(digits)) !== null && found.length < 5) {
+  while ((match = padding.exec(digits)) !== null) {
     const start = match.index + match[0].length;
     for (const size of [8, 9, 10] as const) {
-      if (found.length >= 5) break;
-      if (start + size <= digits.length) add(digits.slice(start, start + size));
+      const candidate = digits.slice(start, start + size).replace(/^0+/, '');
+      if (candidate.length >= MIN_DOCUMENT_LENGTH && !looksLikeDate(candidate)) {
+        return candidate;
+      }
     }
   }
-
-  // Cards that follow neither pattern: try the plausible windows.
-  for (const size of [10, 9, 8] as const) {
-    for (let start = 0; start + size <= digits.length && found.length < 6; start += 1) {
-      add(digits.slice(start, start + size));
-    }
-  }
-
-  return found;
+  return null;
 }
 
-/** The reading the app prefills. */
+/** The document number of the holder, or an empty string when it cannot be read. */
 export function documentFromBarcode(payload: string): string {
-  return documentCandidates(payload)[0] ?? '';
+  const fromNames = documentBeforeSurnames(payload);
+  if (fromNames) return fromNames;
+
+  return documentAfterPadding(payload.replace(/\D/g, '')) ?? '';
 }
 
 /** Kept for the guard: shows the raw shape while a card format is being checked. */

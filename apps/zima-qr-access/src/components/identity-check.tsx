@@ -1,10 +1,10 @@
 import { CameraView } from 'expo-camera';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { confirmIdentityEntry, searchAuthorizations, type IdentityCandidate } from '@/api/access';
 import { Badge, Button, Divider, ui } from '@/components/ui';
-import { describeBarcode, documentCandidates } from '@/lib/cedula';
+import { describeBarcode, documentFromBarcode } from '@/lib/cedula';
 import { colors, radius, spacing, typography } from '@/theme';
 
 type RequestFn = <T>(
@@ -36,7 +36,6 @@ export function IdentityCheck({
   const [cameraOpen, setCameraOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [document, setDocument] = useState('');
-  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [candidates, setCandidates] = useState<IdentityCandidate[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -87,7 +86,6 @@ export function IdentityCheck({
       setCameraOpen(false);
       setCandidates(null);
       setDocument('');
-      setSuggestions([]);
       setManualOpen(false);
       onConfirmed();
     } catch (err) {
@@ -118,12 +116,11 @@ export function IdentityCheck({
       'CEDULA_RAW',
       JSON.stringify({ raw: result.data, ...describeBarcode(result.data) }),
     );
-    const options = documentCandidates(result.data);
+    const extracted = documentFromBarcode(result.data);
     reset();
     setManualOpen(true);
-    setSuggestions(options);
-    if (options.length > 0) {
-      setDocument(options[0]);
+    if (extracted) {
+      setDocument(extracted);
     } else {
       setDocument('');
       setError('No se pudo leer el número en el código. Escribilo a mano.');
@@ -153,23 +150,6 @@ export function IdentityCheck({
             onBarcodeScanned={onBarcodeScanned}
           />
           <Button label="Cancelar" variant="ghost" onPress={() => setCameraOpen(false)} />
-        </View>
-      ) : null}
-
-      {suggestions.length > 1 ? (
-        <View style={styles.suggestions}>
-          <Text style={ui.muted}>Si el número no coincide, elegí el correcto:</Text>
-          <View style={styles.chips}>
-            {suggestions.map((option) => (
-              <Pressable
-                key={option}
-                onPress={() => setDocument(option)}
-                style={[styles.chip, option === document ? styles.chipActive : null]}
-              >
-                <Text style={styles.chipText}>{option}</Text>
-              </Pressable>
-            ))}
-          </View>
         </View>
       ) : null}
 
@@ -244,29 +224,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     height: 260,
     overflow: 'hidden',
-  },
-  suggestions: {
-    gap: spacing.sm,
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  chipActive: {
-    borderColor: colors.primary,
-  },
-  chipText: {
-    color: colors.text,
-    fontSize: typography.small,
-    fontWeight: '600',
   },
   manualBox: {
     gap: spacing.sm,
