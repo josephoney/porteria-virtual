@@ -6,6 +6,8 @@ import {
   text,
   numeric,
   pgEnum,
+  boolean,
+  integer,
 } from 'drizzle-orm/pg-core';
 import { organizations } from './organizations';
 
@@ -39,6 +41,13 @@ export const communities = pgTable('communities', {
     .references(() => organizations.id, { onDelete: 'cascade' }),
   logoAssetId: uuid('logo_asset_id'),
   welcomeMessage: text('welcome_message'),
+  /**
+   * Daily authorization rule of the community. The administration decides if the
+   * limit exists and how high it is; the switch keeps the number stored so turning
+   * the rule back on does not force anyone to remember it.
+   */
+  passDailyLimitEnabled: boolean('pass_daily_limit_enabled').notNull().default(true),
+  passDailyLimit: integer('pass_daily_limit').notNull().default(50),
   status: communityStatusEnum('status').notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

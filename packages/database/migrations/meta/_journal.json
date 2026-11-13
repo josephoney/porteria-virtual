@@ -134,6 +134,13 @@
       "when": 1794512764878,
       "tag": "0018_early_captain_america",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794542536780,
+      "tag": "0019_volatile_lizard",
+      "breakpoints": true
     }
   ]
 }

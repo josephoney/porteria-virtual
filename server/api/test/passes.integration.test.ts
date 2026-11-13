@@ -1080,7 +1080,14 @@ describe('dynamic pass integration', () => {
     assert.match(String(body.items[0]?.locationPath), /Pass Unit A/);
   });
 
-  it('rejects pass creation after the per-unit daily limit', async () => {
+  it('rejects pass creation after the community daily limit', async () => {
+    // The limit is a rule of the community now, so the test states it instead of
+    // leaning on the environment default.
+    await db
+      .update(communities)
+      .set({ passDailyLimitEnabled: true, passDailyLimit: 20 })
+      .where(eq(communities.id, communityId));
+
     const now = Date.now();
     await db.insert(accessPasses).values(
       Array.from({ length: 20 }, () => ({
@@ -1103,6 +1110,25 @@ describe('dynamic pass integration', () => {
     const blocked = await postPass({ locationUnitId: leafBId }, otherResidentToken);
     assert.equal(blocked.statusCode, 429, blocked.body);
     assert.equal(parse(blocked).message, 'daily_limit_reached');
+    // The rejection states the maximum, so the client can explain it.
+    assert.equal(parse(blocked).max, 20);
+  });
+
+  it('skips the daily limit when the community turns it off', async () => {
+    await db
+      .update(communities)
+      .set({ passDailyLimitEnabled: false, passDailyLimit: 20 })
+      .where(eq(communities.id, communityId));
+
+    // Twenty passes are already there from the test above; with the rule off the
+    // count must not even run.
+    const allowed = await postPass({ locationUnitId: leafBId }, otherResidentToken);
+    assert.equal(allowed.statusCode, 201, allowed.body);
+
+    await db
+      .update(communities)
+      .set({ passDailyLimitEnabled: true })
+      .where(eq(communities.id, communityId));
   });
 
   it('rate-limits public preview requests per token', async () => {

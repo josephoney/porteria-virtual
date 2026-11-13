@@ -27,4 +27,11 @@ export type PassErrorCode =
   | 'destination_inactive'
   | 'batch_too_large';
 
-export type PassResult<T> = { ok: true; data: T } | { ok: false; code: PassErrorCode };
+export type PassResult<T> =
+  | { ok: true; data: T }
+  | {
+      ok: false;
+      code: PassErrorCode;
+      /** Present on `daily_limit_reached`: the maximum the community allows. */
+      max?: number;
+    };

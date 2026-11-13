@@ -1,0 +1,2 @@
+ALTER TABLE "communities" ADD COLUMN "pass_daily_limit_enabled" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "communities" ADD COLUMN "pass_daily_limit" integer DEFAULT 50 NOT NULL;

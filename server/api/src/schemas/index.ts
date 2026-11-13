@@ -138,12 +138,19 @@ export const updateOrganizationSchema = z.object({
   ...geographySchema.shape,
 });
 
+/** The daily authorization rule the administration sets per community. */
+const passRuleShape = {
+  passDailyLimitEnabled: z.boolean().optional(),
+  passDailyLimit: z.coerce.number().int().min(1).max(500).optional(),
+};
+
 export const createCommunitySchema = z.object({
   organizationId: z.string().uuid(),
   name: z.string().min(1).max(255),
   address: z.string().min(1).max(500),
   timezone: z.string().min(1).max(50),
   slug: z.string().min(3).max(60).optional(),
+  ...passRuleShape,
   ...geographySchema.shape,
 });
 
@@ -153,6 +160,7 @@ export const updateCommunitySchema = z.object({
   timezone: z.string().min(1).max(50).optional(),
   slug: z.string().min(3).max(60).optional(),
   status: z.enum(['active', 'inactive']).optional(),
+  ...passRuleShape,
   ...geographySchema.shape,
 });
 

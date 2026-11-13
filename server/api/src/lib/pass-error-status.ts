@@ -54,7 +54,12 @@ export function passErrorStatus(code: PassErrorCode): number {
   }
 }
 
-export function sendPassError(reply: FastifyReply, code: PassErrorCode, error = 'Pass rejected') {
+export function sendPassError(
+  reply: FastifyReply,
+  code: PassErrorCode,
+  error = 'Pass rejected',
+  extra: Record<string, unknown> = {},
+) {
   const status = passErrorStatus(code);
-  return reply.status(status).send({ statusCode: status, error, message: code });
+  return reply.status(status).send({ statusCode: status, error, message: code, ...extra });
 }

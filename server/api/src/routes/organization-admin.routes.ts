@@ -263,6 +263,8 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
           organizationId: communities.organizationId,
           logoAssetId: communities.logoAssetId,
           welcomeMessage: communities.welcomeMessage,
+          passDailyLimitEnabled: communities.passDailyLimitEnabled,
+          passDailyLimit: communities.passDailyLimit,
         })
         .from(communities)
         .where(eq(communities.organizationId, user.orgId))
@@ -297,6 +299,8 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         timezone?: string;
         slug?: string;
         welcomeMessage?: string | null;
+        passDailyLimitEnabled?: boolean;
+        passDailyLimit?: number;
       };
       if (!body.name?.trim() || !body.address?.trim() || !body.timezone?.trim()) {
         return reply.status(400).send({
@@ -356,6 +360,8 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
             timezone: body.timezone.trim(),
             organizationId: user.orgId,
             welcomeMessage: body.welcomeMessage?.trim() || null,
+            passDailyLimitEnabled: body.passDailyLimitEnabled ?? true,
+            passDailyLimit: body.passDailyLimit ?? 50,
             status: 'active',
           })
           .returning();

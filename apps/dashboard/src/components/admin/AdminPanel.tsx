@@ -41,6 +41,8 @@ interface Community {
   type: string | null;
   typeLabel: string | null;
   welcomeMessage: string | null;
+  passDailyLimitEnabled: boolean;
+  passDailyLimit: number;
   logoAssetId: string | null;
   administratorEmail: string | null;
   status: string;
@@ -230,6 +232,9 @@ const emptyCommunityForm = {
   latitude: '',
   longitude: '',
   welcomeMessage: '',
+  /** The daily rule the administration sets for this community. */
+  passDailyLimitEnabled: true,
+  passDailyLimit: '50',
   timezone: 'America/Bogota',
   slug: '',
 };
@@ -242,6 +247,8 @@ function mergeCommunity(
     type: string;
     typeLabel: string | null;
     welcomeMessage: string | null;
+    passDailyLimitEnabled: boolean;
+    passDailyLimit: number;
   },
   saved: Partial<Community> & { id?: string },
 ): Community | null {
@@ -254,6 +261,8 @@ function mergeCommunity(
     type: saved.type ?? payload.type,
     typeLabel: saved.typeLabel ?? (payload.typeLabel || null),
     welcomeMessage: saved.welcomeMessage ?? (payload.welcomeMessage || null),
+    passDailyLimitEnabled: saved.passDailyLimitEnabled ?? payload.passDailyLimitEnabled,
+    passDailyLimit: saved.passDailyLimit ?? payload.passDailyLimit,
     logoAssetId: saved.logoAssetId ?? null,
     administratorEmail: saved.administratorEmail ?? null,
     status: saved.status ?? 'active',
@@ -505,6 +514,8 @@ export function AdminPanel() {
       latitude: '',
       longitude: '',
       welcomeMessage: community.welcomeMessage ?? '',
+      passDailyLimitEnabled: community.passDailyLimitEnabled ?? true,
+      passDailyLimit: String(community.passDailyLimit ?? 50),
       timezone: '',
       slug: '',
     });
@@ -547,6 +558,8 @@ export function AdminPanel() {
       latitude: communityForm.latitude ? Number(communityForm.latitude) : null,
       longitude: communityForm.longitude ? Number(communityForm.longitude) : null,
       welcomeMessage: communityForm.welcomeMessage || null,
+      passDailyLimitEnabled: communityForm.passDailyLimitEnabled,
+      passDailyLimit: Number(communityForm.passDailyLimit) || 50,
       ...(communityForm.timezone ? { timezone: communityForm.timezone } : {}),
       ...(communityForm.slug ? { slug: communityForm.slug } : {}),
     };
@@ -862,6 +875,49 @@ export function AdminPanel() {
                       placeholder="Opcional"
                     />
                   </div>
+                  <div className="space-y-3 rounded-lg border border-border p-3">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium">Reglas</p>
+                      <p className="text-xs text-muted-foreground">
+                        Cuántas autorizaciones puede crear cada unidad por día.
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        id="admin-community-limit-enabled"
+                        type="checkbox"
+                        checked={communityForm.passDailyLimitEnabled}
+                        onChange={(event) =>
+                          setCommunityForm({
+                            ...communityForm,
+                            passDailyLimitEnabled: event.target.checked,
+                          })
+                        }
+                        className="size-4 accent-foreground"
+                      />
+                      Limitar autorizaciones por día
+                    </label>
+                    <div className="space-y-1">
+                      <Label htmlFor="admin-community-limit">Máximo por unidad y día</Label>
+                      <Input
+                        id="admin-community-limit"
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={communityForm.passDailyLimit}
+                        disabled={!communityForm.passDailyLimitEnabled}
+                        onChange={(event) =>
+                          setCommunityForm({
+                            ...communityForm,
+                            passDailyLimit: event.target.value,
+                          })
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Entre 1 y 500. Desactivá el límite para no restringir.
+                      </p>
+                    </div>
+                  </div>
                   <div className="space-y-1">
                     <Label htmlFor="admin-community-timezone">Zona horaria</Label>
                     <Input
@@ -1035,6 +1091,14 @@ export function AdminPanel() {
                                       value={community.welcomeMessage}
                                       span="full"
                                       valueClassName="font-normal"
+                                    />
+                                    <DetailField
+                                      label="Límite diario"
+                                      value={
+                                        community.passDailyLimitEnabled
+                                          ? `${community.passDailyLimit} por unidad`
+                                          : 'Sin límite'
+                                      }
                                     />
                                   </DetailGrid>
                                   <section className="space-y-1">

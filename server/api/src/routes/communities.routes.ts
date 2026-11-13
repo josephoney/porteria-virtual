@@ -132,6 +132,8 @@ export async function communityRoutes(app: FastifyInstance) {
           type: communities.type,
           typeLabel: communities.typeLabel,
           welcomeMessage: communities.welcomeMessage,
+          passDailyLimitEnabled: communities.passDailyLimitEnabled,
+          passDailyLimit: communities.passDailyLimit,
           logoAssetId: communities.logoAssetId,
           status: communities.status,
         })
@@ -426,6 +428,8 @@ export async function communityRoutes(app: FastifyInstance) {
         timezone?: string;
         logoAssetId?: string | null;
         welcomeMessage?: string | null;
+        passDailyLimitEnabled?: boolean;
+        passDailyLimit?: number;
         status?: 'active' | 'inactive';
       };
 
@@ -485,6 +489,10 @@ export async function communityRoutes(app: FastifyInstance) {
           ...(body.welcomeMessage !== undefined
             ? { welcomeMessage: body.welcomeMessage?.trim() || null }
             : {}),
+          ...(body.passDailyLimitEnabled !== undefined
+            ? { passDailyLimitEnabled: body.passDailyLimitEnabled }
+            : {}),
+          ...(body.passDailyLimit !== undefined ? { passDailyLimit: body.passDailyLimit } : {}),
           ...(body.status !== undefined ? { status: body.status } : {}),
           updatedAt: new Date(),
         })

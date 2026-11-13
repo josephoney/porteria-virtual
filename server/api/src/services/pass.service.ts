@@ -147,13 +147,27 @@ export async function createPass(
     return { ok: false, code: 'invalid' };
   }
 
-  if (config.passes.dailyLimitPerUnit > 0) {
-    const [community] = await db
-      .select({ timezone: communities.timezone })
-      .from(communities)
-      .where(eq(communities.id, requester.communityId))
-      .limit(1);
-    const timezone = community?.timezone || 'UTC';
+  /**
+   * The daily limit is a rule of the community, not a global setting: each
+   * administration decides if it exists and how high it is.
+   * `PASS_DAILY_LIMIT_PER_UNIT=0` stays as an emergency switch that turns the rule
+   * off everywhere, without touching the stored numbers.
+   */
+  const [communityRule] = await db
+    .select({
+      timezone: communities.timezone,
+      limitEnabled: communities.passDailyLimitEnabled,
+      limit: communities.passDailyLimit,
+    })
+    .from(communities)
+    .where(eq(communities.id, requester.communityId))
+    .limit(1);
+
+  const limitEnabled = config.passes.dailyLimitPerUnit > 0 && (communityRule?.limitEnabled ?? true);
+
+  if (limitEnabled) {
+    const timezone = communityRule?.timezone || 'UTC';
+    const max = communityRule?.limit ?? config.passes.dailyLimitPerUnit;
     const [today] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(accessPasses)
@@ -168,8 +182,8 @@ export async function createPass(
         ),
       );
 
-    if ((today?.count ?? 0) >= config.passes.dailyLimitPerUnit) {
-      return { ok: false, code: 'daily_limit_reached' };
+    if ((today?.count ?? 0) >= max) {
+      return { ok: false, code: 'daily_limit_reached', max };
     }
   }
 
@@ -314,7 +328,10 @@ export async function listHistoryDestinations(
     const tree = trees.get(row.communityId);
     const destination = tree ? resolveDestinationFromTree(tree, row.locationUnitId) : null;
     if (!destination) continue;
-    options.set(row.locationUnitId, { ...toDestinationSummary(destination), active: destination.active });
+    options.set(row.locationUnitId, {
+      ...toDestinationSummary(destination),
+      active: destination.active,
+    });
   }
 
   return {

@@ -83,7 +83,16 @@ export async function passRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const body = createPassSchema.parse(request.body);
       const result = await passService.createPass(getRequester(request), body);
-      if (!result.ok) return sendPassError(reply, result.code);
+      if (!result.ok) {
+        // The limit rejection carries the community maximum so the client can say
+        // "you reached your 50 of today" instead of a bare code.
+        return sendPassError(
+          reply,
+          result.code,
+          'Pass rejected',
+          result.max === undefined ? {} : { max: result.max },
+        );
+      }
       return reply.status(201).send(result.data);
     },
   );
