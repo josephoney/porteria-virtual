@@ -139,7 +139,7 @@ export function ResidentAuthorizationNewPage() {
     }
 
     if (hasVehicle && !plate.trim()) {
-      next.vehicle = 'Ingresá la patente del vehículo.';
+      next.vehicle = 'Ingresá la placa del vehículo.';
     }
 
     setFieldErrors(next);
@@ -473,7 +473,7 @@ export function ResidentAuthorizationNewPage() {
             </label>
             {hasVehicle && (
               <div className="space-y-1">
-                <Label htmlFor="resident-vehicle-plate">Patente</Label>
+                <Label htmlFor="resident-vehicle-plate">Placa</Label>
                 <Input
                   id="resident-vehicle-plate"
                   value={plate}

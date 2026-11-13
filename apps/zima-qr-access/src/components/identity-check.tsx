@@ -1,6 +1,6 @@
 import { CameraView } from 'expo-camera';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
   confirmIdentityEntry,
@@ -211,58 +211,83 @@ export function IdentityCheck({
       {error ? <Text style={ui.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
-      {candidates?.map((candidate) => {
-        const remaining = Math.max(0, candidate.maxUses - candidate.exitCount);
-        const expired = new Date(candidate.validUntil).getTime() < Date.now();
-        const consumed = remaining === 0 || candidate.status === 'used';
-        // A pass with nothing left or past its window is only informative: the
-        // guard sees it as used or expired and gets no action.
-        const inside = candidate.presenceState === 'inside' && !consumed && !expired;
-        const action: 'entry' | 'exit' = inside ? 'exit' : 'entry';
-        const label = inside ? 'Registrar salida' : 'Confirmar ingreso';
-        return (
-          <View key={candidate.passId} style={styles.candidate}>
-            <View style={styles.candidateHeader}>
-              <Text style={styles.candidateName}>
-                {candidate.visitorFirstName} {candidate.visitorLastName}
-              </Text>
-              <Badge
-                label={expired ? 'Vencido' : consumed ? 'Usado' : inside ? 'Dentro' : 'Activa'}
-                tone={expired || consumed ? 'danger' : inside ? 'warning' : 'success'}
-              />
-            </View>
-            <Text style={ui.muted}>{candidate.destinationPath || candidate.destinationName}</Text>
-            <Text style={ui.muted}>{formatWindow(candidate.validFrom, candidate.validUntil)}</Text>
-            <Text style={ui.muted}>
-              {remaining} de {candidate.maxUses} usos disponibles
-            </Text>
-            {consumed || expired ? (
-              <Button
-                label="Denegar"
-                variant="danger"
-                onPress={() => void deny(candidate.passId, expired ? 'expired' : 'used')}
-                loading={confirmingId === candidate.passId}
-                disabled={confirmingId !== null}
-              />
-            ) : (
-              <View style={styles.actions}>
-                <Button
-                  label={label}
-                  onPress={() => void confirm(candidate.passId, action)}
-                  loading={confirmingId === candidate.passId}
-                  disabled={confirmingId !== null}
-                />
-                <Button
-                  label="Denegar"
-                  variant="danger"
-                  onPress={() => void deny(candidate.passId, 'denied')}
-                  disabled={confirmingId !== null}
-                />
-              </View>
-            )}
+      <Modal
+        visible={Boolean(candidates && candidates.length > 0)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCandidates(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Pressable
+              style={styles.modalClose}
+              onPress={() => setCandidates(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar"
+            >
+              <Text style={styles.modalCloseText}>X</Text>
+            </Pressable>
+            {candidates?.map((candidate) => {
+              const remaining = Math.max(0, candidate.maxUses - candidate.exitCount);
+              const expired = new Date(candidate.validUntil).getTime() < Date.now();
+              const consumed = remaining === 0 || candidate.status === 'used';
+              // A pass with nothing left or past its window is only informative: the
+              // guard sees it as used or expired and gets no action.
+              const inside = candidate.presenceState === 'inside' && !consumed && !expired;
+              const action: 'entry' | 'exit' = inside ? 'exit' : 'entry';
+              const label = inside ? 'Registrar salida' : 'Confirmar ingreso';
+              return (
+                <View key={candidate.passId} style={styles.candidate}>
+                  <View style={styles.candidateHeader}>
+                    <Text style={styles.candidateName}>
+                      {candidate.visitorFirstName} {candidate.visitorLastName}
+                    </Text>
+                    <Badge
+                      label={
+                        expired ? 'Vencido' : consumed ? 'Usado' : inside ? 'Dentro' : 'Activa'
+                      }
+                      tone={expired || consumed ? 'danger' : inside ? 'warning' : 'success'}
+                    />
+                  </View>
+                  <Text style={ui.muted}>
+                    {candidate.destinationPath || candidate.destinationName}
+                  </Text>
+                  <Text style={ui.muted}>
+                    {formatWindow(candidate.validFrom, candidate.validUntil)}
+                  </Text>
+                  <Text style={ui.muted}>
+                    {remaining} de {candidate.maxUses} usos disponibles
+                  </Text>
+                  {consumed || expired ? (
+                    <Button
+                      label="Denegar"
+                      variant="danger"
+                      onPress={() => void deny(candidate.passId, expired ? 'expired' : 'used')}
+                      loading={confirmingId === candidate.passId}
+                      disabled={confirmingId !== null}
+                    />
+                  ) : (
+                    <View style={styles.actions}>
+                      <Button
+                        label={label}
+                        onPress={() => void confirm(candidate.passId, action)}
+                        loading={confirmingId === candidate.passId}
+                        disabled={confirmingId !== null}
+                      />
+                      <Button
+                        label="Denegar"
+                        variant="danger"
+                        onPress={() => void deny(candidate.passId, 'denied')}
+                        disabled={confirmingId !== null}
+                      />
+                    </View>
+                  )}
+                </View>
+              );
+            })}
           </View>
-        );
-      })}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -299,6 +324,29 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  modalBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.lg,
+  },
+  modalClose: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: spacing.sm,
+  },
+  modalCloseText: {
+    color: colors.textMuted,
+    fontSize: 20,
+    fontWeight: '700',
   },
   candidate: {
     backgroundColor: colors.surfaceElevated,
