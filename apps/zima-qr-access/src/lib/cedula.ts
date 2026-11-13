@@ -3,19 +3,27 @@
  * record, not the document number alone, so the payload can never be compared
  * against what the resident typed.
  *
- * On the yellow card the document sits right after a run of padding zeros. A real
- * sample, with the owner's number confirmed, looks like this:
+ * Two real samples, with their numbers confirmed:
  *
- *   0204383011500295 56571441111253 000 80136371 01982103...
- *                                    └─┘└──────┘
- *                                     │  document
- *                                     └── padding
+ *   Yellow card, 10 digits. After the `PubDSK_1` prefix comes a long digit run
+ *   and then the surnames, so the document is the tail of that run:
  *
- * Lengths vary between generations of the card, so the offsets after the padding
- * are tried in order and the rest are offered as alternatives. The guard confirms
- * against the physical card; nothing is authorized from the guess.
+ *     PubDSK_1 ... 850801501141526205 ... PEDRAZA GUTIERREZ JUAN MIGUEL
+ *                      └────────────┘
+ *                        └────────┬──┘
+ *                         1141526205
+ *
+ *   Yellow card, 8 digits. No prefix, and the document sits after padding zeros:
+ *
+ *     0204383011500295...1253 000 80136371 01982103...
+ *                              └─┘└──────┘
+ *
+ * Lengths vary between generations, so the readings are ordered by confidence and
+ * the rest are offered as alternatives. The guard confirms against the physical
+ * card; nothing is authorized from the guess.
  */
 const MIN_DOCUMENT_LENGTH = 6;
+const MAX_DOCUMENT_LENGTH = 10;
 
 function looksLikeDate(value: string) {
   if (value.length !== 8) return false;
@@ -25,13 +33,37 @@ function looksLikeDate(value: string) {
   return year >= 1900 && year <= 2100 && month >= 1 && month <= 12 && day >= 1 && day <= 31;
 }
 
+/**
+ * Cards with the `PubDSK` prefix put the document at the end of the digit run
+ * that sits right before the surnames. Reading from the surnames backwards is
+ * safer than counting offsets from the prefix, which changes between batches.
+ */
+function documentBeforeSurnames(payload: string): string | null {
+  const marker = /PubDSK_?1?/i.exec(payload);
+  if (!marker) return null;
+
+  const rest = payload.slice(marker.index + marker[0].length);
+  const letters = /[A-Za-zÁÉÍÓÚÑÜ]{4,}/.exec(rest);
+  if (!letters) return null;
+
+  let end = letters.index - 1;
+  while (end >= 0 && !/\d/.test(rest[end])) end -= 1;
+  if (end < 0) return null;
+
+  let start = end;
+  while (start >= 0 && /\d/.test(rest[start])) start -= 1;
+
+  const run = rest.slice(start + 1, end + 1);
+  if (run.length < 8) return null;
+
+  return run.slice(-MAX_DOCUMENT_LENGTH);
+}
+
 /** Candidate document numbers, ordered from most to least likely. */
 export function documentCandidates(payload: string): string[] {
-  const digits = payload.replace(/\D/g, '');
-  if (!digits) return [];
-
   const found: string[] = [];
-  const add = (raw: string) => {
+  const add = (raw: string | null) => {
+    if (!raw) return;
     const value = raw.replace(/^0+/, '');
     if (value.length < MIN_DOCUMENT_LENGTH) return;
     if (looksLikeDate(value)) return;
@@ -39,17 +71,23 @@ export function documentCandidates(payload: string): string[] {
     found.push(value);
   };
 
+  const beforeSurnames = documentBeforeSurnames(payload);
+  add(beforeSurnames);
+  if (beforeSurnames && beforeSurnames.length > 8) add(beforeSurnames.slice(0, 8));
+
+  const digits = payload.replace(/\D/g, '');
+
   const padding = /0{3,}/g;
   let match: RegExpExecArray | null;
-  while ((match = padding.exec(digits)) !== null && found.length < 4) {
+  while ((match = padding.exec(digits)) !== null && found.length < 5) {
     const start = match.index + match[0].length;
     for (const size of [8, 9, 10] as const) {
-      if (found.length >= 4) break;
+      if (found.length >= 5) break;
       if (start + size <= digits.length) add(digits.slice(start, start + size));
     }
   }
 
-  // Cards that do not pad: fall back to the plausible windows.
+  // Cards that follow neither pattern: try the plausible windows.
   for (const size of [10, 9, 8] as const) {
     for (let start = 0; start + size <= digits.length && found.length < 6; start += 1) {
       add(digits.slice(start, start + size));
