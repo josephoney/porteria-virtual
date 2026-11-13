@@ -83,8 +83,11 @@ test.describe('Platform organizations table', () => {
     await page.goto('/platform/organizations');
 
     const nameCell = page.getByRole('cell', { name: ORG_NAME, exact: true }).first();
-    // `role="button"` on the <tr> removes its row role, so query the attribute.
-    const row = page.locator('tbody tr[role="button"]').filter({ hasText: ORG_NAME }).first();
+    // The expandable row keeps its row role and marks itself with a data attribute.
+    const row = page
+      .locator('tbody tr[data-expandable="true"]')
+      .filter({ hasText: ORG_NAME })
+      .first();
 
     await nameCell.click();
     await expect(page.locator('dl').first()).toBeVisible();

@@ -3,7 +3,6 @@ import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +11,9 @@ import {
   type KeyboardTypeOptions,
   type TextInputProps,
 } from 'react-native';
+// SafeAreaView from react-native is deprecated: the replacement lives in this
+// package and also works on Android, where the core one is a no-op.
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, radius, spacing, typography } from '@/theme';
 
