@@ -113,7 +113,11 @@ export function IdentityCheck({
     setCameraOpen(false);
     // Until the payload format is confirmed against more cards, the raw value is
     // logged in development so a wrong guess can be traced back to the source.
-    if (__DEV__) console.log('cedula barcode', describeBarcode(result.data));
+    // Temporary: the payload shape is still being confirmed against real cards.
+    console.log(
+      'CEDULA_RAW',
+      JSON.stringify({ raw: result.data, ...describeBarcode(result.data) }),
+    );
     const options = documentCandidates(result.data);
     reset();
     setManualOpen(true);
