@@ -824,7 +824,7 @@ export async function confirmIdentityEntry(
       ? pass.type === 'entry_only'
         ? 'used'
         : pass.status
-      : 'used';
+      : pass.type === 'entry_only' ? 'used' : 'active';
   let bitacoraEntryId: string | null = null;
 
   await db.transaction(async (tx) => {

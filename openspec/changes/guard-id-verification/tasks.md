@@ -26,6 +26,7 @@
 - [x] 3.5 Confirmar el ingreso contra el API y refrescar la actividad del turno.
 - [x] 3.6 Mostrar los errores: sin autorizaciones, documento inválido, límite de consultas y pase ya usado.
 - [x] 3.7 El boton de la candidata cambia entre «Registrar entrada» y «Registrar salida» segun la presencia, y se deshabilita cuando el pase ya no tiene movimientos posibles.
+- [x] 3.8 Tras registrar la salida por documento, un pase de ida y vuelta vuelve a ofrecer la entrada mientras su ventana siga vigente.
 
 ## 4. Verificación
 

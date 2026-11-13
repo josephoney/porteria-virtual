@@ -114,4 +114,4 @@ The system SHALL let the guard record either an entry or an exit for a document,
 
 - WHEN the guard records an exit by document
 - THEN the bitacora records a pass exit with its own summary
-- AND the pass stops being active once both movements happened
+- AND a pass that allows entry and exit stays valid for another entry while its window lasts
