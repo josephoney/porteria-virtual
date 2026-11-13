@@ -61,3 +61,35 @@ export function describeBarcode(payload: string) {
     digitsAll: digits,
   };
 }
+
+/**
+ * Candidate document numbers from the scanned payload.
+ *
+ * The field boundaries vary between generations of the yellow card, so instead of
+ * betting on one offset the app offers the plausible readings and the guard picks
+ * the one printed on the card he is holding. Ordered from most to least likely.
+ */
+export function documentCandidates(payload: string): string[] {
+  const digits = payload.replace(/\D/g, '');
+  if (!digits) return [];
+
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  const offsets = [2, 4, 0, 6, 3, 1];
+
+  for (const size of [10, 9, 8] as const) {
+    for (const offset of offsets) {
+      if (offset + size > digits.length) continue;
+      const window = digits.slice(offset, offset + size);
+      if (looksLikeDate(window)) continue;
+      const value = window.replace(/^0+/, '');
+      if (value.length < MIN_DOCUMENT_LENGTH) continue;
+      if (seen.has(value)) continue;
+      seen.add(value);
+      candidates.push(value);
+      if (candidates.length >= 4) return candidates;
+    }
+  }
+
+  return candidates;
+}

@@ -1,10 +1,10 @@
 import { CameraView } from 'expo-camera';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { confirmIdentityEntry, searchAuthorizations, type IdentityCandidate } from '@/api/access';
 import { Badge, Button, Divider, ui } from '@/components/ui';
-import { describeBarcode, documentFromBarcode } from '@/lib/cedula';
+import { describeBarcode, documentCandidates } from '@/lib/cedula';
 import { colors, radius, spacing, typography } from '@/theme';
 
 type RequestFn = <T>(
@@ -39,6 +39,7 @@ export function IdentityCheck({
   const [candidates, setCandidates] = useState<IdentityCandidate[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -112,11 +113,12 @@ export function IdentityCheck({
     // Until the payload format is confirmed against real cards, the raw value is
     // logged in development so a wrong guess can be traced back to the source.
     if (__DEV__) console.log('cedula barcode', describeBarcode(result.data));
-    const extracted = documentFromBarcode(result.data);
+    const options = documentCandidates(result.data);
     reset();
     setManualOpen(true);
-    if (extracted) {
-      setDocument(extracted);
+    setSuggestions(options);
+    if (options.length > 0) {
+      setDocument(options[0]);
     } else {
       setDocument('');
       setError('No se pudo leer el número en el código. Escribilo a mano.');
@@ -147,6 +149,22 @@ export function IdentityCheck({
             barcodeScannerSettings={{ barcodeTypes: ['pdf417'] }}
             onBarcodeScanned={onBarcodeScanned}
           />
+          {suggestions.length > 1 ? (
+            <View style={styles.suggestions}>
+              <Text style={ui.muted}>Si el número no coincide, elegí el correcto:</Text>
+              <View style={styles.chips}>
+                {suggestions.map((option) => (
+                  <Pressable
+                    key={option}
+                    onPress={() => setDocument(option)}
+                    style={[styles.chip, option === document && styles.chipActive]}
+                  >
+                    <Text style={styles.chipText}>{option}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}{' '}
           <Button label="Cancelar" variant="ghost" onPress={() => setCameraOpen(false)} />
         </View>
       )}
@@ -239,6 +257,29 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  suggestions: {
+    gap: spacing.sm,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  chip: {
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  chipActive: {
+    borderColor: colors.primary,
+  },
+  chipText: {
+    color: colors.text,
+    fontSize: typography.small,
+    fontWeight: '600',
   },
   notice: {
     color: colors.success,
