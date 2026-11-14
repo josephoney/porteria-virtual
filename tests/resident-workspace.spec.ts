@@ -330,6 +330,7 @@ async function createPassViaApi(request: APIRequestContext, input: CreatePassInp
       visitorLastName: input.lastName,
       visitorDocument: input.document,
       type: 'entry_exit',
+      ...(input.maxUses ? { maxUses: input.maxUses } : {}),
       validFrom: input.validFrom ?? new Date(now).toISOString(),
       validUntil: input.validUntil ?? new Date(now + 60 * 60 * 1000).toISOString(),
     },
@@ -741,6 +742,21 @@ test.describe('common area branches', () => {
     }
   });
 
+
+  test('the history shows the remaining uses of a pass', async ({ page, request }) => {
+    const lastName = `Usos${Date.now()}`;
+    await createPassViaApi(request, { lastName, document: `USOS-${Date.now()}`, maxUses: 2 });
+
+    try {
+      await openHistory(page);
+
+      const row = page.locator('tbody tr').filter({ hasText: lastName });
+      await expect(row).toBeVisible({ timeout: 20_000 });
+      await expect(row).toContainText('2 de 2 usos');
+    } finally {
+      await revokePasses(request, lastName);
+    }
+  });
   test('a revocation from another session updates the row without reloading', async ({
     page,
     request,

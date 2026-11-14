@@ -18,6 +18,8 @@ export interface BitacoraEntryDto {
   summary: string;
   details: Record<string, unknown>;
   commentCount: number;
+  /** True when the visitor never left and the pass window already ended. */
+  missingExitAlert: boolean;
   createdAt: string;
 }
 

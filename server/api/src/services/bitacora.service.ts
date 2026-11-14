@@ -10,6 +10,7 @@ import {
   guardShiftSegments,
   guardShifts,
   memberships,
+  passAlerts,
   people,
 } from '@porteria/database/schema';
 import type {
@@ -162,6 +163,7 @@ function toEntryDto(
   author: { firstName: string | null; lastName: string | null; email: string | null },
   commentCount: number,
   full: boolean,
+  missingExitAlert = false,
 ): BitacoraEntryDto {
   return {
     id: row.id,
@@ -181,6 +183,7 @@ function toEntryDto(
     summary: row.summary,
     details: full ? ((row.details as Record<string, unknown>) ?? {}) : maskDetails(row.details),
     commentCount,
+    missingExitAlert,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -373,6 +376,17 @@ export async function listBitacora(
     .offset((query.page - 1) * query.pageSize);
 
   const entryIds = rows.map((row) => row.entry.id);
+  const passIds = [
+    ...new Set(rows.map((row) => row.entry.passId).filter((id): id is string => Boolean(id))),
+  ];
+  const alertPassIds = new Set<string>();
+  if (passIds.length > 0) {
+    const openAlerts = await db
+      .select({ passId: passAlerts.passId })
+      .from(passAlerts)
+      .where(and(inArray(passAlerts.passId, passIds), eq(passAlerts.status, 'open')));
+    for (const alert of openAlerts) alertPassIds.add(alert.passId);
+  }
   const commentCounts = new Map<string, number>();
   if (entryIds.length > 0) {
     const counts = await db
@@ -392,6 +406,7 @@ export async function listBitacora(
           { firstName: row.firstName, lastName: row.lastName, email: row.email },
           commentCounts.get(row.entry.id) ?? 0,
           false,
+          alertPassIds.has(row.entry.passId ?? ''),
         ),
       ),
       page: query.page,

@@ -23,9 +23,9 @@
 ## 4. Dashboard
 
 - [x] 4.1 Agregar el campo «Usos permitidos» al formulario de autorización, visible sólo para ida y vuelta, con 1 por defecto.
-- [ ] 4.2 Agregar el mismo campo a la carga masiva y enviarlo en el lote.
+- [x] 4.2 Agregar el mismo campo a la carga masiva y enviarlo en el lote.
 - [x] 4.3 Mostrar en el historial del residente cuántos usos quedan (`1 de 2`).
-- [ ] 4.4 Mostrar el badge de salida faltante en la bitácora y en el detalle del pase.
+- [x] 4.4 Mostrar el badge de salida faltante en la bitácora y en el detalle del pase.
 
 ## 5. App del guardia
 
@@ -37,6 +37,6 @@
 - [x] 6.1 Integración: un pase de dos usos permite entrar y salir dos veces y rechaza el tercer intento. Cubierto en `identity-verification.integration.test.ts`.
 - [x] 6.2 Integración: un pase de sólo entrada se consume con la primera entrada aunque se envíe `maxUses` mayor. Cubierto en `identity-verification.integration.test.ts`.
 - [x] 6.3 Integración: el worker crea una sola alerta para un pase que no salió, y no marca a quien sigue adentro ni a quien ya salió. Cubierto en `pass-alerts.integration.test.ts`.
-- [ ] 6.4 Playwright: el residente crea una autorización con dos usos y el historial muestra el saldo.
+- [x] 6.4 Playwright: el residente crea una autorización con dos usos y el historial muestra el saldo.
 - [x] 6.5 `tsc` de API y dashboard, `typecheck` de la app, Prettier y `openspec validate --strict`.
-- [ ] 6.6 Suite completa en verde y commit.
+- [x] 6.6 Suite completa en verde y commit.

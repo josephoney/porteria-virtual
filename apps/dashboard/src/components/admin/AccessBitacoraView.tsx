@@ -45,6 +45,7 @@ interface BitacoraEntryRow {
   passId: string | null;
   passScanId: string | null;
   summary: string;
+  missingExitAlert?: boolean;
   details: Record<string, unknown>;
   commentCount: number;
   createdAt: string;
@@ -579,6 +580,9 @@ export function AccessBitacoraView({
                     <Badge variant={typeVariants[entry.type] ?? 'secondary'}>
                       {typeLabels[entry.type] ?? entry.type}
                     </Badge>
+                    {entry.missingExitAlert ? (
+                      <Badge variant="destructive">Sin salida</Badge>
+                    ) : null}
                   </TableCell>
                   <TableCell className="max-w-md whitespace-normal">{entry.summary}</TableCell>
                   <TableCell>{entry.destinationPath ?? '—'}</TableCell>

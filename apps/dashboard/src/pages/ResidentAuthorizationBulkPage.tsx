@@ -335,6 +335,7 @@ export function ResidentAuthorizationBulkPage() {
     toLocalInput(new Date(Date.now() + 8 * 60 * 60 * 1000)),
   );
   const [batchLabel, setBatchLabel] = useState('');
+  const [maxUses, setMaxUses] = useState('1');
   const [csvText, setCsvText] = useState('');
   const [fileName, setFileName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -429,6 +430,7 @@ export function ResidentAuthorizationBulkPage() {
       validFrom: new Date(validFrom).toISOString(),
       validUntil: new Date(validUntil).toISOString(),
       batchLabel: batchLabel.trim() || null,
+      ...(type === 'entry_exit' ? { maxUses: Number(maxUses) || 1 } : {}),
       visitors,
     };
   }
@@ -729,6 +731,18 @@ export function ResidentAuthorizationBulkPage() {
                     <SelectItem value="entry_exit">Ingreso y egreso</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="bulk-max-uses">Usos permitidos</Label>
+                <Input
+                  id="bulk-max-uses"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={type === 'entry_only' ? '1' : maxUses}
+                  disabled={type === 'entry_only'}
+                  onChange={(event) => setMaxUses(event.target.value)}
+                />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="bulk-label">Etiqueta del lote (opcional)</Label>
