@@ -46,7 +46,9 @@ import { Pagination } from '../components/layout/Pagination';
 /** Rows start at ten and adapt to the screen so the pager never needs a scroll. */
 const MIN_PAGE_SIZE = 5;
 const MAX_PAGE_SIZE = 50;
-const ROW_HEIGHT = 52;
+// Rows are pinned to 48px in the table below, so the math lands exactly and the
+// last row is never clipped.
+const ROW_HEIGHT = 48;
 const TABLE_HEADER_HEIGHT = 48;
 
 type DisplayStatus = 'active' | 'used' | 'revoked' | 'expired';
@@ -520,7 +522,7 @@ export function ResidentAuthorizationsPage() {
           {!error && !loading && passes.length > 0 && (
             <div
               ref={tableAreaRef}
-              className="min-h-0 flex-1 overflow-hidden rounded-4xl border border-border bg-card"
+              className="min-h-0 flex-1 overflow-hidden rounded-4xl border border-border bg-card [&_td]:h-12"
             >
               <Table>
                 <TableHeader>
