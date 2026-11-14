@@ -46,10 +46,6 @@ import { Pagination } from '../components/layout/Pagination';
 /** Rows start at ten and adapt to the screen so the pager never needs a scroll. */
 const MIN_PAGE_SIZE = 5;
 const MAX_PAGE_SIZE = 50;
-// Rows are pinned to 48px in the table below, so the math lands exactly and the
-// last row is never clipped.
-const ROW_HEIGHT = 48;
-const TABLE_HEADER_HEIGHT = 48;
 
 type DisplayStatus = 'active' | 'used' | 'revoked' | 'expired';
 
@@ -344,19 +340,36 @@ export function ResidentAuthorizationsPage() {
     if (!element) return;
 
     // The table has no inner scroll: the page size is whatever fits the space the
-    // layout leaves, so the pager stays visible without scrolling the page.
+    // layout leaves. Heights are measured from the rendered table instead of
+    // assumed, so zoom or a taller row (a batch chip, a wrapped name) cannot clip
+    // the last line.
     const update = () => {
-      const available = element.clientHeight - TABLE_HEADER_HEIGHT;
-      const rows = Math.floor(available / ROW_HEIGHT);
-      const next = Math.max(MIN_PAGE_SIZE, Math.min(MAX_PAGE_SIZE, rows));
+      const header = element.querySelector('thead')?.getBoundingClientRect().height ?? 48;
+      const rows = Array.from(element.querySelectorAll('tbody tr')).slice(0, 5);
+      const tallest = rows.reduce(
+        (max, row) => Math.max(max, row.getBoundingClientRect().height),
+        0,
+      );
+      const rowHeight = tallest > 0 ? tallest : 48;
+
+      const available = element.clientHeight - header;
+      const next = Math.max(
+        MIN_PAGE_SIZE,
+        Math.min(MAX_PAGE_SIZE, Math.floor(available / rowHeight)),
+      );
       setPageSize((current) => (current === next ? current : next));
     };
 
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
+    // Zoom does not always fire the observer for every browser; resize does.
+    window.addEventListener('resize', update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [passes.length]);
 
   useEffect(() => {
     // A different page size means a different first page.
