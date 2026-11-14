@@ -34,9 +34,9 @@
 
 ## 6. Verificación
 
-- [ ] 6.1 Integración: un pase de dos usos permite entrar y salir dos veces y rechaza el tercer intento.
-- [ ] 6.2 Integración: un pase de sólo entrada se consume con la primera entrada aunque se envíe `maxUses` mayor.
-- [ ] 6.3 Integración: el worker crea una sola alerta para un pase que no salió, y la salida la resuelve.
+- [x] 6.1 Integración: un pase de dos usos permite entrar y salir dos veces y rechaza el tercer intento. Cubierto en `identity-verification.integration.test.ts`.
+- [x] 6.2 Integración: un pase de sólo entrada se consume con la primera entrada aunque se envíe `maxUses` mayor. Cubierto en `identity-verification.integration.test.ts`.
+- [x] 6.3 Integración: el worker crea una sola alerta para un pase que no salió, y no marca a quien sigue adentro ni a quien ya salió. Cubierto en `pass-alerts.integration.test.ts`.
 - [ ] 6.4 Playwright: el residente crea una autorización con dos usos y el historial muestra el saldo.
 - [x] 6.5 `tsc` de API y dashboard, `typecheck` de la app, Prettier y `openspec validate --strict`.
 - [ ] 6.6 Suite completa en verde y commit.

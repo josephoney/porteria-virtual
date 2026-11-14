@@ -22,7 +22,7 @@ const INTERVAL_MS =
  * when the absence was detected, and the board can show the badge even after the
  * visitor eventually leaves.
  */
-async function sweep() {
+export async function sweepPassAlerts() {
   const graceMinutes = config.passes.missingExitGraceMinutes;
   const limit = new Date(Date.now() - graceMinutes * 60_000);
 
@@ -71,7 +71,7 @@ export function startPassAlertsWorker() {
 
   const run = async () => {
     try {
-      await sweep();
+      await sweepPassAlerts();
     } catch (error) {
       console.error('[pass-alerts] sweep failed', error);
     }
