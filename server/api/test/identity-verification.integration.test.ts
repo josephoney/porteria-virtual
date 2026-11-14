@@ -10,15 +10,18 @@ process.env.PASS_WEB_URL = 'http://localhost:5176';
 process.env.PASS_ALERT_WORKER_ENABLED = 'false';
 
 import { createDb } from '@porteria/database';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import {
   accessPasses,
   accessPoints,
   accounts,
+  bitacoraEntries,
   communities,
   locationStructures,
   locationUnits,
   memberships,
+  guardShiftSegments,
+  guardShifts,
   organizations,
   people,
   users,
@@ -198,6 +201,24 @@ describe('identity verification by document', () => {
   });
 
   after(async () => {
+    // The bitacora is append-only: it must go before the shift, or the foreign
+    // key tries to null a column the trigger refuses to update.
+    await db.delete(bitacoraEntries).where(eq(bitacoraEntries.communityId, communityId));
+
+    // Segments block the cascade to the access points: clear the shift first.
+    const shifts = await db
+      .select({ id: guardShifts.id })
+      .from(guardShifts)
+      .where(eq(guardShifts.communityId, communityId));
+    if (shifts.length > 0) {
+      await db.delete(guardShiftSegments).where(
+        inArray(
+          guardShiftSegments.shiftId,
+          shifts.map((shift) => shift.id),
+        ),
+      );
+    }
+    await db.delete(guardShifts).where(eq(guardShifts.communityId, communityId));
     await db.delete(organizations).where(eq(organizations.id, organizationId));
     await app.close();
   });

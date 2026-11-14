@@ -9,7 +9,7 @@ import {
   type IdentityCandidate,
 } from '@/api/access';
 import { Badge, Button, Divider, ui } from '@/components/ui';
-import { describeBarcode, documentFromBarcode } from '@/lib/cedula';
+import { documentFromBarcode } from '@/lib/cedula';
 import { colors, radius, spacing, typography } from '@/theme';
 
 type RequestFn = <T>(
@@ -132,13 +132,6 @@ export function IdentityCheck({
    */
   function onBarcodeScanned(result: { data: string }) {
     setCameraOpen(false);
-    // Until the payload format is confirmed against more cards, the raw value is
-    // logged in development so a wrong guess can be traced back to the source.
-    // Temporary: the payload shape is still being confirmed against real cards.
-    console.log(
-      'CEDULA_RAW',
-      JSON.stringify({ raw: result.data, ...describeBarcode(result.data) }),
-    );
     const extracted = documentFromBarcode(result.data);
     reset();
     setManualOpen(true);

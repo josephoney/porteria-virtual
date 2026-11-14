@@ -30,9 +30,9 @@
 
 ## 4. Verificación
 
-- [ ] 4.1 Test de integración: la búsqueda encuentra la autorización vigente por documento y no devuelve las vencidas ni las de otra comunidad.
-- [ ] 4.2 Test de integración: confirmar por documento escribe la bitácora con `source: 'manual_identity'` y marca el pase como usado.
-- [ ] 4.3 Test de integración: un guardia sin turno abierto recibe `403`.
+- [x] 4.1 Test de integración: la búsqueda encuentra la autorización vigente por documento y no devuelve las vencidas ni las de otra comunidad.
+- [x] 4.2 Test de integración: confirmar por documento escribe la bitácora con `source: 'manual_identity'` y marca el pase como usado.
+- [x] 4.3 Test de integración: un guardia sin turno abierto recibe `403`.
 - [ ] 4.4 Playwright: el guardia verifica una cédula y ve la autorización confirmada en la actividad del turno. **No automatizable**: la verificación vive en la app Expo, que Playwright no maneja. Requiere prueba manual en Expo Go.
 - [x] 4.5 `typecheck` de la app, `tsc` de la API, Prettier y `openspec validate --strict`.
 - [x] 4.6 Suite completa en verde y commit.
