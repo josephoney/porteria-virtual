@@ -43,7 +43,11 @@ import { ListToolbar } from '../components/layout/ListToolbar';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Pagination } from '../components/layout/Pagination';
 
-const PAGE_SIZE = 10;
+/** Rows start at ten and adapt to the screen so the pager never needs a scroll. */
+const MIN_PAGE_SIZE = 5;
+const MAX_PAGE_SIZE = 50;
+const ROW_HEIGHT = 52;
+const TABLE_HEADER_HEIGHT = 48;
 
 type DisplayStatus = 'active' | 'used' | 'revoked' | 'expired';
 
@@ -123,6 +127,8 @@ export function ResidentAuthorizationsPage() {
   const [passes, setPasses] = useState<ResidentPass[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const tableAreaRef = useRef<HTMLDivElement>(null);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -221,7 +227,7 @@ export function ResidentAuthorizationsPage() {
     setLoading(true);
     setError('');
 
-    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (search) params.set('search', search);
     if (statusFilter !== 'all') params.set('status', statusFilter);
     if (destinationFilter !== 'all') params.set('destinationUnitId', destinationFilter);
@@ -240,7 +246,7 @@ export function ResidentAuthorizationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, destinationFilter, batchFilter, reloadKey]);
+  }, [page, pageSize, search, statusFilter, destinationFilter, batchFilter, reloadKey]);
 
   useEffect(() => {
     void load();
@@ -331,7 +337,31 @@ export function ResidentAuthorizationsPage() {
     clearBatchFilter();
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  useEffect(() => {
+    const element = tableAreaRef.current;
+    if (!element) return;
+
+    // The table has no inner scroll: the page size is whatever fits the space the
+    // layout leaves, so the pager stays visible without scrolling the page.
+    const update = () => {
+      const available = element.clientHeight - TABLE_HEADER_HEIGHT;
+      const rows = Math.floor(available / ROW_HEIGHT);
+      const next = Math.max(MIN_PAGE_SIZE, Math.min(MAX_PAGE_SIZE, rows));
+      setPageSize((current) => (current === next ? current : next));
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    // A different page size means a different first page.
+    setPage(1);
+  }, [pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6 p-6">
@@ -488,7 +518,10 @@ export function ResidentAuthorizationsPage() {
           )}
 
           {!error && !loading && passes.length > 0 && (
-            <div className="min-h-0 flex-1 overflow-auto rounded-4xl border border-border bg-card [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
+            <div
+              ref={tableAreaRef}
+              className="min-h-0 flex-1 overflow-hidden rounded-4xl border border-border bg-card"
+            >
               <Table>
                 <TableHeader>
                   <TableRow>
