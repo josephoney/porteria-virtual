@@ -334,7 +334,7 @@ export function ResidentAuthorizationsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-6 p-6">
       <PageHeader
         title="Autorizaciones"
         description="Todo lo que autorizaste, con su destino y su ventana de validez."
@@ -488,7 +488,7 @@ export function ResidentAuthorizationsPage() {
           )}
 
           {!error && !loading && passes.length > 0 && (
-            <div className="overflow-hidden rounded-4xl border border-border bg-card">
+            <div className="min-h-0 flex-1 overflow-auto rounded-4xl border border-border bg-card [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -615,12 +615,14 @@ export function ResidentAuthorizationsPage() {
           )}
 
           {!error && !loading && passes.length > 0 && (
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-              disabled={loading}
-            />
+            <div className="shrink-0">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                disabled={loading}
+              />
+            </div>
           )}
         </>
       )}
