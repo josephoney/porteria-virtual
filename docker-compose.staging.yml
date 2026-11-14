@@ -1,0 +1,96 @@
+# Stack de staging: un dominio, TLS automático y la base fuera de la red pública.
+#
+# Uso:
+#   cp .env.staging.example .env.staging   (y completar los secretos)
+#   docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-porteria}
+      POSTGRES_USER: ${POSTGRES_USER:-porteria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-porteria} -d ${POSTGRES_DB:-porteria}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Sin ports: la base sólo es alcanzable desde la red de compose.
+
+  migrate:
+    build:
+      context: .
+      dockerfile: deploy/api.Dockerfile
+    command: pnpm --filter @porteria/database db:migrate
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-porteria}
+      POSTGRES_USER: ${POSTGRES_USER:-porteria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: deploy/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 3000
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-porteria}
+      POSTGRES_USER: ${POSTGRES_USER:-porteria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET}
+      PASS_QR_SECRET: ${PASS_QR_SECRET:?falta PASS_QR_SECRET}
+      DYNAMIC_QR_ENABLED: ${DYNAMIC_QR_ENABLED:-true}
+      COOKIE_SECURE: 'true'
+      PUBLIC_APP_URL: https://${STAGING_DOMAIN}
+      PASS_WEB_URL: https://${STAGING_DOMAIN}
+      # Mismo origen detrás de Caddy: no hace falta lista de CORS.
+      CORS_ORIGINS: ''
+      AUTH_LOGIN_RATE_LIMIT: ${AUTH_LOGIN_RATE_LIMIT:-10}
+      PASS_DAILY_LIMIT_PER_UNIT: ${PASS_DAILY_LIMIT_PER_UNIT:-50}
+      PASS_ALERT_INTERVAL_MINUTES: ${PASS_ALERT_INTERVAL_MINUTES:-5}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      STAGING_DOMAIN: ${STAGING_DOMAIN:?falta STAGING_DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

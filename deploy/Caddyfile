@@ -1,27 +1,38 @@
-{
-	email {$ACME_EMAIL}
-}
+# Caddyfile de staging: un dominio, todos los servicios detrás.
+#
+# El dominio llega por variable de entorno para no hardcodearlo en el repo:
+#   STAGING_DOMAIN=staging.midominio.com
+#
+# Caddy pide el certificado solo, siempre que el DNS apunte a este servidor.
 
-# Dashboard: app.example.com
-{$DASHBOARD_HOST} {
+{$STAGING_DOMAIN} {
 	encode zstd gzip
 
+	# La API ya espera el prefijo /api, así que no se reescribe.
 	handle /api/* {
-		reverse_proxy api:3000
+		reverse_proxy api:3000 {
+			# Los streams SSE (bitácora y pases) necesitan que nada se bufferee:
+			# sin esto el navegador recibe los eventos de a bloques.
+			flush_interval -1
+		}
 	}
 
-	handle /health {
-		reverse_proxy api:3000
+	# Pase de visita público: las URLs son /p/<token>.
+	handle /p/* {
+		root * /srv/pass-web
+		try_files {path} /index.html
+		file_server
 	}
 
-	handle /ready {
-		reverse_proxy api:3000
+	# El kiosco compila con base /kiosk/, así que sus assets viven bajo esa
+	# ruta: se sirve desde /srv para que /kiosk/assets/x.js resuelva.
+	handle /kiosk/* {
+		root * /srv
+		try_files {path} /kiosk/index.html
+		file_server
 	}
 
-	handle /socket.io/* {
-		reverse_proxy signaling:3001
-	}
-
+	# Todo lo demás es el dashboard.
 	handle {
 		root * /srv/dashboard
 		try_files {path} /index.html
@@ -30,30 +41,7 @@
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "no-referrer"
-	}
-}
-
-# Public pass page: pases.example.com/p/<token>
-{$PASS_WEB_HOST} {
-	encode zstd gzip
-
-	handle /api/* {
-		reverse_proxy api:3000
-	}
-
-	handle {
-		root * /srv/pass-web
-		try_files {path} /index.html
-		file_server
-	}
-
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "no-referrer"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
 	}
 }
