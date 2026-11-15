@@ -27,7 +27,8 @@ export default function RootLayout() {
           <Stack.Screen name="create" options={{ title: 'Nuevo pase' }} />
           <Stack.Screen name="history" options={{ title: 'Historial' }} />
           <Stack.Screen name="pass/[id]" options={{ title: 'Pase' }} />
-          <Stack.Screen name="scan" options={{ title: 'Escanear' }} />
+          {/* La marca va dentro de la pantalla para que el header mida menos. */}
+          <Stack.Screen name="scan" options={{ headerShown: false }} />
         </Stack>
       </AuthProvider>
     </SafeAreaProvider>

@@ -37,6 +37,7 @@ import {
   ui,
 } from '@/components/ui';
 import { IdentityCheck } from '@/components/identity-check';
+import { ZimaLogo } from '@/components/zima-logo';
 import { reasonText, toActivityItem } from '@/lib/bitacora';
 import { errorMessage } from '@/lib/errors';
 import { formatDateTime, formatTime, roleLabel } from '@/lib/format';
@@ -334,6 +335,12 @@ export default function GuardScanScreen() {
 
   return (
     <Screen>
+      {/* El header nativo se oculta para que la marca ocupe menos alto: esta
+          pantalla es la raíz del flujo del guardia y no necesita volver. */}
+      <View style={styles.brandBar}>
+        <ZimaLogo height={26} />
+      </View>
+
       <Card>
         <Row>
           <Text style={ui.heading}>{session.user.name}</Text>
@@ -642,6 +649,10 @@ export default function GuardScanScreen() {
 }
 
 const styles = StyleSheet.create({
+  brandBar: {
+    alignItems: 'center',
+    paddingBottom: spacing.sm,
+  },
   modalBackdrop: {
     backgroundColor: 'rgba(0,0,0,0.6)',
     flex: 1,
