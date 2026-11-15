@@ -52,13 +52,16 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-porteria}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?falta JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?falta JWT_REFRESH_SECRET}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?falta INTERNAL_API_KEY}
       PASS_QR_SECRET: ${PASS_QR_SECRET:?falta PASS_QR_SECRET}
       DYNAMIC_QR_ENABLED: ${DYNAMIC_QR_ENABLED:-true}
       COOKIE_SECURE: 'true'
       PUBLIC_APP_URL: https://${STAGING_DOMAIN}
       PASS_WEB_URL: https://${STAGING_DOMAIN}
-      # Mismo origen detrás de Caddy: no hace falta lista de CORS.
-      CORS_ORIGINS: ''
+      # Caddy sirve todo en el mismo origen, pero la API exige la lista en
+      # producción: se declara el propio dominio y no hay origen cruzado.
+      CORS_ORIGINS: https://${STAGING_DOMAIN}
       AUTH_LOGIN_RATE_LIMIT: ${AUTH_LOGIN_RATE_LIMIT:-10}
       PASS_DAILY_LIMIT_PER_UNIT: ${PASS_DAILY_LIMIT_PER_UNIT:-50}
       PASS_ALERT_INTERVAL_MINUTES: ${PASS_ALERT_INTERVAL_MINUTES:-5}
