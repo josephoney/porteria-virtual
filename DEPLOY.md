@@ -76,7 +76,7 @@ docker compose -f docker-compose.staging.yml exec -T db \
 Los datos de demo se cargan con:
 
 ```bash
-docker compose -f docker-compose.staging.yml exec api \
+docker compose -f docker-compose.staging.yml exec -e SEED_DEMO_DATA=true api \
   pnpm --filter @porteria/database db:seed
 ```
 
