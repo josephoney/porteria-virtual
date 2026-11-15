@@ -14,7 +14,10 @@
     "android": {
       "package": "com.porteria.zimaqraccess",
       "versionCode": 1,
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA",
+        "android.permission.CAMERA"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -30,6 +33,17 @@
     ],
     "experiments": {
       "typedRoutes": false
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "9a5530b7-3753-43a3-baf9-072dd24969b1"
+      }
+    },
+    "owner": "zima-seguridad-tech"
   }
 }
