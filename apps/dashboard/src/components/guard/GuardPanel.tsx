@@ -357,6 +357,9 @@ export function GuardPanel() {
     onEntry: (event) => {
       if (event.type === 'shift_start' || event.type === 'shift_end') {
         void loadHistory();
+        // El turno cambió: la tarjeta de guardias activos tiene que reflejarlo
+        // en el acto, no en el próximo sondeo.
+        void loadActiveGuards();
       }
     },
   });
