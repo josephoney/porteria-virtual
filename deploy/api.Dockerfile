@@ -18,9 +18,11 @@ RUN pnpm install --frozen-lockfile
 COPY tsconfig.base.json ./
 COPY packages packages
 COPY server/api server/api
+COPY deploy/use-dist-exports.mjs deploy/
 RUN pnpm --filter @porteria/shared build \
  && pnpm --filter @porteria/database build \
- && pnpm --filter @porteria/api build
+ && pnpm --filter @porteria/api build \
+ && node deploy/use-dist-exports.mjs
 
 # La imagen final conserva node_modules porque las migraciones usan drizzle-kit,
 # que es una dependencia de desarrollo. Es más grande y menos limpia que un
