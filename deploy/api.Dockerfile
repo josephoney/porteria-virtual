@@ -31,4 +31,7 @@ FROM build AS runtime
 ENV NODE_ENV=production
 EXPOSE 3000
 WORKDIR /app/server/api
-CMD ["node", "dist/index.js"]
+# tsx resuelve los imports sin extensión que emite tsc, que node ESM rechaza.
+# Es una dependencia de desarrollo que ya viaja en la imagen; a cambio el
+# arranque no necesita tocar los cientos de imports de los paquetes.
+CMD ["./node_modules/.bin/tsx", "dist/index.js"]
