@@ -214,27 +214,31 @@ export function GuardPanel() {
 
   const currentAccessPointId = current?.accessPoint?.id ?? selectedAccessPointId ?? undefined;
 
-  useEffect(() => {
+  const loadActiveGuards = useCallback(async () => {
     if (!isAdmin || !communityId || !currentAccessPointId) {
       setActiveGuards([]);
       return;
     }
-    let cancelled = false;
     const params = new URLSearchParams({
       communityId,
       accessPointId: currentAccessPointId,
     });
-    get<{ items: ActiveGuard[] }>(`/api/guard/active-guards?${params.toString()}`)
-      .then((result) => {
-        if (!cancelled) setActiveGuards(result.data.items);
-      })
-      .catch(() => {
-        if (!cancelled) setActiveGuards([]);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const result = await get<{ items: ActiveGuard[] }>(
+        `/api/guard/active-guards?${params.toString()}`,
+      );
+      setActiveGuards(result.data.items);
+    } catch {
+      setActiveGuards([]);
+    }
   }, [isAdmin, communityId, currentAccessPointId]);
+
+  // Se consulta al cambiar de acceso y además en el sondeo: un guardia puede
+  // abrir turno después de que el admin abrió esta pantalla, y sin volver a
+  // preguntar la lista quedaba vacía para siempre.
+  useEffect(() => {
+    void loadActiveGuards();
+  }, [loadActiveGuards]);
 
   /**
    * The bitácora is written by the guard app, not by this panel, so the only
@@ -325,9 +329,10 @@ export function GuardPanel() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       void loadHistory();
+      void loadActiveGuards();
     }, 30_000);
     return () => window.clearInterval(timer);
-  }, [loadHistory]);
+  }, [loadHistory, loadActiveGuards]);
   async function refreshAll() {
     setBusy(true);
     setError(null);
