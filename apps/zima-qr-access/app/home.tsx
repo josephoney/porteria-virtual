@@ -6,6 +6,7 @@ import type { PassWithPath } from '@/api/passes';
 import { useAuth } from '@/auth/AuthContext';
 import { homeForRole, modeForRole } from '@/auth/roles';
 import { Badge, Button, Card, EmptyState, LoadingView, Screen, ui } from '@/components/ui';
+import { ZimaLogo } from '@/components/zima-logo';
 import { errorMessage } from '@/lib/errors';
 import { formatDate, presenceLabel, roleLabel, statusLabel } from '@/lib/format';
 import { colors, spacing } from '@/theme';
@@ -55,6 +56,10 @@ export default function ResidentHomeScreen() {
 
   return (
     <Screen>
+      <View style={styles.brandBar}>
+        <ZimaLogo height={29} />
+      </View>
+
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={ui.title}>Hola, {session.user.name.split(' ')[0]}</Text>
@@ -127,6 +132,10 @@ export default function ResidentHomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  brandBar: {
+    alignItems: 'center',
+    paddingBottom: spacing.sm,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

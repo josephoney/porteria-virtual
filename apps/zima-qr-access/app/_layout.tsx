@@ -23,7 +23,8 @@ export default function RootLayout() {
             options={{ title: 'Elige un contexto', headerBackVisible: false }}
           />
           <Stack.Screen name="no-mode" options={{ title: 'Zima QR Access' }} />
-          <Stack.Screen name="home" options={{ title: 'Mis pases' }} />
+          {/* Misma marca compacta que la pantalla del guardia. */}
+          <Stack.Screen name="home" options={{ headerShown: false }} />
           <Stack.Screen name="create" options={{ title: 'Nuevo pase' }} />
           <Stack.Screen name="history" options={{ title: 'Historial' }} />
           <Stack.Screen name="pass/[id]" options={{ title: 'Pase' }} />

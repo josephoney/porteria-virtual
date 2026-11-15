@@ -338,7 +338,7 @@ export default function GuardScanScreen() {
       {/* El header nativo se oculta para que la marca ocupe menos alto: esta
           pantalla es la raíz del flujo del guardia y no necesita volver. */}
       <View style={styles.brandBar}>
-        <ZimaLogo height={26} />
+        <ZimaLogo height={29} />
       </View>
 
       <Card>
