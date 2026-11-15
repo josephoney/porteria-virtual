@@ -47,10 +47,12 @@ puerto 80 estar libre para el desafío de Let's Encrypt.
 
 ## Actualizar
 
+Hay un script que hace todo:
+
 ```bash
-git pull
-docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build
-```
+bash deploy/update.sh```
+
+Hace git pull, reconstruye las imágenes que cambiaron, recrea los contenedores, limpia las imágenes viejas y muestra el estado final. Si tu archivo de entorno tiene otro nombre, pasalo con ENV_FILE=.env.otro bash deploy/update.sh.
 
 El servicio `migrate` corre las migraciones pendientes antes de que el API
 arranque, así que no hay pasos manuales sobre la base.
