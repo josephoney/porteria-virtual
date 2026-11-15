@@ -1,0 +1,61 @@
+# Backlog
+
+Ideas y deudas anotadas a propósito, sin implementar todavía. No son un
+compromiso de fecha: es el registro de lo que sabemos que falta para no
+redescubrirlo cada vez.
+
+## App móvil
+
+### Selector de contexto en la pantalla del residente
+
+Al ocultar el header nativo de `app/home.tsx` para dejar la marca compacta, se
+perdió la única forma de volver al selector de contexto.
+
+- **Quién lo nota**: un residente con más de una membresía (`multi@porteria.local`
+  es el caso de prueba) ya no puede cambiar de contexto sin cerrar sesión.
+- **Propuesta**: un control discreto en la barra de la marca — ícono o texto
+  «Cambiar contexto» — que navegue a `/context`. Debe verse sólo cuando el
+  usuario tiene más de una membresía activa.
+- **Por qué no se hizo ya**: el cambio de diseño era sólo JavaScript y no se
+  quiso sumar navegación nueva en la misma pasada.
+
+## Despliegue
+
+### Volumen para los archivos subidos
+
+Los logos de organización y comunidad se guardan en el disco del contenedor del
+API. En staging **se pierden en cada rebuild**.
+
+- Opciones: volumen de Docker montado en la carpeta de uploads, o mover a S3/R2.
+- Sin resolver, un logo que desaparece después de un deploy parece un bug.
+
+### Signaling para videollamadas
+
+El compose de staging no incluye el servicio `signaling`, y Caddy no tiene ruta
+para `/socket.io/`. El navegador falla el WebSocket con un 200 en lugar de 101.
+
+- Falta un Dockerfile para `server/signaling` y la ruta en el Caddyfile.
+- Mientras tanto, la mensajería y las llamadas no funcionan en staging.
+
+### EAS Update
+
+Permitiría publicar cambios de JavaScript sin recompilar el APK.
+
+- Requiere configurar `expo-updates` y una rama de publicación.
+- Hoy cada ajuste visual obliga a un build nuevo y a redistribuir el APK.
+
+## Producto
+
+### iOS
+
+El build de iOS funciona en EAS, pero instalar en un iPhone requiere Apple
+Developer Program (99 USD/año) y registrar cada dispositivo.
+
+- Alternativa gratuita para demos: Expo Go con `--tunnel`.
+
+## Deuda técnica conocida
+
+- `role="button"` en `<tr>` de las tablas expandibles: se corrigió, pero quedan
+  componentes nuevos que deben seguir la misma regla (mantener el rol `row`).
+- Tests del camino por documento en la app: cubiertos a nivel API, sin
+  automatización de la interfaz porque vive en Expo.
