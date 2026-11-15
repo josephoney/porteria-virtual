@@ -319,6 +319,15 @@ export function GuardPanel() {
     }
   }, [current, selectedAccessPointId, defaultAccessPoint, activeAccessPoints]);
 
+  // La lista de turnos se refresca por SSE, pero si el evento se pierde (una
+  // reconexión, una pestaña que estuvo dormida) queda vieja hasta recargar. Este
+  // respaldo la mantiene al día sin depender del stream.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void loadHistory();
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [loadHistory]);
   async function refreshAll() {
     setBusy(true);
     setError(null);

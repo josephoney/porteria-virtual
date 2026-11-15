@@ -369,7 +369,9 @@ export async function getEventBreakdown(
 
   const result = await db.execute<{ time: string; event_type: string; count: number }>(sql`
     SELECT
-      time_bucket(${bucketInterval}::interval, created_at) AS time,
+      -- date_bin es nativo desde Postgres 14; time_bucket exigia TimescaleDB,
+      -- que la imagen estandar de Postgres no trae.
+      date_bin(${bucketInterval}::interval, created_at, TIMESTAMPTZ '2000-01-01 00:00:00+00') AS time,
       event_type,
       COUNT(*)::int AS count
     FROM events
