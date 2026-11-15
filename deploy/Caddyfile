@@ -8,6 +8,12 @@
 {$STAGING_DOMAIN} {
 	encode zstd gzip
 
+	# Healthcheck público del API. Sin esta ruta cae en el fallback del
+	# dashboard y responde HTML con un 200 engañoso.
+	handle /health {
+		reverse_proxy api:3000
+	}
+
 	# La API ya espera el prefijo /api, así que no se reescribe.
 	handle /api/* {
 		reverse_proxy api:3000 {
