@@ -114,9 +114,6 @@ export async function createPass(
   if (input.type === PassType.EntryExitRecurring) {
     return { ok: false, code: 'recurring_not_available' };
   }
-  if (input.allowedDays && input.allowedDays.length > 0) {
-    return { ok: false, code: 'allowed_days_reserved' };
-  }
 
   const personId = await resolvePersonId(requester);
   if (!personId) return { ok: false, code: 'forbidden' };
@@ -217,9 +214,10 @@ export async function createPass(
         input.hasVehicle && input.vehiclePlate ? input.vehiclePlate.trim().toUpperCase() : null,
       type: input.type,
       maxUses: input.type === 'entry_only' ? 1 : (input.maxUses ?? 1),
+      recurrence: input.recurrence ?? 'once',
+      allowedDays: input.recurrence === 'weekly' ? (input.allowedDays ?? null) : null,
       validFrom,
       validUntil,
-      allowedDays: null,
       timeFrom: input.timeFrom ?? null,
       timeTo: input.timeTo ?? null,
       linkTokenHash: sha256Hex(linkToken),

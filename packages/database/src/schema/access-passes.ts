@@ -19,6 +19,8 @@ import { locationStructures } from './location-structures';
 import { locationUnits } from './location-units';
 import { people } from './people';
 
+export const passRecurrenceEnum = pgEnum('pass_recurrence', ['once', 'range', 'weekly']);
+
 export const passTypeEnum = pgEnum('pass_type', [
   'entry_only',
   'entry_exit',
@@ -59,6 +61,8 @@ export const accessPasses = pgTable(
   maxUses: integer('max_uses').notNull().default(1),
     validFrom: timestamp('valid_from', { withTimezone: true }).notNull(),
     validUntil: timestamp('valid_until', { withTimezone: true }).notNull(),
+    /** once: una sola vez · range: todos los días del rango · weekly: días marcados. */
+    recurrence: passRecurrenceEnum('recurrence').notNull().default('once'),
     allowedDays: jsonb('allowed_days').$type<number[] | null>(),
     timeFrom: time('time_from'),
     timeTo: time('time_to'),

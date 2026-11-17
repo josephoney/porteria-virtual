@@ -189,6 +189,7 @@ const passStatusSchema = z.enum(PassStatusValues as [PassStatus, ...PassStatus[]
 export const createPassSchema = z.object({
   /** Entry and exit pairs. Ignored for entry-only passes, which always use one. */
   maxUses: z.coerce.number().int().min(1).max(20).optional(),
+  recurrence: z.enum(['once', 'range', 'weekly']).optional(),
   /**
    * Any node of the structure is a valid candidate. Whether it is a home or a
    * common area — and whether the requester may use it — is decided in the
@@ -247,6 +248,7 @@ export const passesQuerySchema = z.object({
  */
 export const createPassBatchSchema = z.object({
   maxUses: z.coerce.number().int().min(1).max(20).optional(),
+  recurrence: z.enum(['once', 'range', 'weekly']).optional(),
   destination: z.string().uuid(),
   type: passTypeSchema,
   validFrom: z.string().datetime(),
