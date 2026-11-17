@@ -120,6 +120,7 @@ The form SHALL offer three exclusive duration options and SHALL only ask for dat
 - WHEN the resident presses "Hoy"
 - THEN the pass is valid today
 - AND no second date field is shown
+- AND the entry time is taken from the moment of creation unless the resident unchecks immediate entry
 
 #### Scenario: Authorizing someone for tomorrow
 
@@ -137,6 +138,28 @@ The form SHALL offer three exclusive duration options and SHALL only ask for dat
 
 - WHEN the resident picks one duration
 - THEN the other two stop being selected
+
+### Requirement: Immediate entry or a chosen hour
+
+With the today option, the resident SHALL choose between entering immediately and entering from a chosen hour.
+
+#### Scenario: Immediate entry by default
+
+- WHEN the resident picks "Hoy"
+- THEN the immediate entry option is checked
+- AND the entry hour selector is disabled
+- AND the pass is valid from the moment it is created, with second precision
+
+#### Scenario: A later start today
+
+- WHEN the resident unchecks immediate entry
+- THEN the entry hour selector becomes available
+- AND the pass does not allow entry before that hour
+
+#### Scenario: Tomorrow and ranges always pick an hour
+
+- WHEN the resident picks "Mañana" or a date range
+- THEN the entry hour selector is always available
 
 ### Requirement: Times are chosen in fifteen minute steps
 

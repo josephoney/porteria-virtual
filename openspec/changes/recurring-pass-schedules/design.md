@@ -84,7 +84,21 @@ El caso más frecuente —autorizar a alguien que viene ahora— pasa de seis in
 
 **«Hoy» arranca exactamente en el instante de creación**, sin redondear. Si el residente autoriza a las 15:43:05 y el visitante entra a las 15:43:36, ya puede pasar.
 
-El redondeo a cuartos aplica **sólo a los selectores**, no a este valor automático. En el caso de «Hoy» el único selector de hora es el de salida; la entrada la pone el sistema con precisión de segundos.
+Pero «hoy» no siempre significa «ahora»: a veces el residente autoriza a las 10:00 a alguien que llega a las 16:00, y necesita que el pase no sirva antes. Por eso, con «Hoy», aparece una casilla:
+
+```
+☑ Entrada inmediata        ← por defecto
+☐ Desde una hora  [ 16:00 ▾ ]
+```
+
+| Estado                        | Qué pasa                                                                   |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| **Entrada inmediata** marcada | La hora de entrada se deshabilita; `validFrom` es el instante de creación  |
+| Desmarcada                    | El residente elige la hora de entrada en cuartos, y el pase no sirve antes |
+
+Con «Mañana» y «Rango de días» el selector de entrada siempre está visible: ahí no hay un «ahora» que valga.
+
+El redondeo a cuartos aplica **sólo a los selectores**, nunca al valor automático. La vigencia se guarda con precisión de segundos y el motor compara instantes reales.
 
 La alternativa —vigencia desde el inicio del día— permitiría un ingreso anterior a la autorización, y eso es difícil de explicar cuando alguien pregunta «¿quién lo dejó entrar?».
 
