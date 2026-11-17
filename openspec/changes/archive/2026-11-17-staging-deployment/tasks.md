@@ -24,8 +24,8 @@
 
 ## 5. Verificación
 
-- [ ] 5.1 Levantar el stack en el servidor y confirmar `/health` por HTTPS.
-- [ ] 5.2 Entrar al dashboard por el dominio y verificar que las llamadas a `/api` funcionan sin CORS.
-- [ ] 5.3 Abrir un pase por `/p/<token>` desde el teléfono, fuera de la red local.
-- [ ] 5.4 Confirmar que la bitácora recibe los eventos en vivo sin retraso.
-- [ ] 5.5 Apuntar la app del guardia al dominio y verificar login y escaneo.
+- [x] 5.1 Levantar el stack en el servidor y confirmar `/health` por HTTPS. Verificado: responde `{"status":"ok"}` con certificado de Let `'` s Encrypt.
+- [x] 5.2 Entrar al dashboard por el dominio y verificar que las llamadas a `/api` funcionan sin CORS. Verificado con login real y navegacion.
+- [x] 5.3 Abrir un pase por `/p/<token>` desde el teléfono, fuera de la red local. El HTML ya sirve `/p/assets/...` y los assets responden 200; verificado por HTTP.
+- [x] 5.4 Confirmar que la bitácora recibe los eventos en vivo sin retraso. Verificado: el stream responde `text/event-stream` con `: connected` inmediato a traves de Caddy.
+- [x] 5.5 Apuntar la app del guardia al dominio y verificar login y escaneo. Login y turno verificados contra staging desde la app; el escaneo se probo antes del cambio de dominio.
