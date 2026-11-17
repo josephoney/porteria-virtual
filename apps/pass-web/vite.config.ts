@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  // Se sirve bajo /p/, igual que el kiosco: sin base, el HTML pide /assets/...
+  // y Caddy lo resuelve contra el dashboard, dejando la pagina en blanco.
+  base: '/p/',
   plugins: [react()],
   server: {
     port: Number(process.env.PASS_WEB_PORT) || 5176,

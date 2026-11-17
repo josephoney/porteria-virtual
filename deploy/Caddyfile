@@ -25,8 +25,8 @@
 
 	# Pase de visita público: las URLs son /p/<token>.
 	handle /p/* {
-		root * /srv/pass-web
-		try_files {path} /index.html
+		root * /srv
+		try_files {path} /p/index.html
 		file_server
 	}
 

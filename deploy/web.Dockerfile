@@ -27,7 +27,7 @@ RUN pnpm --filter @porteria/shared build \
 
 FROM caddy:2-alpine AS runtime
 COPY --from=build /app/apps/dashboard/dist /srv/dashboard
-COPY --from=build /app/apps/pass-web/dist /srv/pass-web
+COPY --from=build /app/apps/pass-web/dist /srv/p
 # El kiosco se sirve desde /srv para respetar su base /kiosk/.
 COPY --from=build /app/apps/kiosk/dist /srv/kiosk
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
