@@ -82,6 +82,8 @@ Los botones fijan **sólo las fechas**; la ventana horaria sigue siendo independ
 
 El caso más frecuente —autorizar a alguien que viene ahora— pasa de seis interacciones a dos.
 
+**«Hoy» arranca en el momento de crear el pase**, redondeado al cuarto siguiente, no a las 00:00. Si el residente autoriza a las 15:00, el pase no puede usarse retroactivamente. La alternativa —vigencia desde el inicio del día— permitiría un ingreso anterior a la autorización, y eso es difícil de explicar cuando alguien pregunta «¿quién lo dejó entrar?».
+
 ### 9. Horas en pasos de quince minutos
 
 Los selectores de hora sólo ofrecen `00`, `15`, `30` y `45` en los minutos.
