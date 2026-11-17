@@ -110,3 +110,40 @@ The change SHALL NOT alter the behaviour of passes created before it.
 
 - WHEN an old pass is used
 - THEN it behaves as a one-time pass with no day or hour restriction
+
+### Requirement: The resident picks the duration, not the dates
+
+The form SHALL offer three exclusive duration options and SHALL only ask for dates when the range is chosen.
+
+#### Scenario: Authorizing someone for today
+
+- WHEN the resident presses "Hoy"
+- THEN the pass is valid today
+- AND no second date field is shown
+
+#### Scenario: Authorizing someone for tomorrow
+
+- WHEN the resident presses "Mañana"
+- THEN the pass is valid tomorrow
+- AND no second date field is shown
+
+#### Scenario: Authorizing several days
+
+- WHEN the resident presses "Rango de días"
+- THEN both date fields are shown
+- AND the pass is valid between them
+
+#### Scenario: The three options exclude each other
+
+- WHEN the resident picks one duration
+- THEN the other two stop being selected
+
+### Requirement: Times are chosen in fifteen minute steps
+
+The time selectors SHALL only offer quarter hours.
+
+#### Scenario: Picking the window
+
+- WHEN the resident opens a time selector
+- THEN the minutes available are 00, 15, 30 and 45
+- AND any other minute value cannot be selected

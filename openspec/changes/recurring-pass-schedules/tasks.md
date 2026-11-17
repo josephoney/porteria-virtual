@@ -17,12 +17,15 @@
 
 ## 3. Dashboard del residente
 
-- [ ] 3.1 Reemplazar el rango único por el control de vigencia más el selector de modalidad.
-- [ ] 3.2 Selector de días de la semana, visible sólo en modalidad semanal.
-- [ ] 3.3 Campos de horario permitido, con ayuda que explique que los usos son por día.
-- [ ] 3.4 Casilla «Sólo entrada», desmarcada por defecto.
-- [ ] 3.5 Resumen en el paso de revisión con la regla completa en lenguaje natural.
-- [ ] 3.6 Mostrar la regla en el historial y en el detalle expandido.
+- [ ] 3.1 Reemplazar el rango único por tres botones excluyentes de duración: Hoy, Mañana y Rango de días.
+- [ ] 3.2 Con Hoy o Mañana se oculta el segundo campo de fecha; con Rango de días aparecen ambos.
+- [ ] 3.3 Los botones fijan sólo las fechas: la ventana horaria queda independiente.
+- [ ] 3.4 Selector de días de la semana, visible sólo en modalidad semanal.
+- [ ] 3.5 Campos de horario permitido, con ayuda que explique que los usos son por día.
+- [ ] 3.6 Minutos en pasos de quince: `step="900"` en la web y lista de opciones en la app.
+- [ ] 3.7 Casilla «Sólo entrada», desmarcada por defecto.
+- [ ] 3.8 Resumen en el paso de revisión con la regla completa en lenguaje natural.
+- [ ] 3.9 Mostrar la regla en el historial y en el detalle expandido.
 
 ## 4. App del guardia
 

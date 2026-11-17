@@ -66,6 +66,30 @@ Cada uno tiene su código y su texto: `not_valid_now`, `out_of_days`, `out_of_sc
 
 Las filas existentes quedan con `recurrence = 'once'` y sin horario: se comportan exactamente como hoy. Ninguna migración de datos ni cambio de comportamiento para lo ya creado.
 
+### 8. Tres botones en lugar de dos fechas
+
+Elegir el rango con dos campos de fecha es correcto y lento: para autorizar a alguien hoy hay que abrir el calendario, elegir la fecha y repetirla en el segundo campo.
+
+El residente elige primero la **duración**, con tres botones excluyentes:
+
+| Botón             | Qué hace                                       |
+| ----------------- | ---------------------------------------------- |
+| **Hoy**           | Vigencia de hoy, sin segundo campo de fecha    |
+| **Mañana**        | Vigencia de mañana, sin segundo campo de fecha |
+| **Rango de días** | Aparecen las dos fechas                        |
+
+Los botones fijan **sólo las fechas**; la ventana horaria sigue siendo independiente. Así «Hoy» no obliga a inventar una hora de fin: si el pase permite un uso, alcanza con el horario habitual.
+
+El caso más frecuente —autorizar a alguien que viene ahora— pasa de seis interacciones a dos.
+
+### 9. Horas en pasos de quince minutos
+
+Los selectores de hora sólo ofrecen `00`, `15`, `30` y `45` en los minutos.
+
+Nadie autoriza a las 14:07. Los minutos arbitrarios son ruido: generan franjas que el guardia no puede recordar y que el residente elige por accidente al arrastrar el selector nativo.
+
+En la web alcanza con `step="900"` en el input de tipo `time`; en la app móvil es una lista de opciones.
+
 ## Risks
 
 - **Zona horaria.** Un error de una hora deja a gente afuera o adentro. La comparación va siempre contra la timezone de la comunidad.
