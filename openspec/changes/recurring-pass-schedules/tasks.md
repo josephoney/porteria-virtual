@@ -53,3 +53,39 @@
 - [ ] 7.5 Playwright: el residente crea un pase semanal y el resumen lo describe bien.
 - [ ] 7.6 `tsc`, `typecheck`, Prettier, `openspec validate --strict`.
 - [ ] 7.7 Suite completa en verde y commit.
+
+## Estado al retomar
+
+Escrito al cerrar la sesión del 17/11. Leer esto antes de tocar código.
+
+### Implementado y verificado
+
+- `passRecurrenceEnum` (`once | range | weekly`) y columna `recurrence` en `access_passes`, migración `0022_typical_lord_tyger.sql` **aplicada**.
+- `createPass` persiste `recurrence` y, en modalidad semanal, `allowedDays`.
+- Se eliminó el rechazo `allowed_days_reserved`.
+- `CreatePassDto` acepta `recurrence` y `allowedDays`.
+
+### Brecha importante
+
+**Nada lee `recurrence` al validar.** Un pase creado como `weekly` hoy se comporta igual que `once`: entra y sale sin mirar días ni horario. El cambio está a medias, no roto.
+
+Además, `maxUses` sigue contándose **en total**. El spec lo redefine como usos **por día**. Mientras no se ajuste el conteo, un pase con dos usos se agota definitivamente después de dos salidas, no cada día.
+
+### Trampa de drizzle encontrada
+
+Al agregar un enum y usarlo en la misma migración, drizzle-kit generó sólo el `ALTER TABLE` y falló con `type "pass_recurrence" does not exist`. Hubo que agregar `CREATE TYPE` a mano al inicio del archivo. Si se regenera la migración, revisar que incluya el `CREATE TYPE`.
+
+### Verificación previa a implementar
+
+1. Leer `proposal.md`, `design.md` y `specs/pass-schedules/spec.md` completos, en ese orden.
+2. Confirmar en la base que `access_passes.recurrence` existe y que los pases viejos quedaron en `once`.
+3. Revisar `createPass` para ver qué campos llegan y cuáles se descartan.
+4. Revisar `confirmScan` y `confirmIdentityEntry`: hoy validan vigencia y usos totales, no día ni horario.
+5. Confirmar de dónde sale la timezone de la comunidad y que esté disponible en ambos caminos.
+
+### Puntos que van a doler si se hacen rápido
+
+- **Timezone**: comparar siempre contra la timezone de la comunidad, nunca la del servidor ni la del teléfono.
+- **Día de la semana**: `0 = domingo`, como dice el spec.
+- **Usos por día**: calcular contando `pass_scans` confirmados en la fecha local; no agregar un contador almacenado.
+- **«Hoy»**: `validFrom` es el instante de creación con segundos, sin redondeo a cuarto.
