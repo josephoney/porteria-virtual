@@ -82,7 +82,11 @@ Los botones fijan **sólo las fechas**; la ventana horaria sigue siendo independ
 
 El caso más frecuente —autorizar a alguien que viene ahora— pasa de seis interacciones a dos.
 
-**«Hoy» arranca en el momento de crear el pase**, redondeado al cuarto siguiente, no a las 00:00. Si el residente autoriza a las 15:00, el pase no puede usarse retroactivamente. La alternativa —vigencia desde el inicio del día— permitiría un ingreso anterior a la autorización, y eso es difícil de explicar cuando alguien pregunta «¿quién lo dejó entrar?».
+**«Hoy» arranca exactamente en el instante de creación**, sin redondear. Si el residente autoriza a las 15:43:05 y el visitante entra a las 15:43:36, ya puede pasar.
+
+El redondeo a cuartos aplica **sólo a los selectores**, no a este valor automático. En el caso de «Hoy» el único selector de hora es el de salida; la entrada la pone el sistema con precisión de segundos.
+
+La alternativa —vigencia desde el inicio del día— permitiría un ingreso anterior a la autorización, y eso es difícil de explicar cuando alguien pregunta «¿quién lo dejó entrar?».
 
 ### 9. Horas en pasos de quince minutos
 
@@ -91,6 +95,8 @@ Los selectores de hora sólo ofrecen `00`, `15`, `30` y `45` en los minutos.
 Nadie autoriza a las 14:07. Los minutos arbitrarios son ruido: generan franjas que el guardia no puede recordar y que el residente elige por accidente al arrastrar el selector nativo.
 
 En la web alcanza con `step="900"` en el input de tipo `time`; en la app móvil es una lista de opciones.
+
+La restricción es de la interfaz, no del dato: `valid_from` se guarda con precisión de segundos cuando lo calcula el sistema («Hoy»), y el motor de validación compara instantes reales.
 
 ## Risks
 

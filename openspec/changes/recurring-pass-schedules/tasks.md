@@ -20,6 +20,7 @@
 - [ ] 3.1 Reemplazar el rango único por tres botones excluyentes de duración: Hoy, Mañana y Rango de días.
 - [ ] 3.2 Con Hoy o Mañana se oculta el segundo campo de fecha; con Rango de días aparecen ambos.
 - [ ] 3.3 Los botones fijan sólo las fechas: la ventana horaria queda independiente.
+- [ ] 3.3.1 Con Hoy, alidFrom es el instante de creación sin redondeo; el cuarto de hora aplica sólo al selector de salida.
 - [ ] 3.4 Selector de días de la semana, visible sólo en modalidad semanal.
 - [ ] 3.5 Campos de horario permitido, con ayuda que explique que los usos son por día.
 - [ ] 3.6 Minutos en pasos de quince: `step="900"` en la web y lista de opciones en la app.
