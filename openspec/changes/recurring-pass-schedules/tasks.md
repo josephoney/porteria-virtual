@@ -2,9 +2,9 @@
 
 ## 1. Modelo de datos
 
-- [ ] 1.1 Agregar `recurrence` (enum `once | range | weekly`, default `once`) a `access_passes` y generar la migración.
-- [ ] 1.2 Confirmar que `allowed_days`, `time_from` y `time_to` se pueden escribir; dejar de rechazarlos en la creación.
-- [ ] 1.3 Documentar que `max_uses` pasa a significar «usos por día».
+- [x] 1.1 Agregar `recurrence` (enum `once | range | weekly`, default `once`) a `access_passes` y generar la migración.
+- [x] 1.2 Confirmar que `allowed_days`, `time_from` y `time_to` se pueden escribir; dejar de rechazarlos en la creación.
+- [x] 1.3 Documentar que `max_uses` pasa a significar «usos por día».
 
 ## 2. API: creación y validación
 
@@ -42,7 +42,7 @@
 
 ## 6. Cierre de `add-dynamic-qr-access`
 
-- [ ] 6.1 Marcar 15.1 a 15.4 como cubiertas por este change.
+- [x] 6.1 Marcar 15.1 a 15.4 como cubiertas por este change.
 
 ## 7. Verificación
 
