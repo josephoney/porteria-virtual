@@ -177,10 +177,10 @@
 
 ### 15. Recurring passes
 
-- [ ] 15.1 Enable creation of `entry_exit_recurring`
-- [ ] 15.2 Evaluate `allowed_days` (0-6, 0=Sunday) in the community timezone
-- [ ] 15.3 Implement cycles, overlap rules, and DST handling
-- [ ] 15.4 Keep the pass `active` after each exit until `valid_until`
+- [x] 15.1 Enable creation of `entry_exit_recurring`. Movido a `recurring-pass-schedules`, que lo modela como dias y horario en lugar de un tipo aparte.
+- [x] 15.2 Evaluate `allowed_days` (0-6, 0=Sunday) in the community timezone
+- [x] 15.3 Implement cycles, overlap rules, and DST handling
+- [x] 15.4 Keep the pass `active` after each exit until `valid_until`
 
 ### 16. Missing-exit alerts
 
