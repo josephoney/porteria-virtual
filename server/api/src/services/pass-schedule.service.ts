@@ -172,13 +172,20 @@ export function describeSchedule(pass: AccessPassRow): string {
       ? `de ${formatStoredTime(pass.timeFrom)} a ${formatStoredTime(pass.timeTo)}`
       : 'sin horario fijo';
 
+  const uses =
+    pass.type === 'entry_only'
+      ? 'Sólo entrada'
+      : pass.recurrence === 'once'
+        ? `${pass.maxUses} ${pass.maxUses === 1 ? 'uso' : 'usos'} en total`
+        : `${pass.maxUses} ${pass.maxUses === 1 ? 'uso' : 'usos'} por día`;
+
   if (pass.recurrence === 'once') {
-    return `Un solo uso · ${window}`;
+    return `${uses} · ${window}`;
   }
 
   const days =
     pass.recurrence === 'weekly' ? describeDays(pass.allowedDays ?? []) : 'Todos los días';
-  return `${days} · ${window}`;
+  return `${days} · ${uses} · ${window}`;
 }
 
 /**
@@ -217,7 +224,7 @@ function describeRule(pass: AccessPassRow, timezone: string, remaining: number):
         }`
       : recurrence === 'range'
         ? `Todos los días ${permanent ? `desde el ${from}` : `del ${from} al ${until}`}`
-        : `Un solo uso ${permanent ? `desde el ${from}` : `hasta el ${until}`}`;
+        : `Vigencia única ${permanent ? `desde el ${from}` : `hasta el ${until}`}`;
 
   const window =
     pass.timeFrom && pass.timeTo

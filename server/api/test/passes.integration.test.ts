@@ -1150,7 +1150,7 @@ describe('dynamic pass integration', () => {
     const rejectedEntry = parse(rejectedBitacora);
     assert.ok(rejectedEntry.authorizedByName);
     assert.equal(rejectedEntry.details.reason, 'denied_by_guard');
-    assert.match(String(rejectedEntry.details.rule), /Un solo uso/);
+    assert.match(String(rejectedEntry.details.rule), /1 uso en total/);
 
     const confirmRejected = await confirm(scanned.scanId as string);
     assert.equal(confirmRejected.statusCode, 409);

@@ -182,7 +182,7 @@ function compactRule(pass: ResidentPass): string | null {
   } else if (recurrence === 'range') {
     mode = 'Todos los días';
   } else {
-    mode = 'Un solo uso';
+    mode = 'Usos totales';
   }
 
   if (!hasWindow) return mode;

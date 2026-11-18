@@ -363,7 +363,7 @@ export default function CreatePassScreen() {
     } else if (effectiveImmediate) {
       when = `Desde ahora hasta el ${formatDate(window.end)}`;
     } else {
-      when = `Un solo uso ${range}`;
+      when = `Vigencia única ${range}`;
     }
 
     const hours = hasSchedule

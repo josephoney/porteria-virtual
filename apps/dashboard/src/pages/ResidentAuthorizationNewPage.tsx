@@ -261,7 +261,7 @@ function describeRule(rule: RuleDescription) {
   } else if (rule.immediate) {
     when = `Desde ahora hasta el ${formatRuleDate(rule.end)}`;
   } else {
-    when = `Un solo uso ${range}`;
+    when = `Vigencia única ${range}`;
   }
 
   const hours = rule.immediate
