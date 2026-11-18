@@ -570,16 +570,35 @@ export default function CreatePassScreen() {
 
       <Card>
         <Text style={ui.sectionTitle}>Duración</Text>
-        <Text style={ui.muted}>
-          Horario en el que el pase permite entrar. Si lo dejás apagado, sirve a cualquier hora.
-        </Text>
+        {mode === 'today' ? (
+          <ToggleRow
+            label="Entrada inmediata"
+            hint={
+              immediate
+                ? 'El pase empieza en el momento en que lo confirmás.'
+                : 'Elegí abajo la hora de inicio.'
+            }
+            value={immediate}
+            onValueChange={(value) => {
+              setImmediate(value);
+              if (!value) setHasSchedule(true);
+              setError('');
+            }}
+          />
+        ) : null}
         <ToggleRow
           label="Restringir horario"
+          hint={
+            mode === 'today' && !immediate
+              ? 'Con una hora de inicio elegida, el horario queda activo.'
+              : 'Apagado, el pase sirve a cualquier hora.'
+          }
           value={hasSchedule}
           onValueChange={(value) => {
             setHasSchedule(value);
             setError('');
           }}
+          disabled={mode === 'today' && !immediate}
         />
         {hasSchedule ? (
           <>
