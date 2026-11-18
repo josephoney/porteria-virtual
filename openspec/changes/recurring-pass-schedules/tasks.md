@@ -158,7 +158,7 @@ Al agregar un enum y usarlo en la misma migración, drizzle-kit generó sólo el
 
 - Nuevo test en `tests/resident-workspace.spec.ts`: crea un pase con vigencia «Recurrente», marca lunes, miércoles y viernes, y verifica en la revisión el texto «Lunes, miércoles y viernes desde el DD/MM/YYYY de forma permanente, en cualquier horario · hasta 1 uso por día.»
 - Al confirmar, el historial muestra la fila del visitante con la regla compacta `L · X · V` y el badge «1 uso por día». El test revoca el pase en `finally` para no ensuciar el historial del demo.
-- No ejecutado todavía: Playwright necesita dashboard, API y base levantados.
+- Ejecutado con `pnpm exec playwright test tests/resident-workspace.spec.ts --grep "a weekly authorization is described"`: **1 passed**. La primera corrida chocó con el historial demo (otro pase también mostraba `L · X · V`); la aserción se acotó a la fila del visitante creado con `getByRole('row').filter({ hasText: lastName })` y `exact: true`.
 
 ### Avance 7.6
 

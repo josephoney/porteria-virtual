@@ -291,8 +291,11 @@ test.describe('resident workspace', () => {
       await expect(page).toHaveURL(/\/resident\/authorizations$/);
       await expect(page.getByText(lastName)).toBeVisible();
       // The compact rule and the per-day uses badge come from the list row.
-      await expect(page.getByText('L · X · V')).toBeVisible();
-      await expect(page.getByText('1 uso por día')).toBeVisible();
+      // Scope to this visitor: the demo history already has other weekly passes
+      // whose compact rule also starts with "L · X · V".
+      const row = page.getByRole('row').filter({ hasText: lastName });
+      await expect(row.getByText('L · X · V', { exact: true })).toBeVisible();
+      await expect(row.getByText('1 uso por día', { exact: true })).toBeVisible();
     } finally {
       await revokePasses(request, lastName);
     }
