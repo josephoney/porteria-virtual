@@ -70,6 +70,8 @@ export const passScans = pgTable(
     action: scanActionEnum('action').notNull(),
     result: scanResultEnum('result').notNull().default('authorized'),
     reason: text('reason'),
+    /** Guard observation attached to the decision; audited with the scan. */
+    note: text('note'),
     tokenJti: uuid('token_jti').notNull(),
     status: scanStatusEnum('status').notNull().default('pending'),
     scannedAt: timestamp('scanned_at', { withTimezone: true }).defaultNow().notNull(),

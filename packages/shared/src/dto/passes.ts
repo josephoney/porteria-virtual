@@ -87,6 +87,8 @@ export interface ScanPassResponse {
     lastName: string;
     document: string;
   };
+  /** Group arriving with the primary visitor; informational only. */
+  companions: PassCompanion[];
   vehiclePlate: string | null;
   locationPath: string;
   accessPointId: string;

@@ -341,8 +341,16 @@ export const scanPassSchema = z.object({
   token: z.string().min(1),
 });
 
+/** Guard observation: optional free text, trimmed and capped by the API. */
+const scanNoteSchema = z.string().trim().max(500);
+
+export const scanConfirmSchema = z.object({
+  note: scanNoteSchema.optional(),
+});
+
 export const scanDecisionSchema = z.object({
-  reason: z.string().max(500).optional(),
+  reason: scanNoteSchema.optional(),
+  note: scanNoteSchema.optional(),
 });
 
 export const scansQuerySchema = z.object({

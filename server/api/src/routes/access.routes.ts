@@ -3,7 +3,12 @@ import type { ScanAction, ScanStatus } from '@porteria/shared';
 import config from '../config.js';
 import { sendPassError } from '../lib/pass-error-status.js';
 import { requireRole } from '../middlewares/rbac.js';
-import { scanDecisionSchema, scanPassSchema, scansQuerySchema } from '../schemas/index.js';
+import {
+  scanConfirmSchema,
+  scanDecisionSchema,
+  scanPassSchema,
+  scansQuerySchema,
+} from '../schemas/index.js';
 import {
   confirmIdentityEntry,
   denyIdentityEntry,
@@ -130,7 +135,8 @@ export async function accessRoutes(app: FastifyInstance) {
     { preHandler: [dynamicQrGuard, requireRole('guard')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const result = await confirmScan(getRequester(request), id);
+      const body = scanConfirmSchema.parse(request.body ?? {});
+      const result = await confirmScan(getRequester(request), id, body.note);
       if (!result.ok) return sendPassError(reply, result.code);
       return reply.send(result.data);
     },
@@ -142,7 +148,7 @@ export async function accessRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const body = scanDecisionSchema.parse(request.body ?? {});
-      const result = await rejectScan(getRequester(request), id, body.reason);
+      const result = await rejectScan(getRequester(request), id, body.reason, body.note);
       if (!result.ok) return sendPassError(reply, result.code);
       return reply.send(result.data);
     },

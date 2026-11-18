@@ -1,0 +1,1 @@
+ALTER TABLE "pass_scans" ADD COLUMN "note" text;

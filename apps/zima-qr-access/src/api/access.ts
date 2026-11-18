@@ -17,16 +17,21 @@ export function scanPass(request: RequestFn, qrToken: string) {
   });
 }
 
-export function confirmScan(request: RequestFn, scanId: string) {
+export function confirmScan(request: RequestFn, scanId: string, note?: string) {
+  const observation = note?.trim();
   return request<ScanDecisionResponse>(`/api/access/scans/${scanId}/confirm`, {
     method: 'POST',
+    body: observation ? { note: observation } : {},
   });
 }
 
-export function rejectScan(request: RequestFn, scanId: string, reason?: string) {
+export function rejectScan(request: RequestFn, scanId: string, note?: string) {
+  const observation = note?.trim();
   return request<ScanDecisionResponse>(`/api/access/scans/${scanId}/reject`, {
     method: 'POST',
-    body: reason ? { reason } : {},
+    // Without an observation the machine code keeps the existing wording in the
+    // activity list; a note doubles as the reason and is also stored separately.
+    body: observation ? { reason: observation, note: observation } : { reason: 'denied_by_guard' },
   });
 }
 

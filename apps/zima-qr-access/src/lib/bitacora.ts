@@ -11,6 +11,8 @@ export interface ActivityItem {
   vehiclePlate: string | null;
   destination: string | null;
   reason: string | null;
+  /** Guard observation attached to the decision, if any. */
+  note: string | null;
   /** Static schedule rule of the pass at the moment of the event. */
   rule: string | null;
   /** Group that arrived with the visitor, exactly as the audit snapshot stored it. */
@@ -109,6 +111,7 @@ export function toActivityItem(entry: BitacoraEntryDto): ActivityItem {
     vehiclePlate: textField(entry.details.vehiclePlate),
     destination: textField(entry.details.destinationName) ?? entry.destinationPath,
     reason: textField(entry.details.reason),
+    note: textField(entry.details.note),
     rule: textField(entry.details.rule),
     companions: companionsField(entry.details.companions),
     createdAt: entry.createdAt,

@@ -105,6 +105,12 @@ function toSchedule(pass: AccessPassRow) {
   };
 }
 
+/** A note is optional: whitespace-only means "no note" for storage and audit. */
+function normalizeNote(note: string | undefined): string | null {
+  const value = note?.trim();
+  return value ? value : null;
+}
+
 async function loadOpenShiftContext(personId: string): Promise<ShiftContext | null> {
   const [row] = await db
     .select({
@@ -170,6 +176,7 @@ function deniedResponse(
     result: 'denied',
     reason,
     visitor: toVisitor(pass),
+    companions: pass.companions,
     vehiclePlate: pass.vehiclePlate,
     locationPath,
     authorizedByName,
@@ -341,6 +348,7 @@ export async function scanPass(
       result: 'authorized',
       reason: null,
       visitor: toVisitor(pass),
+      companions: pass.companions,
       vehiclePlate: pass.vehiclePlate,
       locationPath,
       authorizedByName,
@@ -358,7 +366,9 @@ export async function scanPass(
 export async function confirmScan(
   requester: PassRequester,
   scanId: string,
+  note?: string,
 ): Promise<PassResult<ScanDecisionResponse>> {
+  const trimmedNote = normalizeNote(note);
   const [scan] = await db.select().from(passScans).where(eq(passScans.id, scanId)).limit(1);
   if (!scan) return { ok: false, code: 'not_found' };
   if (scan.status !== 'pending') return { ok: false, code: 'scan_already_processed' };
@@ -434,6 +444,7 @@ export async function confirmScan(
           status: 'confirmed',
           confirmedAt: now,
           result: 'authorized',
+          note: trimmedNote,
           confirmedByPersonId: personId,
           confirmedByAccountId: requester.accountId ?? null,
           ...(scan.accessPointId
@@ -524,6 +535,7 @@ export async function confirmScan(
           destinationName: destination?.name ?? null,
           destinationKind: destination?.kind ?? null,
           rule: describeSchedule(pass),
+          note: trimmedNote,
         },
       });
       bitacoraEntryId = entry.id;
@@ -558,7 +570,12 @@ export async function rejectScan(
   requester: PassRequester,
   scanId: string,
   reason?: string,
+  note?: string,
 ): Promise<PassResult<ScanDecisionResponse>> {
+  const trimmedNote = normalizeNote(note);
+  // The observation doubles as the reason when the guard wrote one; otherwise
+  // the machine code `denied_by_guard` keeps the existing wording.
+  const trimmedReason = normalizeNote(reason) ?? trimmedNote ?? 'denied_by_guard';
   const [scan] = await db.select().from(passScans).where(eq(passScans.id, scanId)).limit(1);
   if (!scan) return { ok: false, code: 'not_found' };
 
@@ -589,7 +606,8 @@ export async function rejectScan(
         .set({
           status: 'rejected',
           confirmedAt: new Date(),
-          reason: reason ?? null,
+          reason: trimmedReason,
+          note: trimmedNote,
           confirmedByPersonId: personId,
           confirmedByAccountId: requester.accountId ?? null,
         })
@@ -605,7 +623,7 @@ export async function rejectScan(
           communityId: pass.communityId,
           actorId: requester.sub,
           actorRole: requester.role,
-          payload: { passId: pass.id, scanId, reason: reason ?? null },
+          payload: { passId: pass.id, scanId, reason: trimmedReason, note: trimmedNote },
         }),
       );
 
@@ -630,7 +648,8 @@ export async function rejectScan(
         passScanId: scanId,
         summary: `Ingreso rechazado: ${pass.visitorFirstName} ${pass.visitorLastName}`,
         details: {
-          reason: reason ?? null,
+          reason: trimmedReason,
+          note: trimmedNote,
           action: scan.action,
           visitor: toVisitor(pass),
           companions: pass.companions,

@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   isPermanentPass,
   type AccessPoint,
@@ -81,6 +81,7 @@ export default function GuardScanScreen() {
   const [decision, setDecision] = useState<ScanDecisionResponse | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanned, setScanned] = useState(false);
+  const [note, setNote] = useState('');
 
   /**
    * The activity only exists while a shift is open: it is the bitacora filtered
@@ -243,6 +244,7 @@ export default function GuardScanScreen() {
     setScanError(null);
     setScanned(false);
     setCameraOpen(false);
+    setNote('');
   };
 
   /**
@@ -271,6 +273,7 @@ export default function GuardScanScreen() {
     setScanError(null);
     setDecision(null);
     setScanResult(null);
+    setNote('');
     setScanned(true);
     try {
       const result = await scanPass(request, value);
@@ -283,17 +286,22 @@ export default function GuardScanScreen() {
     }
   };
 
-  const onConfirm = async () => {
+  const onConfirm = async (withNote: boolean) => {
     if (!scanResult?.scanId) return;
     setBusy(true);
     setScanError(null);
+    const observation = withNote ? note.trim() : '';
     try {
-      const result = await confirmScan(request, scanResult.scanId);
+      const result = await confirmScan(request, scanResult.scanId, observation || undefined);
       setDecision(result);
       await refresh();
       // The guard has a line in front: after the decision the scanner resets by
       // itself so the next visitor can be scanned without an extra tap.
-      setFlash('Ingreso registrado. Listo para el siguiente.');
+      setFlash(
+        observation
+          ? 'Ingreso registrado con nota. Listo para el siguiente.'
+          : 'Ingreso registrado. Listo para el siguiente.',
+      );
       setTimeout(() => {
         setFlash(null);
         resetScan();
@@ -310,7 +318,7 @@ export default function GuardScanScreen() {
     setBusy(true);
     setScanError(null);
     try {
-      const result = await rejectScan(request, scanResult.scanId, 'denied_by_guard');
+      const result = await rejectScan(request, scanResult.scanId, note.trim() || undefined);
       setDecision(result);
       await refresh();
       setFlash('Ingreso rechazado. Listo para el siguiente.');
@@ -513,58 +521,105 @@ export default function GuardScanScreen() {
                 >
                   <Text style={styles.modalCloseText}>X</Text>
                 </Pressable>
-                {scanResult ? (
-                  <Card>
-                    <Row>
-                      <Badge
-                        label={scanResult.authorized ? 'Autorizado' : 'Denegado'}
-                        tone={scanResult.authorized ? 'success' : 'danger'}
-                      />
-                      <Badge label={actionLabel(scanResult.action)} tone="info" />
-                    </Row>
-                    <Text style={ui.heading}>
-                      {scanResult.visitor.firstName} {scanResult.visitor.lastName}
-                    </Text>
-                    <Text style={ui.muted}>Documento: {scanResult.visitor.document}</Text>
-                    {scanResult.vehiclePlate ? (
-                      <Text style={ui.muted}>Vehículo: {scanResult.vehiclePlate}</Text>
-                    ) : null}
-                    <Text style={ui.muted}>Ubicación: {scanResult.locationPath}</Text>
-                    <Text style={ui.muted}>Acceso: {scanResult.accessPointName}</Text>
-                    <Text style={ui.muted}>Autoriza: {scanResult.authorizedByName}</Text>
-                    <Text style={ui.muted}>
-                      Vigencia: {formatDateTime(scanResult.schedule.validFrom)} →{' '}
-                      {isPermanentPass(scanResult.schedule.validUntil)
-                        ? 'sin fecha de fin'
-                        : formatDateTime(scanResult.schedule.validUntil)}
-                    </Text>
-                    {scanResult.reason ? (
-                      <Text style={ui.error}>{reasonText(scanResult.reason)}</Text>
-                    ) : null}
-
-                    {scanResult.authorized && scanResult.scanId && !decision ? (
+                {/* The result can carry up to ten companions and the note field:
+                    the sheet scrolls instead of pushing the actions off screen. */}
+                <ScrollView
+                  style={styles.modalScroll}
+                  contentContainerStyle={styles.modalScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {scanResult ? (
+                    <Card>
                       <Row>
-                        <Button label="Confirmar" onPress={() => void onConfirm()} loading={busy} />
-                        <Button
-                          label="Denegar"
-                          variant="danger"
-                          onPress={() => void onReject()}
-                          loading={busy}
+                        <Badge
+                          label={scanResult.authorized ? 'Autorizado' : 'Denegado'}
+                          tone={scanResult.authorized ? 'success' : 'danger'}
                         />
+                        <Badge label={actionLabel(scanResult.action)} tone="info" />
                       </Row>
-                    ) : null}
-
-                    {decision ? (
-                      <Text style={ui.body}>
-                        {decision.status === 'confirmed'
-                          ? 'Acceso confirmado. La bitácora quedó actualizada.'
-                          : 'Acceso rechazado. La bitácora quedó actualizada.'}
+                      <Text style={ui.heading}>
+                        {scanResult.visitor.firstName} {scanResult.visitor.lastName}
                       </Text>
-                    ) : null}
+                      <Text style={ui.muted}>Documento: {scanResult.visitor.document}</Text>
+                      {scanResult.vehiclePlate ? (
+                        <Text style={ui.muted}>Vehículo: {scanResult.vehiclePlate}</Text>
+                      ) : null}
+                      <Text style={ui.muted}>Ubicación: {scanResult.locationPath}</Text>
+                      <Text style={ui.muted}>Acceso: {scanResult.accessPointName}</Text>
+                      <Text style={ui.muted}>Autoriza: {scanResult.authorizedByName}</Text>
+                      <Text style={ui.muted}>
+                        Vigencia: {formatDateTime(scanResult.schedule.validFrom)} →{' '}
+                        {isPermanentPass(scanResult.schedule.validUntil)
+                          ? 'sin fecha de fin'
+                          : formatDateTime(scanResult.schedule.validUntil)}
+                      </Text>
+                      {scanResult.companions.length > 0 ? (
+                        <View style={styles.companions}>
+                          <Text style={styles.companionsTitle}>
+                            {scanResult.companions.length === 1
+                              ? 'Acompañante'
+                              : `Acompañantes (${scanResult.companions.length})`}
+                          </Text>
+                          {scanResult.companions.map((companion, index) => (
+                            <Text
+                              key={`${companion.document}-${index}`}
+                              style={styles.companionLine}
+                            >
+                              {companion.firstName} {companion.lastName} · Doc. {companion.document}
+                            </Text>
+                          ))}
+                        </View>
+                      ) : null}
+                      {scanResult.reason ? (
+                        <Text style={ui.error}>{reasonText(scanResult.reason)}</Text>
+                      ) : null}
 
-                    <Button label="Escanear otro" variant="secondary" onPress={resetScan} />
-                  </Card>
-                ) : null}
+                      {scanResult.authorized && scanResult.scanId && !decision ? (
+                        <>
+                          <Field
+                            label="Novedad / observación (opcional)"
+                            value={note}
+                            onChangeText={setNote}
+                            placeholder="Ej.: ingresa con equipaje, el documento no coincide…"
+                            multiline
+                            maxLength={500}
+                          />
+                          <Text style={ui.muted}>{note.length}/500</Text>
+                          <Row>
+                            <Button
+                              label="Confirmar"
+                              onPress={() => void onConfirm(false)}
+                              loading={busy}
+                            />
+                            <Button
+                              label="Confirmar con nota"
+                              variant="success"
+                              onPress={() => void onConfirm(true)}
+                              loading={busy}
+                              disabled={note.trim().length === 0}
+                            />
+                          </Row>
+                          <Button
+                            label="Denegar"
+                            variant="danger"
+                            onPress={() => void onReject()}
+                            loading={busy}
+                          />
+                        </>
+                      ) : null}
+
+                      {decision ? (
+                        <Text style={ui.body}>
+                          {decision.status === 'confirmed'
+                            ? 'Acceso confirmado. La bitácora quedó actualizada.'
+                            : 'Acceso rechazado. La bitácora quedó actualizada.'}
+                        </Text>
+                      ) : null}
+
+                      <Button label="Escanear otro" variant="secondary" onPress={resetScan} />
+                    </Card>
+                  ) : null}
+                </ScrollView>
               </View>
             </View>
           </Modal>
@@ -623,7 +678,10 @@ export default function GuardScanScreen() {
                   {item.vehiclePlate ? (
                     <Text style={ui.muted}>Vehículo: {item.vehiclePlate}</Text>
                   ) : null}
-                  {item.reason ? <Text style={ui.error}>{reasonText(item.reason)}</Text> : null}
+                  {item.note ? <Text style={ui.muted}>Novedad: {item.note}</Text> : null}
+                  {item.reason && item.reason !== item.note ? (
+                    <Text style={ui.error}>{reasonText(item.reason)}</Text>
+                  ) : null}
                 </View>
               );
             })}
@@ -682,6 +740,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.sm,
     padding: spacing.lg,
+    maxHeight: '85%',
+  },
+  modalScroll: {
+    flexShrink: 1,
+  },
+  modalScrollContent: {
+    paddingBottom: spacing.xs,
   },
   modalClose: {
     alignSelf: 'flex-end',
@@ -697,6 +762,19 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontSize: 16,
     fontWeight: '600',
+  },
+  companions: {
+    gap: 2,
+    marginTop: spacing.xs,
+  },
+  companionsTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  companionLine: {
+    color: colors.textMuted,
+    fontSize: 14,
   },
   cameraWrap: {
     borderRadius: radius.lg,

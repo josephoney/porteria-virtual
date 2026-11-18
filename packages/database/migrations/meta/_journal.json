@@ -169,6 +169,13 @@
       "when": 1795029610222,
       "tag": "0023_bright_tinkerer",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795033622442,
+      "tag": "0024_flimsy_lizard",
+      "breakpoints": true
     }
   ]
 }

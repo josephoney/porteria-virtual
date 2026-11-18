@@ -1199,6 +1199,106 @@ describe('dynamic pass integration', () => {
     assert.equal(parse(secondScan).scanId, null);
   });
 
+  it('returns the companions in the QR scan response', async () => {
+    const companions = [
+      { firstName: 'Ana', lastName: 'Pérez', document: 'SCAN-COMP-A' },
+      { firstName: 'Luis', lastName: 'Gómez', document: 'SCAN-COMP-B' },
+    ];
+    const created = await createPass({ type: 'entry_exit', companions });
+    const token = linkToken(created);
+    const { cookie } = await bind(token);
+    const qr = parse(await publicQr(token, cookie)).token as string;
+
+    const scanned = await scan(qr);
+    assert.equal(scanned.statusCode, 200, scanned.body);
+    const body = parse(scanned);
+    assert.equal(body.authorized, true);
+    assert.deepEqual(body.companions, companions);
+  });
+
+  it('records the guard note when a scan is confirmed', async () => {
+    const created = await createPass({ type: 'entry_exit' });
+    const token = linkToken(created);
+    const { cookie } = await bind(token);
+    const qr = parse(await publicQr(token, cookie)).token as string;
+    const scanned = parse(await scan(qr));
+
+    const confirmed = await request(
+      'POST',
+      `/api/access/scans/${scanned.scanId as string}/confirm`,
+      { note: '  Llega con equipaje  ' },
+      guardToken,
+    );
+    assert.equal(confirmed.statusCode, 200, confirmed.body);
+
+    const [row] = await db
+      .select()
+      .from(passScans)
+      .where(eq(passScans.id, scanned.scanId as string));
+    assert.equal(row?.note, 'Llega con equipaje');
+
+    const bitacora = await request(
+      'GET',
+      `/api/bitacora/${parse(confirmed).bitacoraEntryId as string}`,
+      undefined,
+      guardToken,
+    );
+    assert.equal(bitacora.statusCode, 200, bitacora.body);
+    const details = parse(bitacora).details as Json;
+    assert.equal(details.note, 'Llega con equipaje');
+  });
+
+  it('records the note as the rejection reason and in the audit', async () => {
+    const created = await createPass({ type: 'entry_exit' });
+    const token = linkToken(created);
+    const { cookie } = await bind(token);
+    const qr = parse(await publicQr(token, cookie)).token as string;
+    const scanned = parse(await scan(qr));
+
+    const rejected = await request(
+      'POST',
+      `/api/access/scans/${scanned.scanId as string}/reject`,
+      { note: '  Documento ilegible  ' },
+      guardToken,
+    );
+    assert.equal(rejected.statusCode, 200, rejected.body);
+
+    const [row] = await db
+      .select()
+      .from(passScans)
+      .where(eq(passScans.id, scanned.scanId as string));
+    assert.equal(row?.note, 'Documento ilegible');
+    assert.equal(row?.reason, 'Documento ilegible');
+
+    const bitacora = await request(
+      'GET',
+      `/api/bitacora/${parse(rejected).bitacoraEntryId as string}`,
+      undefined,
+      guardToken,
+    );
+    assert.equal(bitacora.statusCode, 200, bitacora.body);
+    const details = parse(bitacora).details as Json;
+    assert.equal(details.note, 'Documento ilegible');
+    assert.equal(details.reason, 'Documento ilegible');
+  });
+
+  it('rejects a scan note longer than 500 characters', async () => {
+    const created = await createPass({ type: 'entry_exit' });
+    const token = linkToken(created);
+    const { cookie } = await bind(token);
+    const qr = parse(await publicQr(token, cookie)).token as string;
+    const scanned = parse(await scan(qr));
+
+    const tooLong = await request(
+      'POST',
+      `/api/access/scans/${scanned.scanId as string}/confirm`,
+      { note: 'x'.repeat(501) },
+      guardToken,
+    );
+    assert.equal(tooLong.statusCode, 400, tooLong.body);
+    assert.equal(parse(tooLong).message, 'Validation error');
+  });
+
   it('rejects a pending scan without changing the pass', async () => {
     const created = await createPass({ type: 'entry_exit' });
     const token = linkToken(created);
