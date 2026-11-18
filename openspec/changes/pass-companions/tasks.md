@@ -32,3 +32,7 @@
 - [x] 5.2 Typecheck the mobile app and pass-web; lint/typecheck the dashboard pages touched.
 - [x] 5.3 Run Prettier and `openspec validate pass-companions --strict`.
 - [ ] 5.4 Run the API suites and a manual smoke test of the dashboard, mobile and guard flows.
+
+## 6. Follow-ups
+
+- [ ] 6.1 Show the companion count on the public pre-bind card (`apps/pass-web/src/components/PreviewCard.tsx`), not only in `QrView`. Does not block the current deploy.
