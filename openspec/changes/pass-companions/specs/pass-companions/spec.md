@@ -68,7 +68,12 @@ The dashboard create form, the mobile resident create form and the bulk upload S
 
 ### Requirement: Guard sees companions
 
-The identity candidate and the pass/bitacora detail SHALL show the companions with their names and documents.
+The identity candidate, the QR scan result and the pass/bitacora detail SHALL show the companions with their names and documents.
+
+#### Scenario: QR scan result
+
+- **WHEN** the guard scans a pass QR that has companions
+- **THEN** the scan result lists each companion with name and document before the guard confirms or rejects
 
 #### Scenario: Identity candidate
 

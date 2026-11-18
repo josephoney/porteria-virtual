@@ -25,6 +25,7 @@
 
 - [x] 4.1 Show companions in the identity candidate.
 - [x] 4.2 Show companions in the bitacora and pass detail.
+- [x] 4.3 Show companions in the QR scan result before the confirm/reject actions.
 
 ## 5. Verification
 
