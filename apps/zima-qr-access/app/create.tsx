@@ -1,5 +1,5 @@
 import { Redirect, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { PERMANENT_PASS_UNTIL, isPermanentPass, type PassLinkResponse } from '@porteria/shared';
@@ -12,6 +12,12 @@ import { colors, radius, spacing, typography } from '@/theme';
 type ValidityMode = 'today' | 'tomorrow' | 'range' | 'recurrent';
 type Recurrence = 'once' | 'range' | 'weekly';
 type PickerMode = 'date' | 'time';
+
+interface UnitDestination {
+  id: string;
+  name: string;
+  path?: string;
+}
 
 const VALIDITY_OPTIONS: Array<{ value: ValidityMode; label: string }> = [
   { value: 'today', label: 'Hoy' },
@@ -236,6 +242,10 @@ export default function CreatePassScreen() {
   const router = useRouter();
   const { session, request } = useAuth();
 
+  // The session only carries the unit id. The readable path is fetched once so
+  // the resident sees the actual unit instead of a UUID.
+  const unitId = session?.activeMembership?.locationUnitId ?? null;
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [document, setDocument] = useState('');
@@ -257,13 +267,42 @@ export default function CreatePassScreen() {
   const [maxUses, setMaxUses] = useState('1');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [unitLabel, setUnitLabel] = useState<string | null>(null);
+  const [unitLoading, setUnitLoading] = useState(() => Boolean(unitId));
+
+  useEffect(() => {
+    if (!unitId) {
+      setUnitLabel(null);
+      setUnitLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setUnitLoading(true);
+
+    void (async () => {
+      try {
+        const destinations = await request<UnitDestination[]>('/api/passes/destinations');
+        if (cancelled) return;
+        const unit = destinations.find((destination) => destination.id === unitId);
+        setUnitLabel(unit?.path || unit?.name || null);
+      } catch {
+        if (!cancelled) setUnitLabel(null);
+      } finally {
+        if (!cancelled) setUnitLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [request, unitId]);
 
   if (!session) return <Redirect href="/" />;
   if (modeForRole(session.activeMembership.role) !== 'resident') {
     return <Redirect href={homeForRole(session.activeMembership.role)} />;
   }
 
-  const unitId = session.activeMembership.locationUnitId;
   const recurrence: Recurrence =
     mode === 'recurrent' ? 'weekly' : mode === 'range' ? 'range' : 'once';
   const isRecurrent = mode === 'recurrent';
@@ -393,6 +432,11 @@ export default function CreatePassScreen() {
       return;
     }
 
+    if (!unitId) {
+      setError('Tu usuario no tiene una unidad asignada.');
+      return;
+    }
+
     setSubmitting(true);
     setError('');
 
@@ -441,7 +485,9 @@ export default function CreatePassScreen() {
 
       <Card>
         <Text style={ui.sectionTitle}>Unidad</Text>
-        <Text style={ui.body}>{unitId || 'Sin unidad asignada'}</Text>
+        <Text style={ui.body}>
+          {unitLoading ? 'Cargando unidad…' : (unitLabel ?? 'Unidad asignada')}
+        </Text>
       </Card>
 
       <Card>
