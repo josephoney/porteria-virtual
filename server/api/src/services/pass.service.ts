@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { and, desc, eq, gte, ilike, inArray, lt, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { createDb } from '@porteria/database';
 import { accessPasses, communities, memberships } from '@porteria/database/schema';
@@ -601,6 +601,10 @@ export interface PassListQuery {
   search?: string;
   destinationUnitId?: string;
   batchId?: string;
+  sort?: 'createdAt' | 'validFrom' | 'validUntil';
+  order?: 'asc' | 'desc';
+  dateFrom?: string;
+  dateTo?: string;
   page: number;
   pageSize: number;
 }
@@ -667,6 +671,12 @@ export async function listPasses(
     conditions.push(eq(accessPasses.locationUnitId, query.destinationUnitId));
   }
   if (query.batchId) conditions.push(eq(accessPasses.batchId, query.batchId));
+  if (query.dateFrom) {
+    conditions.push(gte(accessPasses.createdAt, new Date(query.dateFrom)));
+  }
+  if (query.dateTo) {
+    conditions.push(lte(accessPasses.createdAt, new Date(query.dateTo)));
+  }
 
   const search = query.search?.trim();
   if (search) {
@@ -688,11 +698,18 @@ export async function listPasses(
     .from(accessPasses)
     .where(where);
 
+  const sortColumn =
+    query.sort === 'validFrom'
+      ? accessPasses.validFrom
+      : query.sort === 'validUntil'
+        ? accessPasses.validUntil
+        : accessPasses.createdAt;
+
   const rows = await db
     .select()
     .from(accessPasses)
     .where(where)
-    .orderBy(desc(accessPasses.validFrom))
+    .orderBy(query.order === 'asc' ? asc(sortColumn) : desc(sortColumn))
     .limit(query.pageSize)
     .offset((query.page - 1) * query.pageSize);
 

@@ -268,6 +268,12 @@ export const passesQuerySchema = z.object({
   destinationUnitId: z.string().uuid().optional(),
   /** Filters the history by the bulk operation that created the passes. */
   batchId: z.string().uuid().optional(),
+  /** Sort key for the history; defaults to the creation date. */
+  sort: z.enum(['createdAt', 'validFrom', 'validUntil']).optional(),
+  order: z.enum(['asc', 'desc']).optional(),
+  /** Creation-date range, sent as ISO instants to avoid timezone ambiguity. */
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });

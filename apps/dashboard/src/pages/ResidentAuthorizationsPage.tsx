@@ -24,6 +24,7 @@ import { expandableRowProps, useExpandedRow } from '../lib/use-expanded-row';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { DetailField, DetailGrid } from '../components/ui/detail-field';
+import { Input } from '../components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -72,6 +73,7 @@ interface ResidentPass {
   visitorDocument: string;
   validFrom: string;
   validUntil: string;
+  createdAt: string;
   status: string;
   /** `inside` means the visitor already went through the gate. */
   presenceState?: string;
@@ -119,6 +121,17 @@ const dateFormat = new Intl.DateTimeFormat('es-CO', {
   dateStyle: 'medium',
   timeStyle: 'short',
 });
+
+/** The date inputs are local calendar days; the API receives exact instants. */
+function startOfLocalDay(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day, 0, 0, 0, 0).toISOString();
+}
+
+function endOfLocalDay(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day, 23, 59, 59, 999).toISOString();
+}
 
 /**
  * `expired` is derived, not stored: a pass only flips to that status when a
@@ -201,6 +214,9 @@ export function ResidentAuthorizationsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [destinationFilter, setDestinationFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
   const [batchFilter, setBatchFilter] = useState<{ id: string; label: string } | null>(() => {
     // The bulk result links here with `?batchId=…&batchLabel=…` so the lot
     // arrives already filtered.
@@ -305,6 +321,10 @@ export function ResidentAuthorizationsPage() {
     if (statusFilter !== 'all') params.set('status', statusFilter);
     if (destinationFilter !== 'all') params.set('destinationUnitId', destinationFilter);
     if (batchFilter) params.set('batchId', batchFilter.id);
+    if (dateFrom) params.set('dateFrom', startOfLocalDay(dateFrom));
+    if (dateTo) params.set('dateTo', endOfLocalDay(dateTo));
+    params.set('sort', 'createdAt');
+    params.set('order', order);
 
     try {
       const result = await get<ResidentPass[]>(`/api/passes?${params.toString()}`);
@@ -319,7 +339,18 @@ export function ResidentAuthorizationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, statusFilter, destinationFilter, batchFilter, reloadKey]);
+  }, [
+    page,
+    pageSize,
+    search,
+    statusFilter,
+    destinationFilter,
+    dateFrom,
+    dateTo,
+    order,
+    batchFilter,
+    reloadKey,
+  ]);
 
   useEffect(() => {
     void load();
@@ -438,10 +469,20 @@ export function ResidentAuthorizationsPage() {
     setSearch('');
     setStatusFilter('all');
     setDestinationFilter('all');
+    setDateFrom('');
+    setDateTo('');
     clearBatchFilter();
   }
 
+  function toggleCreatedOrder() {
+    setOrder((current) => (current === 'desc' ? 'asc' : 'desc'));
+    setPage(1);
+  }
+
   useEffect(() => {
+    // While a page loads the table unmounts; measuring a detached node would
+    // shrink the page size and bounce the pager back to page one.
+    if (loading) return;
     const element = tableAreaRef.current;
     if (!element) return;
 
@@ -475,14 +516,14 @@ export function ResidentAuthorizationsPage() {
       observer.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, [passes.length]);
-
-  useEffect(() => {
-    // A different page size means a different first page.
-    setPage(1);
-  }, [pageSize]);
+  }, [passes.length, loading]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    // A filter or layout change can leave the current page past the last one.
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6 p-6">
@@ -561,7 +602,35 @@ export function ResidentAuthorizationsPage() {
               </SelectContent>
             </Select>
 
-            {(search || statusFilter !== 'all' || destinationFilter !== 'all' || batchFilter) && (
+            <Input
+              type="date"
+              aria-label="Creado desde"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(event) => {
+                setDateFrom(event.target.value);
+                setPage(1);
+              }}
+              className="w-40"
+            />
+            <Input
+              type="date"
+              aria-label="Creado hasta"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(event) => {
+                setDateTo(event.target.value);
+                setPage(1);
+              }}
+              className="w-40"
+            />
+
+            {(search ||
+              statusFilter !== 'all' ||
+              destinationFilter !== 'all' ||
+              dateFrom ||
+              dateTo ||
+              batchFilter) && (
               <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
                 Limpiar filtros
               </Button>
@@ -623,12 +692,22 @@ export function ResidentAuthorizationsPage() {
           {!error && !loading && passes.length === 0 && (
             <div className="rounded-4xl border border-dashed border-border p-8 text-center">
               <p className="text-sm font-medium">
-                {search || statusFilter !== 'all' || destinationFilter !== 'all' || batchFilter
+                {search ||
+                statusFilter !== 'all' ||
+                destinationFilter !== 'all' ||
+                dateFrom ||
+                dateTo ||
+                batchFilter
                   ? 'No hay autorizaciones con esos filtros'
                   : 'Todavía no hay autorizaciones'}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                {search || statusFilter !== 'all' || destinationFilter !== 'all' || batchFilter
+                {search ||
+                statusFilter !== 'all' ||
+                destinationFilter !== 'all' ||
+                dateFrom ||
+                dateTo ||
+                batchFilter
                   ? 'Prueba limpiando los filtros.'
                   : 'Cuando autorices una visita, va a quedar registrada acá.'}
               </p>
@@ -649,6 +728,20 @@ export function ResidentAuthorizationsPage() {
                     <TableHead>Visitante</TableHead>
                     <TableHead>Destino</TableHead>
                     <TableHead>Vigencia</TableHead>
+                    <TableHead
+                      aria-sort={order === 'asc' ? 'ascending' : 'descending'}
+                      className="whitespace-nowrap"
+                    >
+                      <button
+                        type="button"
+                        onClick={toggleCreatedOrder}
+                        className="inline-flex items-center gap-1 font-medium hover:text-foreground"
+                        aria-label="Ordenar por fecha de creación"
+                      >
+                        Creado
+                        <span aria-hidden="true">{order === 'asc' ? '↑' : '↓'}</span>
+                      </button>
+                    </TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
@@ -721,6 +814,11 @@ export function ResidentAuthorizationsPage() {
                                 </span>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-xs text-muted-foreground">
+                              {dateFormat.format(new Date(pass.createdAt))}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <Badge variant={STATUS_VARIANTS[state]}>{STATUS_LABELS[state]}</Badge>
@@ -797,7 +895,7 @@ export function ResidentAuthorizationsPage() {
                         </TableRow>
                         {isExpanded && (
                           <TableRow>
-                            <TableCell colSpan={5} className="bg-muted/30">
+                            <TableCell colSpan={6} className="bg-muted/30">
                               {detailLoading ? (
                                 <Skeleton className="h-20 w-full" />
                               ) : detailError ? (

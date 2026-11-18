@@ -807,6 +807,39 @@ describe('dynamic pass integration', () => {
     assert.doesNotMatch(summary, /9999/);
   });
 
+  it('filters by creation date and orders the history by it', async () => {
+    const older = await createPass({ visitorFirstName: 'Historial', visitorLastName: 'Enero' });
+    const newer = await createPass({ visitorFirstName: 'Historial', visitorLastName: 'Febrero' });
+
+    await db
+      .update(accessPasses)
+      .set({ createdAt: new Date('2024-01-10T12:00:00.000Z') })
+      .where(eq(accessPasses.id, older.pass.id));
+    await db
+      .update(accessPasses)
+      .set({ createdAt: new Date('2024-02-10T12:00:00.000Z') })
+      .where(eq(accessPasses.id, newer.pass.id));
+
+    const idsFrom = async (query: string) => {
+      const response = await request('GET', `/api/passes?${query}`, undefined, residentToken);
+      assert.equal(response.statusCode, 200, response.body);
+      const body = parse(response) as Array<{ id: string }>;
+      return body.map((item) => item.id);
+    };
+
+    const desc = await idsFrom('sort=createdAt&order=desc&pageSize=100');
+    assert.ok(desc.indexOf(newer.pass.id) < desc.indexOf(older.pass.id));
+
+    const asc = await idsFrom('sort=createdAt&order=asc&pageSize=100');
+    assert.ok(asc.indexOf(older.pass.id) < asc.indexOf(newer.pass.id));
+
+    const february = await idsFrom(
+      'dateFrom=2024-02-01T00:00:00.000Z&dateTo=2024-02-29T23:59:59.999Z&pageSize=100',
+    );
+    assert.ok(february.includes(newer.pass.id));
+    assert.ok(!february.includes(older.pass.id));
+  });
+
   it('exposes a masked preview and binds only the first device', async () => {
     const created = await createPass();
     const token = linkToken(created);
