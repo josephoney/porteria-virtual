@@ -16,15 +16,28 @@ entry.
 - **WHEN** the guard confirms a pending scan without a note
 - **THEN** the confirmation succeeds and the scan note stays null
 
-### Requirement: Confirm with note action
+### Requirement: Confirm and reject actions with an optional note
 
-The guard scan result SHALL offer both **Confirmar** and **Confirmar con nota**.
-The second action MUST remain disabled until the trimmed note is non-empty.
+The guard scan result SHALL offer exactly two actions: **Confirmar** and
+**Denegar**. The note field SHALL stay visible while the actions are available.
+**Confirmar** MUST send the note when it contains non-whitespace text and omit
+it otherwise. **Denegar** MUST send the note as the reason when present and fall
+back to `denied_by_guard` when empty.
 
-#### Scenario: Note required for the second action
+#### Scenario: Confirm sends the typed note
 
-- **WHEN** the note field is empty or contains only whitespace
-- **THEN** Confirmar con nota is disabled and Confirmar remains available
+- **WHEN** the guard types a note and presses Confirmar
+- **THEN** the confirmation includes the trimmed note
+
+#### Scenario: Confirm with an empty note
+
+- **WHEN** the note field is empty or contains only whitespace and the guard presses Confirmar
+- **THEN** the confirmation succeeds without a note
+
+#### Scenario: Two actions only
+
+- **WHEN** the scan result is shown
+- **THEN** the only available actions are Confirmar and Denegar
 
 ### Requirement: Reject note
 
@@ -54,13 +67,20 @@ validation error response.
 
 ### Requirement: Audit visibility
 
-The guard activity and bitacora entry SHALL display the note as «Novedad: …»
-without showing the same text twice when it also acts as the rejection reason.
+The guard activity list and the bitacora entry SHALL display the note as
+«Novedad: …» without showing the same text twice when it also acts as the
+rejection reason. The guard activity reads the bitacora list endpoint, so that
+response MUST include the note through its entry details.
 
 #### Scenario: Note in the activity list
 
-- **WHEN** a scan has a note
-- **THEN** the guard activity shows the note once, labelled as a novedad
+- **WHEN** a scan with a note is listed in the guard activity
+- **THEN** the list response includes the note and the activity shows it once, labelled as a novedad
+
+#### Scenario: Detail parity
+
+- **WHEN** the same bitacora entry is opened in detail
+- **THEN** it exposes the same note as the activity list
 
 ### Requirement: Authorization semantics unchanged
 

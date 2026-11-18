@@ -286,22 +286,19 @@ export default function GuardScanScreen() {
     }
   };
 
-  const onConfirm = async (withNote: boolean) => {
+  const onConfirm = async () => {
     if (!scanResult?.scanId) return;
     setBusy(true);
     setScanError(null);
-    const observation = withNote ? note.trim() : '';
     try {
-      const result = await confirmScan(request, scanResult.scanId, observation || undefined);
+      // The field is always visible: whatever the guard wrote travels with the
+      // confirmation; an empty or whitespace-only note is simply omitted.
+      const result = await confirmScan(request, scanResult.scanId, note.trim() || undefined);
       setDecision(result);
       await refresh();
       // The guard has a line in front: after the decision the scanner resets by
       // itself so the next visitor can be scanned without an extra tap.
-      setFlash(
-        observation
-          ? 'Ingreso registrado con nota. Listo para el siguiente.'
-          : 'Ingreso registrado. Listo para el siguiente.',
-      );
+      setFlash('Ingreso registrado. Listo para el siguiente.');
       setTimeout(() => {
         setFlash(null);
         resetScan();
@@ -588,23 +585,16 @@ export default function GuardScanScreen() {
                           <Row>
                             <Button
                               label="Confirmar"
-                              onPress={() => void onConfirm(false)}
+                              onPress={() => void onConfirm()}
                               loading={busy}
                             />
                             <Button
-                              label="Confirmar con nota"
-                              variant="success"
-                              onPress={() => void onConfirm(true)}
+                              label="Denegar"
+                              variant="danger"
+                              onPress={() => void onReject()}
                               loading={busy}
-                              disabled={note.trim().length === 0}
                             />
                           </Row>
-                          <Button
-                            label="Denegar"
-                            variant="danger"
-                            onPress={() => void onReject()}
-                            loading={busy}
-                          />
                         </>
                       ) : null}
 

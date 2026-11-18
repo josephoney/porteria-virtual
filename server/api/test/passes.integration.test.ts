@@ -1246,6 +1246,26 @@ describe('dynamic pass integration', () => {
     assert.equal(bitacora.statusCode, 200, bitacora.body);
     const details = parse(bitacora).details as Json;
     assert.equal(details.note, 'Llega con equipaje');
+
+    // The guard activity reads the list endpoint filtered by the current shift:
+    // the note must survive that exact path, not only the detail endpoint.
+    const current = await request('GET', '/api/guard/shifts/current', undefined, guardToken);
+    assert.equal(current.statusCode, 200, current.body);
+    const shiftId = parse(current).shift?.id as string | undefined;
+    assert.ok(shiftId, 'the guard must have an open shift');
+
+    const list = await request(
+      'GET',
+      `/api/bitacora?shiftId=${shiftId}&pageSize=100`,
+      undefined,
+      guardToken,
+    );
+    assert.equal(list.statusCode, 200, list.body);
+    const listedEntry = (parse(list).items as Json[]).find(
+      (item) => item.id === parse(confirmed).bitacoraEntryId,
+    );
+    assert.ok(listedEntry, 'the confirmed entry must appear in the guard activity');
+    assert.equal((listedEntry.details as Json).note, 'Llega con equipaje');
   });
 
   it('records the note as the rejection reason and in the audit', async () => {
@@ -1280,6 +1300,24 @@ describe('dynamic pass integration', () => {
     const details = parse(bitacora).details as Json;
     assert.equal(details.note, 'Documento ilegible');
     assert.equal(details.reason, 'Documento ilegible');
+
+    const current = await request('GET', '/api/guard/shifts/current', undefined, guardToken);
+    assert.equal(current.statusCode, 200, current.body);
+    const shiftId = parse(current).shift?.id as string | undefined;
+    assert.ok(shiftId, 'the guard must have an open shift');
+
+    const list = await request(
+      'GET',
+      `/api/bitacora?shiftId=${shiftId}&pageSize=100`,
+      undefined,
+      guardToken,
+    );
+    assert.equal(list.statusCode, 200, list.body);
+    const listedEntry = (parse(list).items as Json[]).find(
+      (item) => item.id === parse(rejected).bitacoraEntryId,
+    );
+    assert.ok(listedEntry, 'the rejection must appear in the guard activity');
+    assert.equal((listedEntry.details as Json).note, 'Documento ilegible');
   });
 
   it('rejects a scan note longer than 500 characters', async () => {

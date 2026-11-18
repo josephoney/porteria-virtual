@@ -11,7 +11,7 @@ next shift or the administrator.
 ## What Changes
 
 - Add an optional observation/note to the scan confirmation and rejection.
-- On confirmation, the guard can use **Confirmar** (no note) or **Confirmar con nota**; the second action requires a non-empty note.
+- The note field is always visible in the scan result; the guard has only **Confirmar** and **Denegar**. Confirmation sends the note when present and omits it when empty.
 - On rejection, the note is optional. When present it becomes the rejection reason; when absent the existing `denied_by_guard` reason is used.
 - Trim the note, limit it to 500 characters, and reject longer notes with the existing validation error shape.
 - Persist the note on the scan (`pass_scans.note`) and in the bitacora entry `details.note` so it is visible in the audit and guard activity.

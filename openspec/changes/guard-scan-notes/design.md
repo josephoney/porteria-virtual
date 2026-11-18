@@ -15,7 +15,7 @@ nullable column.
 
 - Let the guard leave an optional observation on confirmation and rejection.
 - Persist the observation with the scan and in the audit entry.
-- Keep the action explicit: Confirmar, Confirmar con nota, Denegar.
+- Keep the action explicit: Confirmar and Denegar, both with the optional note.
 - Keep the note bounded and trimmed.
 - Preserve the existing authorization, QR, entry/exit and use-count behavior.
 
@@ -48,9 +48,10 @@ nullable column.
    `pass_entry`, `pass_exit` and `pass_rejected`. This keeps the audit readable
    even if the scan row is later archived.
 
-5. **UI actions.** The scan result offers Confirmar, Confirmar con nota and
-   Denegar. The middle action is disabled until the trimmed note is non-empty.
-   Denegar accepts an empty note. The result sheet is scrollable so up to ten
+5. **UI actions.** The scan result offers exactly Confirmar and Denegar with an
+   always-visible note field. Confirmar sends the note when the trimmed text is
+   non-empty and omits it otherwise; Denegar uses the note as the reason or
+   falls back to `denied_by_guard`. The result sheet is scrollable so up to ten
    companions, the note and the actions fit on small screens.
 
 6. **No semantic changes.** Notes do not alter the scan result, QR token,
