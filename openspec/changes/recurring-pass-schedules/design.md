@@ -66,37 +66,32 @@ Cada uno tiene su código y su texto: `not_valid_now`, `out_of_days`, `out_of_sc
 
 Las filas existentes quedan con `recurrence = 'once'` y sin horario: se comportan exactamente como hoy. Ninguna migración de datos ni cambio de comportamiento para lo ya creado.
 
-### 8. Tres botones en lugar de dos fechas
+### 8. Cuatro modos de vigencia y una tarjeta de duración
 
 Elegir el rango con dos campos de fecha es correcto y lento: para autorizar a alguien hoy hay que abrir el calendario, elegir la fecha y repetirla en el segundo campo.
 
-El residente elige primero la **duración**, con tres botones excluyentes:
+El residente elige primero la **vigencia**, con cuatro botones excluyentes:
 
-| Botón             | Qué hace                                       |
-| ----------------- | ---------------------------------------------- |
-| **Hoy**           | Vigencia de hoy, sin segundo campo de fecha    |
-| **Mañana**        | Vigencia de mañana, sin segundo campo de fecha |
-| **Rango de días** | Aparecen las dos fechas                        |
+| Botón           | Qué hace                                                   |
+| --------------- | ---------------------------------------------------------- |
+| **Hoy**         | Vigencia de hoy; entrada inmediata por defecto             |
+| **Mañana**      | Vigencia de mañana, sin segundo campo de fecha             |
+| **Varios días** | Aparecen las dos fechas                                    |
+| **Recurrente**  | Días de la semana marcados y fechas Desde/Hasta opcionales |
 
-Los botones fijan **sólo las fechas**; la ventana horaria sigue siendo independiente. Así «Hoy» no obliga a inventar una hora de fin: si el pase permite un uso, alcanza con el horario habitual.
+Los botones de vigencia fijan las fechas y la modalidad, pero **no** la ventana horaria. El horario diario vive en una tarjeta aparte, **Duración**, con `Hora inicio` y `Hora final`. Así «Hoy» no obliga a inventar una hora de fin: si el pase permite un uso, alcanza con el horario habitual.
 
 El caso más frecuente —autorizar a alguien que viene ahora— pasa de seis interacciones a dos.
 
-**«Hoy» arranca exactamente en el instante de creación**, sin redondear. Si el residente autoriza a las 15:43:05 y el visitante entra a las 15:43:36, ya puede pasar.
+**«Hoy» arranca exactamente en el instante de creación** cuando «Entrada inmediata» está marcada, sin redondear. Si el residente autoriza a las 15:43:05 y el visitante entra a las 15:43:36, ya puede pasar. Desmarcada, el pase no sirve antes de la `Hora inicio`; por eso el formulario exige esa hora si se desmarca la casilla.
 
-Pero «hoy» no siempre significa «ahora»: a veces el residente autoriza a las 10:00 a alguien que llega a las 16:00, y necesita que el pase no sirva antes. Por eso, con «Hoy», aparece una casilla:
+La casilla «Entrada inmediata» sólo se habilita para «Hoy». En «Mañana», «Varios días» y «Recurrente» el inicio es la `Hora inicio` en la fecha que corresponda: ahí no hay un «ahora» que valga.
 
-```
-☑ Entrada inmediata        ← por defecto
-☐ Desde una hora  [ 16:00 ▾ ]
-```
+La tarjeta **Recurrente** está deshabilitada (y visible en gris) mientras la vigencia no sea «Recurrente». Al habilitarse ofrece la máscara L–D y dos fechas opcionales, **Desde** y **Hasta**. Sin fechas, el pase empieza el día en que se crea y **no vence**; con fechas, empieza a la `Hora inicio` del día elegido y termina al final del día «Hasta». Los días marcados y la ventana de Duración se combinan: sólo se entra en esos días, dentro de esa ventana.
 
-| Estado                        | Qué pasa                                                                   |
-| ----------------------------- | -------------------------------------------------------------------------- |
-| **Entrada inmediata** marcada | La hora de entrada se deshabilita; `validFrom` es el instante de creación  |
-| Desmarcada                    | El residente elige la hora de entrada en cuartos, y el pase no sirve antes |
+Una recurrencia sin fecha de fin se guarda con el instante técnico `9999-12-31T23:59:59.999Z` (`PERMANENT_PASS_UNTIL` en `@porteria/shared`) y se muestra como «sin fecha de fin» en todas las pantallas. La alternativa —hacer `valid_until` nullable— es más correcta a largo plazo, pero obliga a un `IS NULL` en cada listado, búsqueda, alerta y expiración; el centinela deja esas consultas intactas. La UI nunca muestra el año 9999: `isPermanentPass` centraliza la detección.
 
-Con «Mañana» y «Rango de días» el selector de entrada siempre está visible: ahí no hay un «ahora» que valga.
+El menú de repetición (`once` / `range` / `weekly`) se elimina porque confundía: la vigencia ya determina la modalidad. «Hoy» y «Mañana» envían `recurrence: 'once'`; «Varios días», `'range'`; «Recurrente», `'weekly'` con `allowedDays`.
 
 El redondeo a cuartos aplica **sólo a los selectores**, nunca al valor automático. La vigencia se guarda con precisión de segundos y el motor compara instantes reales.
 

@@ -11,6 +11,8 @@ export interface ActivityItem {
   vehiclePlate: string | null;
   destination: string | null;
   reason: string | null;
+  /** Static schedule rule of the pass at the moment of the event. */
+  rule: string | null;
   createdAt: string;
 }
 
@@ -18,7 +20,10 @@ const REASON_TEXTS: Record<string, string> = {
   pass_used: 'El pase ya fue utilizado.',
   revoked: 'El pase fue revocado.',
   expired: 'El pase está expirado.',
+  not_valid_now: 'El pase no está vigente en este momento.',
+  out_of_days: 'Hoy no es un día autorizado para este pase.',
   out_of_schedule: 'El pase está fuera del horario permitido.',
+  daily_uses_exhausted: 'El pase ya agotó los usos permitidos para hoy.',
   wrong_direction: 'El sentido del escaneo no coincide con este acceso.',
   token_already_used: 'Ese QR ya fue usado.',
   denied_by_guard: 'El guardia denegó el acceso.',
@@ -80,6 +85,7 @@ export function toActivityItem(entry: BitacoraEntryDto): ActivityItem {
     vehiclePlate: textField(entry.details.vehiclePlate),
     destination: textField(entry.details.destinationName) ?? entry.destinationPath,
     reason: textField(entry.details.reason),
+    rule: textField(entry.details.rule),
     createdAt: entry.createdAt,
   };
 }

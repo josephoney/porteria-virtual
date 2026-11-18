@@ -8,6 +8,7 @@ import {
   RiQrCodeLine,
 } from '@remixicon/react';
 import { ApiError, get } from '../lib/apiClient';
+import { isPermanentPass } from '@porteria/shared';
 import { usePassStream } from '../lib/use-pass-stream';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -30,7 +31,9 @@ const dateFormat = new Intl.DateTimeFormat('es-CO', {
 });
 
 function formatRange(from: string, until: string) {
-  return `${dateFormat.format(new Date(from))} — ${dateFormat.format(new Date(until))}`;
+  const start = dateFormat.format(new Date(from));
+  if (isPermanentPass(until)) return `${start} — sin fecha de fin`;
+  return `${start} — ${dateFormat.format(new Date(until))}`;
 }
 
 interface QuickActionProps {

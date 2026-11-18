@@ -24,6 +24,9 @@ export function passErrorStatus(code: PassErrorCode): number {
     case 'pin_locked':
       return 429;
     case 'not_valid_now':
+    case 'out_of_days':
+    case 'out_of_schedule':
+    case 'daily_uses_exhausted':
       return 409;
     case 'dynamic_qr_disabled':
       return 404;

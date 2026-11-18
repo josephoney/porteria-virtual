@@ -1,4 +1,4 @@
-import type { PublicPassPreview } from '@porteria/shared';
+import { isPermanentPass, type PublicPassPreview } from '@porteria/shared';
 import { formatDateTime, formatTime } from '../lib/format';
 
 interface PreviewCardProps {
@@ -29,7 +29,11 @@ export function PreviewCard({ preview, busy, error, onBind }: PreviewCardProps) 
           </div>
           <div>
             <dt>Válido hasta</dt>
-            <dd>{formatDateTime(preview.validUntil)}</dd>
+            <dd>
+              {isPermanentPass(preview.validUntil)
+                ? 'Sin fecha de fin'
+                : formatDateTime(preview.validUntil)}
+            </dd>
           </div>
           {preview.timeFrom && preview.timeTo && (
             <div>

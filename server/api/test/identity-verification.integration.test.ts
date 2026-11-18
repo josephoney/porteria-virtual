@@ -52,6 +52,56 @@ async function request(method: 'GET' | 'POST', url: string, token: string, paylo
   });
 }
 
+/** 0 = Sunday, read from the community's calendar, not the server clock. */
+function weekdayIn(timeZone: string, date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? '0');
+  return new Date(Date.UTC(value('year'), value('month') - 1, value('day'))).getUTCDay();
+}
+
+function localMinutesIn(timeZone: string, date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? '0');
+  return value('hour') * 60 + value('minute');
+}
+
+function linkToken(shareUrl: string): string {
+  return shareUrl.split('/p/')[1]!;
+}
+
+async function bindPass(token: string): Promise<string> {
+  const response = await app.inject({
+    method: 'POST',
+    url: `/api/public/passes/${token}/bind`,
+    payload: {},
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  const raw = response.headers['set-cookie'];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  assert.ok(value, 'expected a Set-Cookie header');
+  return value.split(';')[0]!;
+}
+
+async function publicQrToken(token: string, cookie: string): Promise<string> {
+  const response = await app.inject({
+    method: 'GET',
+    url: `/api/public/passes/${token}/qr`,
+    headers: { cookie },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  return parse(response).token as string;
+}
+
 describe('identity verification by document', () => {
   before(async () => {
     const { buildApp } = await import('../src/index.js');
@@ -301,6 +351,37 @@ describe('identity verification by document', () => {
     assert.notEqual(blocked.statusCode, 200, 'a consumed pass cannot be used again');
   });
 
+  it('returns the schedule and the remaining uses today with each candidate', async () => {
+    const weekday = weekdayIn('America/Bogota');
+    const created = await request('POST', '/api/passes', residentToken, {
+      locationUnitId: unitId,
+      visitorFirstName: 'Semanal',
+      visitorLastName: 'Candidata',
+      visitorDocument: 'CAND-9911',
+      type: 'entry_exit',
+      recurrence: 'weekly',
+      allowedDays: [weekday],
+      timeFrom: '00:00',
+      timeTo: '23:59',
+      maxUses: 2,
+      validFrom: new Date(Date.now() - 60_000).toISOString(),
+      validUntil: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    assert.equal(created.statusCode, 201, created.body);
+
+    const found = await request('GET', '/api/access/authorizations?document=CAND-9911', guardToken);
+    assert.equal(found.statusCode, 200, found.body);
+    const candidates = parse(found) as unknown as Json[];
+    assert.equal(candidates.length, 1);
+
+    const rule = candidates[0].rule as Json;
+    assert.equal(rule.recurrence, 'weekly');
+    assert.equal(rule.maxUses, 2);
+    assert.equal(rule.remainingUses, 2);
+    assert.match(String(rule.summary), /de 00:00 a 23:59/);
+    assert.match(String(rule.summary), /quedan 2 usos hoy/);
+  });
+
   it('refuses an entry for someone already inside', async () => {
     const created = await request('POST', '/api/passes', residentToken, {
       locationUnitId: unitId,
@@ -342,5 +423,114 @@ describe('identity verification by document', () => {
 
     const [row] = await db.select().from(accessPasses).where(eq(accessPasses.id, passId));
     assert.equal(row.maxUses, 1);
+  });
+
+  it('rejects a document entry on a weekday the pass does not allow', async () => {
+    const today = weekdayIn('America/Bogota');
+    const created = await request('POST', '/api/passes', residentToken, {
+      locationUnitId: unitId,
+      visitorFirstName: 'Dora',
+      visitorLastName: 'Dias',
+      visitorDocument: `${document}-D`,
+      type: 'entry_exit',
+      recurrence: 'weekly',
+      allowedDays: [(today + 1) % 7],
+      maxUses: 1,
+      validFrom: new Date(Date.now() - 60_000).toISOString(),
+      validUntil: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const passId = parse(created).pass.id as string;
+
+    const denied = await request(
+      'POST',
+      `/api/access/authorizations/${passId}/confirm`,
+      guardToken,
+      { action: 'entry' },
+    );
+    assert.equal(denied.statusCode, 409, denied.body);
+    assert.equal(parse(denied).message, 'out_of_days');
+  });
+
+  it('rejects a document entry outside the allowed window', async () => {
+    const minutes = localMinutesIn('America/Bogota');
+    const [from, to] = minutes >= 12 * 60 ? ['00:00', '11:59'] : ['12:00', '23:59'];
+    const created = await request('POST', '/api/passes', residentToken, {
+      locationUnitId: unitId,
+      visitorFirstName: 'Fuera',
+      visitorLastName: 'Horario',
+      visitorDocument: `${document}-F`,
+      type: 'entry_exit',
+      maxUses: 1,
+      timeFrom: from,
+      timeTo: to,
+      validFrom: new Date(Date.now() - 60_000).toISOString(),
+      validUntil: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const passId = parse(created).pass.id as string;
+
+    const denied = await request(
+      'POST',
+      `/api/access/authorizations/${passId}/confirm`,
+      guardToken,
+      { action: 'entry' },
+    );
+    assert.equal(denied.statusCode, 409, denied.body);
+    assert.equal(parse(denied).message, 'out_of_schedule');
+  });
+
+  it('exhausts the daily uses in the document flow after a QR pair', async () => {
+    const created = await request('POST', '/api/passes', residentToken, {
+      locationUnitId: unitId,
+      visitorFirstName: 'Eva',
+      visitorLastName: 'Usos',
+      visitorDocument: `${document}-E`,
+      type: 'entry_exit',
+      recurrence: 'range',
+      maxUses: 1,
+      validFrom: new Date(Date.now() - 60_000).toISOString(),
+      validUntil: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const body = parse(created);
+    const passId = body.pass.id as string;
+    const token = linkToken(body.shareUrl as string);
+    const cookie = await bindPass(token);
+
+    const entryScan = parse(
+      await request('POST', '/api/access/scan', guardToken, {
+        token: await publicQrToken(token, cookie),
+      }),
+    );
+    const entryConfirm = await request(
+      'POST',
+      `/api/access/scans/${entryScan.scanId as string}/confirm`,
+      guardToken,
+      {},
+    );
+    assert.equal(entryConfirm.statusCode, 200, entryConfirm.body);
+
+    const exitScan = parse(
+      await request('POST', '/api/access/scan', guardToken, {
+        token: await publicQrToken(token, cookie),
+      }),
+    );
+    const exitConfirm = await request(
+      'POST',
+      `/api/access/scans/${exitScan.scanId as string}/confirm`,
+      guardToken,
+      {},
+    );
+    assert.equal(exitConfirm.statusCode, 200, exitConfirm.body);
+
+    const denied = await request(
+      'POST',
+      `/api/access/authorizations/${passId}/confirm`,
+      guardToken,
+      { action: 'entry' },
+    );
+    assert.equal(denied.statusCode, 409, denied.body);
+    assert.equal(parse(denied).message, 'daily_uses_exhausted');
   });
 });

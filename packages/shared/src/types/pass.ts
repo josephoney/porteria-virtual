@@ -32,6 +32,13 @@ export interface DestinationOption extends DestinationSummary {
   active: boolean;
 }
 
+/**
+ * How often a pass can be used. `once` is one entry/exit inside the validity
+ * window; `range` allows every day between the dates; `weekly` only the marked
+ * weekdays.
+ */
+export type PassRecurrence = 'once' | 'range' | 'weekly';
+
 export interface AccessPass {
   id: string;
   communityId: string;
@@ -46,6 +53,8 @@ export interface AccessPass {
   hasVehicle: boolean;
   vehiclePlate: string | null;
   type: PassType;
+  maxUses: number;
+  recurrence: PassRecurrence;
   validFrom: Date;
   validUntil: Date;
   allowedDays: number[] | null;
@@ -62,6 +71,23 @@ export interface AccessPass {
   exitCount: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/**
+ * Readable version of the pass rule. `remainingUses` is per day for `range` and
+ * `weekly`; for `once` it is the total left in the whole validity window.
+ */
+export interface PassRuleSummary {
+  recurrence: PassRecurrence;
+  /** 0 = Sunday. Only set for `weekly`; `null` means every day. */
+  allowedDays: number[] | null;
+  timeFrom: string | null;
+  timeTo: string | null;
+  /** Entry/exit pairs per day, or in total for `once`. */
+  maxUses: number;
+  remainingUses: number;
+  /** One-line Spanish description ready to render in the UI. */
+  summary: string;
 }
 
 export interface PassScan {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PERMANENT_PASS_UNTIL, isPermanentPass } from '@porteria/shared';
+import { cn } from 'cn';
 import { ApiError, get, post } from '../lib/apiClient';
 import { Button } from '../components/ui/button';
 import { DetailField, DetailGrid } from '../components/ui/detail-field';
@@ -22,27 +24,306 @@ interface Destination {
 }
 
 type Step = 'form' | 'review';
-
-type FieldKey = 'destination' | 'visitor' | 'window' | 'vehicle';
+type Duration = 'today' | 'tomorrow' | 'range' | 'recurrent';
+type Recurrence = 'once' | 'range' | 'weekly';
+type FieldKey =
+  | 'destination'
+  | 'visitor'
+  | 'window'
+  | 'vehicle'
+  | 'schedule'
+  | 'days'
+  | 'recurrenceUntil'
+  | 'uses';
 
 const dateTimeFormatter = new Intl.DateTimeFormat('es-CO', {
   dateStyle: 'short',
   timeStyle: 'short',
 });
 
-function toLocalInput(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours(),
-  )}:${pad(date.getMinutes())}`;
+const DURATIONS: Array<{ value: Duration; label: string }> = [
+  { value: 'today', label: 'Hoy' },
+  { value: 'tomorrow', label: 'Mañana' },
+  { value: 'range', label: 'Varios días' },
+  { value: 'recurrent', label: 'Recurrente' },
+];
+
+/** Monday first, as the resident reads a calendar. `0` is Sunday in the database. */
+const WEEKDAYS: Array<{ value: number; short: string; name: string }> = [
+  { value: 1, short: 'L', name: 'lunes' },
+  { value: 2, short: 'M', name: 'martes' },
+  { value: 3, short: 'X', name: 'miércoles' },
+  { value: 4, short: 'J', name: 'jueves' },
+  { value: 5, short: 'V', name: 'viernes' },
+  { value: 6, short: 'S', name: 'sábado' },
+  { value: 0, short: 'D', name: 'domingo' },
+];
+
+const HOURS_12 = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'));
+const MINUTE_STEPS = ['00', '15', '30', '45'];
+
+interface TimeParts {
+  hour: string;
+  minute: string;
+  meridiem: 'AM' | 'PM';
 }
 
-function formatWindow(from: string, until: string) {
-  const fromDate = new Date(from);
-  const untilDate = new Date(until);
-  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(untilDate.getTime())) return '';
+/** `input type="time"` follows the OS locale, so the page builds its own AM/PM control. */
+function splitTime(value: string): TimeParts {
+  if (!value) return { hour: '', minute: '00', meridiem: 'AM' };
+  const [hours, minutes] = value.slice(0, 5).split(':');
+  const hour24 = Number(hours);
+  return {
+    hour: String(hour24 % 12 === 0 ? 12 : hour24 % 12).padStart(2, '0'),
+    minute: MINUTE_STEPS.includes(minutes) ? minutes : '00',
+    meridiem: hour24 >= 12 ? 'PM' : 'AM',
+  };
+}
 
-  return `${dateTimeFormatter.format(fromDate)} → ${dateTimeFormatter.format(untilDate)}`;
+function joinTime(hour: string, minute: string, meridiem: 'AM' | 'PM') {
+  const hour24 = (Number(hour) % 12) + (meridiem === 'PM' ? 12 : 0);
+  return `${String(hour24).padStart(2, '0')}:${minute}`;
+}
+
+interface TimeFieldProps {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  invalid?: boolean;
+  disabled?: boolean;
+}
+
+/**
+ * Native time inputs render in 12 or 24 hours depending on the operating system,
+ * so the format cannot be forced with an attribute. Three selects keep AM/PM
+ * stable for every resident; the value remains a 24-hour `HH:MM` string.
+ */
+function TimeField({ id, label, value, onChange, invalid, disabled }: TimeFieldProps) {
+  const { hour, minute, meridiem } = splitTime(value);
+
+  function update(next: Partial<TimeParts>) {
+    const nextHour = next.hour ?? hour;
+    if (!nextHour) {
+      onChange('');
+      return;
+    }
+    onChange(joinTime(nextHour, next.minute ?? minute, next.meridiem ?? meridiem));
+  }
+
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id} className="whitespace-nowrap">
+        {label}
+      </Label>
+      <div className="flex items-center gap-1">
+        <Select
+          value={hour || 'none'}
+          onValueChange={(next) => update({ hour: next === 'none' ? '' : next })}
+          disabled={disabled}
+        >
+          <SelectTrigger
+            id={id}
+            aria-label={`${label}: hora`}
+            aria-invalid={invalid}
+            className="w-[4.5rem]"
+          >
+            <SelectValue placeholder="--" />
+          </SelectTrigger>
+          <SelectContent className="min-w-0">
+            <SelectItem value="none">--</SelectItem>
+            {HOURS_12.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-sm text-muted-foreground">:</span>
+        <Select
+          value={minute}
+          onValueChange={(next) => update({ minute: next })}
+          disabled={disabled || !hour}
+        >
+          <SelectTrigger aria-label={`${label}: minutos`} className="w-[4.5rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="min-w-0">
+            {MINUTE_STEPS.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={meridiem}
+          onValueChange={(next) => update({ meridiem: next as 'AM' | 'PM' })}
+          disabled={disabled || !hour}
+        >
+          <SelectTrigger aria-label={`${label}: AM o PM`} className="w-[5rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="min-w-0">
+            <SelectItem value="AM">AM</SelectItem>
+            <SelectItem value="PM">PM</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+function pad(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+/** Local wall clock in the 24-hour `HH:MM` format the API expects. */
+function timeOfDay(date: Date) {
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function toDateInput(date: Date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function parseDateInput(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function addDays(date: Date, days: number) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function combineDateAndTime(date: Date, time: string) {
+  const [hours, minutes] = time.split(':').map(Number);
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    Number.isFinite(hours) ? hours : 0,
+    Number.isFinite(minutes) ? minutes : 0,
+    0,
+    0,
+  );
+}
+
+function endOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
+function formatRuleDate(date: Date) {
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+function formatWindow(from: Date, until: Date) {
+  if (Number.isNaN(from.getTime()) || Number.isNaN(until.getTime())) return '';
+  if (isPermanentPass(until)) return `${dateTimeFormatter.format(from)} → sin fecha de fin`;
+  return `${dateTimeFormatter.format(from)} → ${dateTimeFormatter.format(until)}`;
+}
+
+function describeDays(days: number[]) {
+  const names = WEEKDAYS.filter((day) => days.includes(day.value)).map((day) => day.name);
+  if (names.length === 0) return 'Ningún día';
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+}
+
+interface RuleDescription {
+  recurrence: Recurrence;
+  allowedDays: number[];
+  scheduleFrom: string;
+  scheduleTo: string;
+  maxUses: number;
+  entryOnly: boolean;
+  start: Date;
+  end: Date;
+  immediate: boolean;
+}
+
+/** Mirrors the wording the API uses in the pass detail, so review and detail agree. */
+function describeRule(rule: RuleDescription) {
+  const permanent = isPermanentPass(rule.end);
+  const sameDay = formatRuleDate(rule.start) === formatRuleDate(rule.end);
+  const range = permanent
+    ? `desde el ${formatRuleDate(rule.start)} de forma permanente`
+    : sameDay
+      ? `del ${formatRuleDate(rule.start)}`
+      : `del ${formatRuleDate(rule.start)} al ${formatRuleDate(rule.end)}`;
+  let when: string;
+  if (rule.recurrence === 'weekly') {
+    when = `${describeDays(rule.allowedDays)} ${range}`;
+  } else if (rule.recurrence === 'range') {
+    when = `Todos los días ${range}`;
+  } else if (rule.immediate) {
+    when = `Desde ahora hasta el ${formatRuleDate(rule.end)}`;
+  } else {
+    when = `Un solo uso ${range}`;
+  }
+
+  const hours = rule.immediate
+    ? rule.scheduleTo
+      ? `desde la confirmación hasta ${rule.scheduleTo}`
+      : 'en cualquier horario'
+    : rule.scheduleFrom && rule.scheduleTo
+      ? `de ${rule.scheduleFrom} a ${rule.scheduleTo}`
+      : 'en cualquier horario';
+  const uses = rule.entryOnly
+    ? 'sólo entrada'
+    : rule.recurrence === 'once'
+      ? `${rule.maxUses} ${rule.maxUses === 1 ? 'uso' : 'usos'} en total`
+      : `hasta ${rule.maxUses} ${rule.maxUses === 1 ? 'uso' : 'usos'} por día`;
+
+  return `${when.charAt(0).toUpperCase()}${when.slice(1)}, ${hours} · ${uses}.`;
+}
+
+interface WindowInput {
+  duration: Duration;
+  immediateEntry: boolean;
+  scheduleFrom: string;
+  rangeFrom: string;
+  rangeUntil: string;
+  recurrenceFrom: string;
+  recurrenceUntil: string;
+  now: Date;
+}
+
+function computeWindow(input: WindowInput): { start: Date; end: Date } {
+  const startTime = input.scheduleFrom || '00:00';
+
+  if (input.duration === 'today') {
+    // Without a start hour there is nothing to delay, so immediate is the only
+    // coherent start.
+    const start =
+      input.immediateEntry || !input.scheduleFrom
+        ? input.now
+        : combineDateAndTime(input.now, startTime);
+    return { start, end: endOfDay(input.now) };
+  }
+
+  if (input.duration === 'tomorrow') {
+    const day = addDays(input.now, 1);
+    return { start: combineDateAndTime(day, startTime), end: endOfDay(day) };
+  }
+
+  if (input.duration === 'range') {
+    const from = parseDateInput(input.rangeFrom);
+    const until = parseDateInput(input.rangeUntil);
+    return { start: combineDateAndTime(from, startTime), end: endOfDay(until) };
+  }
+
+  // Recurring passes start today when no start date is chosen, and never expire
+  // when no end date is chosen; the weekdays live in `allowedDays`.
+  const startDay = input.recurrenceFrom ? parseDateInput(input.recurrenceFrom) : input.now;
+  return {
+    start: combineDateAndTime(startDay, startTime),
+    end: input.recurrenceUntil
+      ? endOfDay(parseDateInput(input.recurrenceUntil))
+      : new Date(PERMANENT_PASS_UNTIL),
+  };
 }
 
 /**
@@ -66,6 +347,14 @@ function destinationErrorFor(code: string): string | null {
   }
 }
 
+/** Zod validation details arrive as a list; the first one names the broken rule. */
+function validationDetailMessage(err: unknown): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const body = err.body as { details?: Array<{ message?: unknown }> } | null;
+  const message = body?.details?.[0]?.message;
+  return typeof message === 'string' ? message : null;
+}
+
 export function ResidentAuthorizationNewPage() {
   const navigate = useNavigate();
   const now = useMemo(() => new Date(), []);
@@ -84,12 +373,19 @@ export function ResidentAuthorizationNewPage() {
   const [document, setDocument] = useState('');
   const [hasVehicle, setHasVehicle] = useState(false);
   const [plate, setPlate] = useState('');
-  const [type, setType] = useState('entry_only');
+
+  const [duration, setDuration] = useState<Duration>('today');
+  const [immediateEntry, setImmediateEntry] = useState(true);
+  const [rangeFrom, setRangeFrom] = useState(toDateInput(now));
+  const [rangeUntil, setRangeUntil] = useState(toDateInput(addDays(now, 1)));
+  const [recurrenceFrom, setRecurrenceFrom] = useState('');
+  const [recurrenceUntil, setRecurrenceUntil] = useState('');
+
+  const [allowedDays, setAllowedDays] = useState<number[]>([]);
+  const [scheduleFrom, setScheduleFrom] = useState('');
+  const [scheduleTo, setScheduleTo] = useState('');
+  const [entryOnly, setEntryOnly] = useState(false);
   const [maxUses, setMaxUses] = useState('1');
-  const [validFrom, setValidFrom] = useState(toLocalInput(now));
-  const [validUntil, setValidUntil] = useState(
-    toLocalInput(new Date(now.getTime() + 4 * 60 * 60 * 1000)),
-  );
 
   const loadDestinations = useCallback(async () => {
     try {
@@ -116,8 +412,60 @@ export function ResidentAuthorizationNewPage() {
   const commonAreas = destinations.filter((destination) => destination.kind === 'common_area');
   const selectedDestination = destinations.find((destination) => destination.id === destinationId);
 
+  // The repetition menu was removed from the form: the validity mode already
+  // says how the pass repeats, so sending both would let them contradict.
+  const recurrence: Recurrence =
+    duration === 'recurrent' ? 'weekly' : duration === 'range' ? 'range' : 'once';
+  const isRecurrent = duration === 'recurrent';
+  const immediateApplies = duration === 'today';
+  const effectiveImmediate = immediateApplies && immediateEntry;
+
+  const previewWindow = computeWindow({
+    duration,
+    immediateEntry: effectiveImmediate,
+    scheduleFrom,
+    rangeFrom,
+    rangeUntil,
+    recurrenceFrom,
+    recurrenceUntil,
+    now,
+  });
+  const previewRule = describeRule({
+    recurrence,
+    allowedDays,
+    scheduleFrom,
+    scheduleTo,
+    maxUses: Number(maxUses) || 1,
+    entryOnly,
+    start: previewWindow.start,
+    end: previewWindow.end,
+    immediate: effectiveImmediate,
+  });
+
   function clearFieldError(key: FieldKey) {
     setFieldErrors((current) => (current[key] ? { ...current, [key]: undefined } : current));
+  }
+
+  function selectDuration(next: Duration) {
+    setDuration(next);
+    // Immediate entry only makes sense for a pass that starts today. For the
+    // other modes the start is the chosen hour on the start date.
+    setImmediateEntry(next === 'today');
+    clearFieldError('window');
+    clearFieldError('days');
+    clearFieldError('recurrenceUntil');
+  }
+
+  function toggleImmediateEntry(checked: boolean) {
+    setImmediateEntry(checked);
+    clearFieldError('window');
+  }
+
+  function toggleDay(day: number) {
+    setAllowedDays((current) =>
+      current.includes(day) ? current.filter((value) => value !== day) : [...current, day],
+    );
+    clearFieldError('days');
   }
 
   function validate(): boolean {
@@ -130,12 +478,63 @@ export function ResidentAuthorizationNewPage() {
       next.visitor = 'Completa nombre, apellido y documento del visitante.';
     }
 
-    const from = new Date(validFrom);
-    const until = new Date(validUntil);
-    if (Number.isNaN(from.getTime()) || Number.isNaN(until.getTime())) {
-      next.window = 'Completa la fecha y hora de la vigencia.';
-    } else if (until.getTime() <= from.getTime()) {
-      next.window = 'La vigencia debe terminar después de empezar.';
+    const window = computeWindow({
+      duration,
+      immediateEntry: effectiveImmediate,
+      scheduleFrom,
+      rangeFrom,
+      rangeUntil,
+      recurrenceFrom,
+      recurrenceUntil,
+      now,
+    });
+
+    if (duration === 'range') {
+      if (!rangeFrom || !rangeUntil) {
+        next.window = 'Elige la fecha de inicio y la de fin.';
+      } else if (
+        Number.isNaN(window.start.getTime()) ||
+        Number.isNaN(window.end.getTime()) ||
+        window.end.getTime() <= window.start.getTime()
+      ) {
+        next.window = 'La vigencia debe terminar después de empezar.';
+      }
+    }
+
+    if (isRecurrent) {
+      const startDay = recurrenceFrom
+        ? parseDateInput(recurrenceFrom)
+        : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (recurrenceUntil) {
+        const untilDay = parseDateInput(recurrenceUntil);
+        if (
+          Number.isNaN(startDay.getTime()) ||
+          Number.isNaN(untilDay.getTime()) ||
+          untilDay.getTime() < startDay.getTime()
+        ) {
+          next.recurrenceUntil = 'La fecha de fin debe ser igual o posterior a la de inicio.';
+        }
+      }
+      if (allowedDays.length === 0) {
+        next.days = 'Marca al menos un día de la semana.';
+      }
+    }
+
+    const scheduleStart = effectiveImmediate ? timeOfDay(new Date()) : scheduleFrom;
+    if (duration === 'today' && !effectiveImmediate && !scheduleFrom) {
+      next.schedule = 'Elegí la hora de inicio o volvé a marcar Entrada inmediata.';
+    } else if (
+      !effectiveImmediate &&
+      ((scheduleFrom && !scheduleTo) || (!scheduleFrom && scheduleTo))
+    ) {
+      next.schedule = 'Completa el horario o deja ambos campos vacíos.';
+    } else if (scheduleTo && scheduleStart >= scheduleTo) {
+      next.schedule = 'El horario debe empezar antes de terminar.';
+    }
+
+    const uses = Number(maxUses);
+    if (!entryOnly && (!Number.isInteger(uses) || uses < 1 || uses > 20)) {
+      next.uses = 'Elige entre 1 y 20 usos.';
     }
 
     if (hasVehicle && !plate.trim()) {
@@ -158,6 +557,23 @@ export function ResidentAuthorizationNewPage() {
     setFieldErrors({});
     setSaving(true);
     try {
+      // "Hoy" with immediate entry must use the exact creation instant, so the
+      // window is computed here and not when the review step was rendered.
+      const submittedAt = new Date();
+      const window = computeWindow({
+        duration,
+        immediateEntry: effectiveImmediate,
+        scheduleFrom,
+        rangeFrom,
+        rangeUntil,
+        recurrenceFrom,
+        recurrenceUntil,
+        now: submittedAt,
+      });
+      // The start selector is disabled while the entry is immediate: the window
+      // starts at the confirmation instant, and only its end can be chosen.
+      const windowFrom = effectiveImmediate ? timeOfDay(submittedAt) : scheduleFrom;
+
       await post('/api/passes', {
         locationUnitId: destinationId,
         visitorFirstName: firstName.trim(),
@@ -165,10 +581,13 @@ export function ResidentAuthorizationNewPage() {
         visitorDocument: document.trim(),
         hasVehicle,
         vehiclePlate: hasVehicle ? plate.trim().toUpperCase() : null,
-        type,
-        ...(type === 'entry_exit' ? { maxUses: Number(maxUses) || 1 } : {}),
-        validFrom: new Date(validFrom).toISOString(),
-        validUntil: new Date(validUntil).toISOString(),
+        type: entryOnly ? 'entry_only' : 'entry_exit',
+        recurrence,
+        ...(recurrence === 'weekly' ? { allowedDays } : {}),
+        ...(windowFrom && scheduleTo ? { timeFrom: windowFrom, timeTo: scheduleTo } : {}),
+        ...(entryOnly ? {} : { maxUses: Number(maxUses) || 1 }),
+        validFrom: window.start.toISOString(),
+        validUntil: window.end.toISOString(),
       });
       navigate('/resident/authorizations', { replace: true });
     } catch (err) {
@@ -177,8 +596,12 @@ export function ResidentAuthorizationNewPage() {
           ? String((err.body as { message?: unknown } | null)?.message ?? '')
           : '';
       const destinationError = destinationErrorFor(code);
+      const detail = validationDetailMessage(err);
 
-      if (destinationError) {
+      if (detail === 'weekly_requires_days') {
+        setFieldErrors({ days: 'Marca al menos un día de la semana.' });
+        setStep('form');
+      } else if (destinationError) {
         setFieldErrors({ destination: destinationError });
         setStep('form');
         void loadDestinations();
@@ -208,7 +631,7 @@ export function ResidentAuthorizationNewPage() {
     <div className="p-6 space-y-6">
       <PageHeader
         title="Autorizar visita"
-        description="Elige el destino, carga los datos del visitante y define la ventana de validez."
+        description="Elige el destino, carga los datos del visitante y define cuándo y cuántas veces puede entrar."
       />
 
       <ol className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -242,21 +665,25 @@ export function ResidentAuthorizationNewPage() {
               />
               <DetailField label="Documento" value={document.trim()} />
               <DetailField label="Destino" value={selectedDestination?.path ?? ''} span="full" />
+              <DetailField label="Regla" value={previewRule} span="full" />
               <DetailField
                 label="Vigencia"
-                value={formatWindow(validFrom, validUntil)}
+                value={
+                  effectiveImmediate
+                    ? `Desde ahora hasta el ${formatRuleDate(previewWindow.end)} 23:59`
+                    : formatWindow(previewWindow.start, previewWindow.end)
+                }
                 span="full"
               />
-              <DetailField
-                label="Tipo"
-                value={type === 'entry_exit' ? 'Ingreso y egreso' : 'Solo ingreso'}
-              />
+              <DetailField label="Tipo" value={entryOnly ? 'Sólo entrada' : 'Ingreso y egreso'} />
               <DetailField
                 label="Usos"
                 value={
-                  type === 'entry_exit'
-                    ? `${maxUses} ${Number(maxUses) === 1 ? 'uso' : 'usos'}`
-                    : 'Un solo uso'
+                  entryOnly
+                    ? 'Un solo uso'
+                    : recurrence === 'once'
+                      ? `${maxUses} en total`
+                      : `${maxUses} por día`
                 }
               />
               <DetailField
@@ -374,7 +801,7 @@ export function ResidentAuthorizationNewPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="resident-visitor-document">Documento</Label>
               <Input
@@ -389,32 +816,28 @@ export function ResidentAuthorizationNewPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="resident-pass-type">Tipo de autorización</Label>
-              <Select value={type} onValueChange={setType}>
-                <SelectTrigger id="resident-pass-type" aria-label="Tipo de autorización">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="entry_only">Solo ingreso</SelectItem>
-                  <SelectItem value="entry_exit">Ingreso y egreso</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="resident-max-uses">Usos permitidos</Label>
+              <Label htmlFor="resident-max-uses">
+                {recurrence === 'once' ? 'Usos permitidos' : 'Usos por día'}
+              </Label>
               <Input
                 id="resident-max-uses"
                 type="number"
                 min={1}
                 max={20}
-                value={type === 'entry_only' ? '1' : maxUses}
-                disabled={type === 'entry_only'}
-                onChange={(event) => setMaxUses(event.target.value)}
+                value={entryOnly ? '1' : maxUses}
+                disabled={entryOnly}
+                onChange={(event) => {
+                  setMaxUses(event.target.value);
+                  clearFieldError('uses');
+                }}
+                aria-invalid={Boolean(fieldErrors.uses)}
               />
               <p className="text-xs text-muted-foreground">
-                {type === 'entry_only'
-                  ? 'Pase de ingreso, un solo uso'
-                  : 'Un uso es una entrada y una salida.'}
+                {entryOnly
+                  ? 'El pase se consume al entrar.'
+                  : recurrence === 'once'
+                    ? 'Se cuentan en total, sin importar el día.'
+                    : 'Reinicia cada día. 1 uso = entrada y salida.'}
               </p>
             </div>
           </div>
@@ -424,48 +847,237 @@ export function ResidentAuthorizationNewPage() {
               {fieldErrors.visitor}
             </p>
           )}
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="resident-valid-from">Válida desde</Label>
-              <Input
-                id="resident-valid-from"
-                type="datetime-local"
-                value={validFrom}
-                onChange={(event) => {
-                  setValidFrom(event.target.value);
-                  clearFieldError('window');
-                }}
-                aria-invalid={Boolean(fieldErrors.window)}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="resident-valid-until">Válida hasta</Label>
-              <Input
-                id="resident-valid-until"
-                type="datetime-local"
-                value={validUntil}
-                onChange={(event) => {
-                  setValidUntil(event.target.value);
-                  clearFieldError('window');
-                }}
-                aria-invalid={Boolean(fieldErrors.window)}
-                required
-              />
-            </div>
-          </div>
-
-          {fieldErrors.window && (
-            <p id="resident-window-error" role="alert" className="text-xs text-destructive">
-              {fieldErrors.window}
+          {fieldErrors.uses && (
+            <p role="alert" className="text-xs text-destructive">
+              {fieldErrors.uses}
             </p>
           )}
 
-          <div className="space-y-2 rounded-lg border border-border bg-card p-3">
+          <section className="space-y-3 rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold">Vigencia</h2>
+              <div role="group" aria-label="Vigencia" className="flex flex-wrap gap-2">
+                {DURATIONS.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    variant={duration === option.value ? 'default' : 'outline'}
+                    aria-pressed={duration === option.value}
+                    onClick={() => selectDuration(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {duration === 'range' && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="resident-range-from">Desde</Label>
+                  <Input
+                    id="resident-range-from"
+                    type="date"
+                    value={rangeFrom}
+                    onChange={(event) => {
+                      setRangeFrom(event.target.value);
+                      clearFieldError('window');
+                    }}
+                    aria-invalid={Boolean(fieldErrors.window)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="resident-range-until">Hasta</Label>
+                  <Input
+                    id="resident-range-until"
+                    type="date"
+                    value={rangeUntil}
+                    onChange={(event) => {
+                      setRangeUntil(event.target.value);
+                      clearFieldError('window');
+                    }}
+                    aria-invalid={Boolean(fieldErrors.window)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {fieldErrors.window && (
+              <p id="resident-window-error" role="alert" className="text-xs text-destructive">
+                {fieldErrors.window}
+              </p>
+            )}
+          </section>
+
+          <section className="space-y-3 rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold">Duración</h2>
+              <p className="text-xs text-muted-foreground">
+                Horario en el que el pase permite entrar. Si lo dejás vacío, sirve a cualquier hora
+                del día.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <TimeField
+                id="resident-time-from"
+                label="Hora inicio"
+                value={effectiveImmediate ? '' : scheduleFrom}
+                onChange={(next) => {
+                  setScheduleFrom(next);
+                  clearFieldError('schedule');
+                }}
+                invalid={Boolean(fieldErrors.schedule)}
+                disabled={effectiveImmediate}
+              />
+              <TimeField
+                id="resident-time-to"
+                label="Hora final"
+                value={scheduleTo}
+                onChange={(next) => {
+                  setScheduleTo(next);
+                  clearFieldError('schedule');
+                }}
+                invalid={Boolean(fieldErrors.schedule)}
+              />
+            </div>
+
+            {fieldErrors.schedule && (
+              <p role="alert" className="text-xs text-destructive">
+                {fieldErrors.schedule}
+              </p>
+            )}
+
+            <div className="space-y-1 border-t border-border pt-3">
+              <label
+                className={cn(
+                  'flex items-center gap-2 text-sm',
+                  !immediateApplies && 'text-muted-foreground',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={effectiveImmediate}
+                  disabled={!immediateApplies}
+                  onChange={(event) => toggleImmediateEntry(event.target.checked)}
+                />
+                Entrada inmediata
+              </label>
+              <p className="text-xs text-muted-foreground">
+                {immediateApplies
+                  ? effectiveImmediate
+                    ? 'El pase vale desde el momento en que lo confirmás.'
+                    : 'El pase no sirve antes de la hora de inicio.'
+                  : 'Sólo aplica a la vigencia de hoy; en los otros modos manda la hora de inicio.'}
+              </p>
+            </div>
+          </section>
+
+          <fieldset
+            disabled={!isRecurrent}
+            className={cn(
+              'space-y-3 rounded-2xl border border-border/70 bg-muted/30 p-4',
+              !isRecurrent && 'opacity-60',
+            )}
+          >
+            <legend className="px-1 text-sm font-semibold">Recurrente</legend>
+            <p className="text-xs text-muted-foreground">
+              {isRecurrent
+                ? 'Elegí los días y, si querés, desde y hasta cuándo vale. Usa el horario de la tarjeta Duración.'
+                : 'Elegí «Recurrente» en Vigencia para configurar los días.'}
+            </p>
+
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Días de la semana">
+              {WEEKDAYS.map((day) => {
+                const active = allowedDays.includes(day.value);
+                return (
+                  <button
+                    key={day.value}
+                    type="button"
+                    aria-label={day.name}
+                    aria-pressed={active}
+                    onClick={() => toggleDay(day.value)}
+                    className={cn(
+                      'size-9 rounded-full border text-sm font-medium transition-colors',
+                      active
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-background hover:bg-muted',
+                    )}
+                  >
+                    {day.short}
+                  </button>
+                );
+              })}
+            </div>
+            {fieldErrors.days && (
+              <p role="alert" className="text-xs text-destructive">
+                {fieldErrors.days}
+              </p>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="resident-recurrence-from">Desde</Label>
+                <Input
+                  id="resident-recurrence-from"
+                  type="date"
+                  value={recurrenceFrom}
+                  onChange={(event) => {
+                    setRecurrenceFrom(event.target.value);
+                    clearFieldError('recurrenceUntil');
+                  }}
+                  aria-invalid={Boolean(fieldErrors.recurrenceUntil)}
+                />
+                <p className="text-xs text-muted-foreground">Si lo dejás vacío, empieza hoy.</p>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="resident-recurrence-until">Hasta</Label>
+                <Input
+                  id="resident-recurrence-until"
+                  type="date"
+                  value={recurrenceUntil}
+                  onChange={(event) => {
+                    setRecurrenceUntil(event.target.value);
+                    clearFieldError('recurrenceUntil');
+                  }}
+                  aria-invalid={Boolean(fieldErrors.recurrenceUntil)}
+                />
+                <p className="text-xs text-muted-foreground">Si lo dejás vacío, no vence.</p>
+              </div>
+            </div>
+            {fieldErrors.recurrenceUntil && (
+              <p role="alert" className="text-xs text-destructive">
+                {fieldErrors.recurrenceUntil}
+              </p>
+            )}
+          </fieldset>
+
+          <div className="space-y-2 rounded-2xl border border-border/70 bg-muted/30 p-4">
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
+                className="size-4 accent-primary"
+                checked={entryOnly}
+                onChange={(event) => {
+                  setEntryOnly(event.target.checked);
+                  clearFieldError('uses');
+                }}
+              />
+              Sólo entrada
+            </label>
+            <p className="text-xs text-muted-foreground">
+              {entryOnly
+                ? 'El pase se consume al entrar; no hace falta registrar el egreso.'
+                : 'Permite entrada y salida. Un uso es un par de entrada y salida.'}
+            </p>
+          </div>
+
+          <div className="space-y-2 rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
                 checked={hasVehicle}
                 onChange={(event) => setHasVehicle(event.target.checked)}
               />
@@ -518,12 +1130,13 @@ function messageForError(err: unknown, code: string) {
     case 'daily_limit_reached':
       return 'Esta unidad alcanzó el límite de autorizaciones por hoy. Prueba de nuevo mañana.';
     case 'recurring_not_available':
-    case 'allowed_days_reserved':
       return 'Ese tipo de autorización todavía no está disponible desde la web.';
     case 'rate_limited':
       return 'Demasiados intentos seguidos. Espera un minuto y vuelve a intentar.';
     case 'dynamic_qr_disabled':
       return 'Las autorizaciones con QR están desactivadas en esta comunidad.';
+    case 'invalid':
+      return 'Revisa las fechas y el horario permitido.';
     default:
       if (err instanceof ApiError && err.message && !/^[a-z_]+$/.test(err.message)) {
         return err.message;

@@ -27,6 +27,7 @@ import {
   users,
 } from '@porteria/database/schema';
 import { randomToken } from '../src/lib/pass-tokens.js';
+import { PERMANENT_PASS_UNTIL } from '@porteria/shared';
 
 const db = createDb();
 
@@ -176,6 +177,10 @@ describe('dynamic pass integration', () => {
         slug: `pass-test-community-${suffix}`,
         address: 'Calle Pass 123',
         timezone: 'UTC',
+        // The suite creates passes in almost every test. Each limit test states
+        // the rule it needs instead of depending on the accumulated count.
+        passDailyLimitEnabled: false,
+        passDailyLimit: 20,
       })
       .returning();
     communityId = community.id;
@@ -659,7 +664,7 @@ describe('dynamic pass integration', () => {
     assert.match(String(previewBody.communityName), /^Pass Test Community /);
   });
 
-  it('rejects non-leaf units, foreign units and reserved pass options', async () => {
+  it('rejects non-leaf and foreign units and accepts schedule options', async () => {
     const nonLeaf = await postPass({ locationUnitId: floorId }, badResidentToken);
     assert.equal(nonLeaf.statusCode, 400, nonLeaf.body);
     assert.equal(parse(nonLeaf).message, 'invalid');
@@ -672,9 +677,25 @@ describe('dynamic pass integration', () => {
     assert.equal(recurring.statusCode, 400, recurring.body);
     assert.equal(parse(recurring).message, 'recurring_not_available');
 
-    const allowedDays = await postPass({ allowedDays: [1] });
-    assert.equal(allowedDays.statusCode, 400, allowedDays.body);
-    assert.equal(parse(allowedDays).message, 'allowed_days_reserved');
+    const weekly = await postPass({ recurrence: 'weekly', allowedDays: [3, 1, 3] });
+    assert.equal(weekly.statusCode, 201, weekly.body);
+    assert.deepEqual(parse(weekly).pass.allowedDays, [1, 3]);
+
+    const weeklyWithoutDays = await postPass({ recurrence: 'weekly' });
+    assert.equal(weeklyWithoutDays.statusCode, 400, weeklyWithoutDays.body);
+    assert.equal(parse(weeklyWithoutDays).message, 'Validation error');
+    assert.deepEqual(parse(weeklyWithoutDays).details, [
+      { path: 'allowedDays', message: 'weekly_requires_days' },
+    ]);
+
+    const daysOnOnce = await postPass({ allowedDays: [1] });
+    assert.equal(daysOnOnce.statusCode, 400, daysOnOnce.body);
+    assert.deepEqual(parse(daysOnOnce).details, [
+      { path: 'allowedDays', message: 'allowed_days_only_for_weekly' },
+    ]);
+
+    const daysOnRange = await postPass({ recurrence: 'range', allowedDays: [1] });
+    assert.equal(daysOnRange.statusCode, 400, daysOnRange.body);
 
     const vehicleWithoutPlate = await postPass({ hasVehicle: true });
     assert.equal(vehicleWithoutPlate.statusCode, 400, vehicleWithoutPlate.body);
@@ -684,6 +705,12 @@ describe('dynamic pass integration', () => {
     assert.equal(incompleteWindow.statusCode, 400, incompleteWindow.body);
     assert.equal(parse(incompleteWindow).message, 'invalid');
 
+    // Same minute expressed with and without seconds. A raw string comparison
+    // would accept this as a valid window, so compare clock minutes instead.
+    const zeroWidthWindow = await postPass({ timeFrom: '08:00', timeTo: '08:00:00' });
+    assert.equal(zeroWidthWindow.statusCode, 400, zeroWidthWindow.body);
+    assert.equal(parse(zeroWidthWindow).message, 'invalid');
+
     const now = Date.now();
     const invertedRange = await postPass({
       validFrom: new Date(now + 2 * 3_600_000).toISOString(),
@@ -691,6 +718,93 @@ describe('dynamic pass integration', () => {
     });
     assert.equal(invertedRange.statusCode, 400, invertedRange.body);
     assert.equal(parse(invertedRange).message, 'invalid');
+
+    // A zero-length pass can never be used: reject it as incoherent instead of
+    // storing something the guard will always deny.
+    const sameInstant = new Date(now).toISOString();
+    const zeroLength = await postPass({ validFrom: sameInstant, validUntil: sameInstant });
+    assert.equal(zeroLength.statusCode, 400, zeroLength.body);
+    assert.equal(parse(zeroLength).message, 'invalid');
+  });
+
+  it('returns the readable rule and the remaining uses in the pass detail', async () => {
+    const weekly = await createPass({
+      type: 'entry_exit',
+      recurrence: 'weekly',
+      allowedDays: [5, 1, 3],
+      timeFrom: '08:00',
+      timeTo: '17:00',
+      maxUses: 2,
+    });
+
+    const weeklyDetail = await request(
+      'GET',
+      `/api/passes/${weekly.pass.id}`,
+      undefined,
+      residentToken,
+    );
+    assert.equal(weeklyDetail.statusCode, 200, weeklyDetail.body);
+    const weeklyBody = parse(weeklyDetail);
+    assert.deepEqual(weeklyBody.rule.recurrence, 'weekly');
+    assert.deepEqual(weeklyBody.rule.allowedDays, [1, 3, 5]);
+    assert.equal(weeklyBody.rule.timeFrom, '08:00');
+    assert.equal(weeklyBody.rule.timeTo, '17:00');
+    assert.equal(weeklyBody.rule.maxUses, 2);
+    assert.equal(weeklyBody.rule.remainingUses, 2);
+    assert.match(
+      String(weeklyBody.rule.summary),
+      /^Lunes, miércoles y viernes del \d{2}\/\d{2}\/\d{4} al \d{2}\/\d{2}\/\d{4}/,
+    );
+    assert.match(String(weeklyBody.rule.summary), /de 08:00 a 17:00/);
+    assert.match(String(weeklyBody.rule.summary), /quedan 2 usos hoy$/);
+
+    // A range pass allows today, so the pair can be consumed and the counter
+    // shown by the detail must come from the confirmed scans.
+    const range = await createPass({ type: 'entry_exit', recurrence: 'range', maxUses: 2 });
+    const token = linkToken(range);
+    const { cookie } = await bind(token);
+
+    const entryQr = parse(await publicQr(token, cookie)).token as string;
+    const entry = await scan(entryQr);
+    assert.equal(entry.statusCode, 200, entry.body);
+    const entryBody = parse(entry);
+    assert.equal(entryBody.authorized, true, entry.body);
+
+    const confirmedEntry = await confirm(entryBody.scanId as string);
+    assert.equal(confirmedEntry.statusCode, 200, confirmedEntry.body);
+
+    const exitQr = parse(await publicQr(token, cookie)).token as string;
+    const exit = await scan(exitQr);
+    const exitBody = parse(exit);
+    assert.equal(exitBody.authorized, true, exit.body);
+    const confirmedExit = await confirm(exitBody.scanId as string);
+    assert.equal(confirmedExit.statusCode, 200, confirmedExit.body);
+
+    const rangeDetail = await request(
+      'GET',
+      `/api/passes/${range.pass.id}`,
+      undefined,
+      residentToken,
+    );
+    assert.equal(rangeDetail.statusCode, 200, rangeDetail.body);
+    const rangeBody = parse(rangeDetail);
+    assert.equal(rangeBody.rule.remainingUses, 1);
+    assert.match(String(rangeBody.rule.summary), /quedan 1 uso hoy$/);
+  });
+
+  it('describes a recurring pass without an end date as permanent', async () => {
+    const created = await createPass({
+      type: 'entry_exit',
+      recurrence: 'weekly',
+      allowedDays: [1, 3],
+      validUntil: PERMANENT_PASS_UNTIL,
+    });
+
+    const detail = await request('GET', `/api/passes/${created.pass.id}`, undefined, residentToken);
+    assert.equal(detail.statusCode, 200, detail.body);
+    const summary = String(parse(detail).rule.summary);
+    assert.match(summary, /^Lunes y miércoles desde el \d{2}\/\d{2}\/\d{4} de forma permanente/);
+    assert.doesNotMatch(summary, /9999/);
   });
 
   it('exposes a masked preview and binds only the first device', async () => {
@@ -983,7 +1097,7 @@ describe('dynamic pass integration', () => {
     const qr = parse(await publicQr(token, cookie)).token as string;
     const scanned = parse(await scan(qr));
 
-    const rejected = await reject(scanned.scanId as string);
+    const rejected = await reject(scanned.scanId as string, 'denied_by_guard');
     assert.equal(rejected.statusCode, 200);
     const rejectedBody = parse(rejected);
     assert.equal(rejectedBody.scanId, scanned.scanId);
@@ -1000,7 +1114,10 @@ describe('dynamic pass integration', () => {
       guardToken,
     );
     assert.equal(rejectedBitacora.statusCode, 200);
-    assert.ok(parse(rejectedBitacora).authorizedByName);
+    const rejectedEntry = parse(rejectedBitacora);
+    assert.ok(rejectedEntry.authorizedByName);
+    assert.equal(rejectedEntry.details.reason, 'denied_by_guard');
+    assert.match(String(rejectedEntry.details.rule), /Un solo uso/);
 
     const confirmRejected = await confirm(scanned.scanId as string);
     assert.equal(confirmRejected.statusCode, 409);
@@ -1039,7 +1156,7 @@ describe('dynamic pass integration', () => {
     assert.equal(row?.status, 'expired');
   });
 
-  it('denies out-of-schedule scans without creating a pending scan', async () => {
+  it('denies out-of-validity scans without creating a pending scan', async () => {
     const now = Date.now();
     const created = await createPass({
       validFrom: new Date(now + 3_600_000).toISOString(),
@@ -1056,8 +1173,201 @@ describe('dynamic pass integration', () => {
     assert.equal(denied.statusCode, 200);
     const body = parse(denied);
     assert.equal(body.authorized, false);
-    assert.equal(body.reason, 'out_of_schedule');
+    assert.equal(body.reason, 'not_valid_now');
     assert.equal(body.scanId, null);
+
+    const scans = await db
+      .select({ id: passScans.id })
+      .from(passScans)
+      .where(eq(passScans.passId, created.pass.id));
+    assert.equal(scans.length, 0, 'a denied scan never reaches the pending state');
+  });
+
+  it('allows a weekly pass on a marked day and rejects it on an unmarked one', async () => {
+    const now = new Date();
+    const today = now.getUTCDay();
+    const tomorrow = (today + 1) % 7;
+    const validFrom = new Date(now.getTime() - 60_000).toISOString();
+    const validUntil = new Date(now.getTime() + 86_400_000).toISOString();
+
+    const allowed = await createPass({
+      type: 'entry_exit',
+      recurrence: 'weekly',
+      allowedDays: [today],
+      maxUses: 1,
+      validFrom,
+      validUntil,
+    });
+    const allowedToken = linkToken(allowed);
+    const allowedBind = await bind(allowedToken);
+    const allowedQr = parse(await publicQr(allowedToken, allowedBind.cookie)).token as string;
+    const allowedScan = parse(await scan(allowedQr));
+    assert.equal(allowedScan.authorized, true);
+    const allowedConfirm = await confirm(allowedScan.scanId as string);
+    assert.equal(allowedConfirm.statusCode, 200, allowedConfirm.body);
+
+    const blocked = await createPass({
+      type: 'entry_exit',
+      recurrence: 'weekly',
+      allowedDays: [tomorrow],
+      maxUses: 1,
+      validFrom,
+      validUntil,
+    });
+    const blockedToken = linkToken(blocked);
+    const blockedBind = await bind(blockedToken);
+    const blockedQr = parse(await publicQr(blockedToken, blockedBind.cookie)).token as string;
+    const blockedScan = parse(await scan(blockedQr));
+    assert.equal(blockedScan.authorized, false);
+    assert.equal(blockedScan.reason, 'out_of_days');
+    assert.equal(blockedScan.scanId, null);
+  });
+
+  it('rejects an entry when the allowed days change before the confirmation', async () => {
+    const now = new Date();
+    const today = now.getUTCDay();
+    const tomorrow = (today + 1) % 7;
+
+    const created = await createPass({
+      type: 'entry_exit',
+      recurrence: 'weekly',
+      allowedDays: [today],
+      maxUses: 1,
+      validFrom: new Date(now.getTime() - 60_000).toISOString(),
+      validUntil: new Date(now.getTime() + 86_400_000).toISOString(),
+    });
+    const token = linkToken(created);
+    const { cookie } = await bind(token);
+    const qr = parse(await publicQr(token, cookie)).token as string;
+    const scanned = parse(await scan(qr));
+    assert.equal(scanned.authorized, true);
+
+    // The scan read the pass, but the rule can change before the guard confirms.
+    await db
+      .update(accessPasses)
+      .set({ allowedDays: [tomorrow] })
+      .where(eq(accessPasses.id, created.pass.id));
+
+    const confirmed = await confirm(scanned.scanId as string);
+    assert.equal(confirmed.statusCode, 409, confirmed.body);
+    assert.equal(parse(confirmed).message, 'out_of_days');
+  });
+
+  it('rejects an entry outside the schedule at confirmation', async () => {
+    const created = await createPass({
+      type: 'entry_exit',
+      validFrom: new Date(Date.now() - 60_000).toISOString(),
+      validUntil: new Date(Date.now() + 86_400_000).toISOString(),
+      timeFrom: '00:00',
+      timeTo: '23:59',
+    });
+    const token = linkToken(created);
+    const { cookie } = await bind(token);
+    const qr = parse(await publicQr(token, cookie)).token as string;
+    const scanned = parse(await scan(qr));
+    assert.equal(scanned.authorized, true);
+
+    const minutes = new Date().getUTCHours() * 60 + new Date().getUTCMinutes();
+    const format = (value: number) =>
+      `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+    await db
+      .update(accessPasses)
+      .set({
+        timeFrom: format((minutes + 120) % (24 * 60)),
+        timeTo: format((minutes + 180) % (24 * 60)),
+      })
+      .where(eq(accessPasses.id, created.pass.id));
+
+    const confirmed = await confirm(scanned.scanId as string);
+    assert.equal(confirmed.statusCode, 409, confirmed.body);
+    assert.equal(parse(confirmed).message, 'out_of_schedule');
+  });
+
+  it('exhausts the daily uses and resets them on the next local day', async () => {
+    const created = await createPass({
+      type: 'entry_exit',
+      recurrence: 'range',
+      maxUses: 1,
+      validFrom: new Date(Date.now() - 60_000).toISOString(),
+      validUntil: new Date(Date.now() + 2 * 86_400_000).toISOString(),
+    });
+    const token = linkToken(created);
+    const { cookie } = await bind(token);
+
+    const entryQr = parse(await publicQr(token, cookie)).token as string;
+    const entry = parse(await scan(entryQr));
+    assert.equal((await confirm(entry.scanId as string)).statusCode, 200);
+
+    const exitQr = parse(await publicQr(token, cookie)).token as string;
+    const exit = parse(await scan(exitQr));
+    const exitConfirm = await confirm(exit.scanId as string);
+    assert.equal(exitConfirm.statusCode, 200, exitConfirm.body);
+    assert.equal(
+      parse(exitConfirm).passStatus,
+      'active',
+      'a recurring pass is not consumed by a pair',
+    );
+
+    const blockedQr = parse(await publicQr(token, cookie)).token as string;
+    const blocked = parse(await scan(blockedQr));
+    assert.equal(blocked.authorized, false, 'the scan already sees the exhausted counter');
+    assert.equal(blocked.reason, 'daily_uses_exhausted');
+    assert.equal(blocked.scanId, null);
+
+    // The counter is date-based: moving the completed pair to yesterday resets it.
+    const yesterday = new Date(Date.now() - 86_400_000);
+    await db
+      .update(passScans)
+      .set({ scannedAt: yesterday, confirmedAt: yesterday })
+      .where(eq(passScans.id, exit.scanId as string));
+
+    const retryQr = parse(await publicQr(token, cookie)).token as string;
+    const retry = parse(await scan(retryQr));
+    assert.equal(retry.authorized, true);
+    assert.equal((await confirm(retry.scanId as string)).statusCode, 200);
+  });
+
+  it('rejects a use consumed between the scan and the confirmation', async () => {
+    const created = await createPass({
+      type: 'entry_exit',
+      recurrence: 'range',
+      maxUses: 2,
+      validFrom: new Date(Date.now() - 60_000).toISOString(),
+      validUntil: new Date(Date.now() + 2 * 86_400_000).toISOString(),
+    });
+    const token = linkToken(created);
+    const { cookie } = await bind(token);
+
+    const firstEntry = parse(await scan(parse(await publicQr(token, cookie)).token as string));
+    assert.equal((await confirm(firstEntry.scanId as string)).statusCode, 200);
+    const firstExit = parse(await scan(parse(await publicQr(token, cookie)).token as string));
+    assert.equal((await confirm(firstExit.scanId as string)).statusCode, 200);
+
+    // One use is consumed, so the scan still sees a free slot.
+    const pending = parse(await scan(parse(await publicQr(token, cookie)).token as string));
+    assert.equal(pending.authorized, true);
+
+    // Another guard finishes a second pair while this scan waits for confirmation.
+    await db.insert(passScans).values({
+      passId: created.pass.id,
+      guardPersonId,
+      communityId,
+      locationUnitId: leafAId,
+      structureId,
+      visitorFirstName: 'Visitante',
+      visitorLastName: 'Prueba',
+      visitorDocument: '12345678',
+      action: 'exit',
+      result: 'authorized',
+      tokenJti: randomUUID(),
+      status: 'confirmed',
+      scannedAt: new Date(),
+      confirmedAt: new Date(),
+    });
+
+    const confirmed = await confirm(pending.scanId as string);
+    assert.equal(confirmed.statusCode, 409, confirmed.body);
+    assert.equal(parse(confirmed).message, 'daily_uses_exhausted');
   });
 
   it('rejects a guard from another community', async () => {
@@ -1127,7 +1437,7 @@ describe('dynamic pass integration', () => {
 
     await db
       .update(communities)
-      .set({ passDailyLimitEnabled: true })
+      .set({ passDailyLimitEnabled: false })
       .where(eq(communities.id, communityId));
   });
 

@@ -142,7 +142,27 @@ test.describe('resident workspace', () => {
 
     await expect(page.getByRole('heading', { level: 1, name: 'Autorizar visita' })).toBeVisible();
     await expect(page.locator('#resident-visitor-first')).toBeVisible();
-    await expect(page.locator('#resident-valid-from')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Hoy' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Mañana' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Varios días' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Recurrente' })).toBeVisible();
+
+    // With "Hoy" + immediate entry the start is the confirmation instant, so the
+    // start time cannot be chosen. Unchecking it re-enables the selector.
+    const immediateEntry = page.getByRole('checkbox', { name: 'Entrada inmediata' });
+    await expect(immediateEntry).toBeChecked();
+    await expect(page.locator('#resident-time-from')).toBeDisabled();
+    await expect(page.locator('#resident-time-to')).toBeEnabled();
+    await immediateEntry.uncheck();
+    await expect(page.locator('#resident-time-from')).toBeEnabled();
+
+    // The recurrence card only opens when the validity mode is "Recurrente".
+    await expect(page.locator('#resident-recurrence-from')).toBeDisabled();
+    await expect(page.locator('#resident-recurrence-until')).toBeDisabled();
+    await page.getByRole('button', { name: 'Recurrente' }).click();
+    await expect(page.locator('#resident-recurrence-from')).toBeEnabled();
+    await expect(page.locator('#resident-recurrence-until')).toBeEnabled();
+    await expect(page.getByRole('checkbox', { name: 'Entrada inmediata' })).toBeDisabled();
 
     // The destination select is populated from /api/passes/destinations.
     await page.locator('#resident-destination').click();
@@ -178,7 +198,7 @@ test.describe('resident workspace', () => {
     await expect(page.getByText('QA Confirmación')).toBeVisible();
     await expect(page.getByText('99000111')).toBeVisible();
     await expect(page.getByText('No ingresa en vehículo')).toBeVisible();
-    await expect(page.getByText('Solo ingreso')).toBeVisible();
+    await expect(page.getByText('Ingreso y egreso')).toBeVisible();
 
     // Going back keeps every entered value.
     await page.getByRole('button', { name: 'Volver' }).click();
@@ -196,7 +216,9 @@ test.describe('resident workspace', () => {
     await page.locator('#resident-visitor-last').fill('Ventana');
     await page.locator('#resident-visitor-document').fill('99000222');
     await pickDestination(page);
-    await page.locator('#resident-valid-until').fill('2020-01-01T10:00');
+    await page.getByRole('button', { name: 'Varios días' }).click();
+    await page.locator('#resident-range-from').fill('2026-12-31');
+    await page.locator('#resident-range-until').fill('2020-01-01');
 
     await page.getByRole('button', { name: 'Revisar autorización' }).click();
 
@@ -229,6 +251,48 @@ test.describe('resident workspace', () => {
       // Client-side navigation, so the history fetches again on mount.
       await expect(page).toHaveURL(/\/resident\/authorizations$/);
       await expect(page.getByText(lastName)).toBeVisible();
+    } finally {
+      await revokePasses(request, lastName);
+    }
+  });
+
+  test('a weekly authorization is described in the review and in the history', async ({
+    page,
+    request,
+  }) => {
+    const lastName = `Semanal${Date.now()}`;
+
+    await loginAs(page, DEMO_USERS.resident);
+    await expect(page).toHaveURL(/\/resident$/);
+    await page.goto('/resident/authorizations/new');
+
+    await page.locator('#resident-visitor-first').fill('QA');
+    await page.locator('#resident-visitor-last').fill(lastName);
+    await page.locator('#resident-visitor-document').fill('99000444');
+    await pickDestination(page);
+
+    await page.getByRole('button', { name: 'Recurrente', exact: true }).click();
+    await page.getByRole('button', { name: 'lunes', exact: true }).click();
+    await page.getByRole('button', { name: 'miércoles', exact: true }).click();
+    await page.getByRole('button', { name: 'viernes', exact: true }).click();
+
+    await page.getByRole('button', { name: 'Revisar autorización' }).click();
+
+    // No dates and no schedule: starts today, never expires and allows any hour.
+    await expect(
+      page.getByText(
+        /^Lunes, miércoles y viernes desde el \d{2}\/\d{2}\/\d{4} de forma permanente, en cualquier horario · hasta 1 uso por día\.$/,
+      ),
+    ).toBeVisible();
+
+    try {
+      await page.getByRole('button', { name: 'Confirmar y autorizar' }).click();
+
+      await expect(page).toHaveURL(/\/resident\/authorizations$/);
+      await expect(page.getByText(lastName)).toBeVisible();
+      // The compact rule and the per-day uses badge come from the list row.
+      await expect(page.getByText('L · X · V')).toBeVisible();
+      await expect(page.getByText('1 uso por día')).toBeVisible();
     } finally {
       await revokePasses(request, lastName);
     }
@@ -741,7 +805,6 @@ test.describe('common area branches', () => {
       await deleteNodeByName(request, name);
     }
   });
-
 
   test('the history shows the remaining uses of a pass', async ({ page, request }) => {
     const lastName = `Usos${Date.now()}`;

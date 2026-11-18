@@ -13,7 +13,6 @@ export interface CreatePassDto {
   maxUses?: number;
   /** once | range | weekly. */
   recurrence?: 'once' | 'range' | 'weekly';
-  allowedDays?: number[] | null;
   locationUnitId: string;
   visitorFirstName: string;
   visitorLastName: string;

@@ -111,55 +111,74 @@ The change SHALL NOT alter the behaviour of passes created before it.
 - WHEN an old pass is used
 - THEN it behaves as a one-time pass with no day or hour restriction
 
-### Requirement: The resident picks the duration, not the dates
+### Requirement: The resident picks the validity mode, not the dates
 
-The form SHALL offer three exclusive duration options and SHALL only ask for dates when the range is chosen.
+The form SHALL offer four exclusive validity options and SHALL only ask for dates when the range or the recurrence needs them.
 
 #### Scenario: Authorizing someone for today
 
 - WHEN the resident presses "Hoy"
 - THEN the pass is valid today
 - AND no second date field is shown
-- AND the entry time is taken from the moment of creation unless the resident unchecks immediate entry
+- AND immediate entry is checked by default
+- AND the pass is valid from the moment it is created unless the resident unchecks immediate entry
 
 #### Scenario: Authorizing someone for tomorrow
 
 - WHEN the resident presses "Mañana"
 - THEN the pass is valid tomorrow
 - AND no second date field is shown
+- AND immediate entry is disabled
+- AND the pass starts at the chosen start hour
 
 #### Scenario: Authorizing several days
 
-- WHEN the resident presses "Rango de días"
+- WHEN the resident presses "Varios días"
 - THEN both date fields are shown
 - AND the pass is valid between them
 
-#### Scenario: The three options exclude each other
+#### Scenario: Authorizing on specific weekdays
 
-- WHEN the resident picks one duration
-- THEN the other two stop being selected
+- WHEN the resident presses "Recurrente"
+- THEN the weekday selector and the optional "Desde" and "Hasta" fields are enabled
+- AND the pass is valid only on the marked weekdays
 
-### Requirement: Immediate entry or a chosen hour
+#### Scenario: A recurring pass without dates never expires
 
-With the today option, the resident SHALL choose between entering immediately and entering from a chosen hour.
+- WHEN the resident leaves "Desde" and "Hasta" empty
+- THEN the pass starts on the day it is created
+- AND it never expires
+- AND every screen shows "sin fecha de fin" instead of a technical date
 
-#### Scenario: Immediate entry by default
+#### Scenario: The recurrence card is disabled otherwise
 
-- WHEN the resident picks "Hoy"
-- THEN the immediate entry option is checked
-- AND the entry hour selector is disabled
-- AND the pass is valid from the moment it is created, with second precision
+- WHEN the validity mode is "Hoy", "Mañana" or "Varios días"
+- THEN the weekday selector and both optional date fields stay disabled
 
-#### Scenario: A later start today
+#### Scenario: The four options exclude each other
 
-- WHEN the resident unchecks immediate entry
-- THEN the entry hour selector becomes available
-- AND the pass does not allow entry before that hour
+- WHEN the resident picks one validity mode
+- THEN the other three stop being selected
 
-#### Scenario: Tomorrow and ranges always pick an hour
+### Requirement: The duration card sets the daily window
 
-- WHEN the resident picks "Mañana" or a date range
-- THEN the entry hour selector is always available
+The form SHALL keep the allowed daily window in a "Duración" card, independent from the validity mode, with a start hour and an end hour.
+
+#### Scenario: Choosing the daily window
+
+- WHEN the resident sets the start and end hours
+- THEN the pass only allows entry inside that window on the valid days
+- AND a recurring pass uses the same window every marked day
+
+#### Scenario: Immediate entry only applies to today
+
+- WHEN the resident picks a validity mode other than "Hoy"
+- THEN the immediate entry checkbox is disabled
+
+#### Scenario: Leaving the window empty
+
+- WHEN the resident leaves both hour fields empty
+- THEN the pass allows entry at any hour of the valid days
 
 ### Requirement: Times are chosen in fifteen minute steps
 
@@ -167,6 +186,6 @@ The time selectors SHALL only offer quarter hours.
 
 #### Scenario: Picking the window
 
-- WHEN the resident opens a time selector
+- WHEN the resident opens the start or end hour selector
 - THEN the minutes available are 00, 15, 30 and 45
 - AND any other minute value cannot be selected

@@ -14,6 +14,8 @@ export type {
   AccessPass,
   PassScan,
   PassAlert,
+  PassRecurrence,
+  PassRuleSummary,
   DestinationKind,
   DestinationSummary,
   DestinationOption,
@@ -149,3 +151,4 @@ export {
 } from './utils/slug.js';
 export { createEventEnvelope } from './utils/event-envelope.js';
 export type { CreateEventEnvelopeInput } from './utils/event-envelope.js';
+export { PERMANENT_PASS_UNTIL, isPermanentPass } from './utils/pass-validity.js';

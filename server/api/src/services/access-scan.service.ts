@@ -3,7 +3,6 @@ import { createDb } from '@porteria/database';
 import {
   accessPasses,
   accessPoints,
-  communities,
   guardShiftSegments,
   guardShifts,
   memberships,
@@ -13,6 +12,7 @@ import {
 } from '@porteria/database/schema';
 import { createEventEnvelope } from '@porteria/shared';
 import type {
+  PassRuleSummary,
   PassStatus,
   ScanAction,
   ScanDecisionResponse,
@@ -27,6 +27,12 @@ import { resolveDestinationById } from './pass-destination.service.js';
 import { enqueueEvent } from './outbox.service.js';
 import type { PassResult } from './pass-errors.js';
 import { verifyPassQrToken } from './pass-qr-token.service.js';
+import {
+  buildPassRule,
+  describeSchedule,
+  evaluateEntryAccess,
+  loadCommunityTimezone as loadTimezone,
+} from './pass-schedule.service.js';
 import type { PassRequester } from './pass.service.js';
 
 const db = createDb();
@@ -72,15 +78,6 @@ async function loadPass(passId: string): Promise<AccessPassRow | null> {
   return row ?? null;
 }
 
-async function loadTimezone(communityId: string): Promise<string> {
-  const [row] = await db
-    .select({ timezone: communities.timezone })
-    .from(communities)
-    .where(eq(communities.id, communityId))
-    .limit(1);
-  return row?.timezone ?? 'UTC';
-}
-
 async function loadAuthorizerName(personId: string): Promise<string> {
   const [row] = await db
     .select({ firstName: people.firstName, lastName: people.lastName })
@@ -105,20 +102,6 @@ function toSchedule(pass: AccessPassRow) {
     timeFrom: pass.timeFrom,
     timeTo: pass.timeTo,
   };
-}
-
-function isInsideSchedule(pass: AccessPassRow, timezone: string, now: Date): boolean {
-  if (now < pass.validFrom || now > pass.validUntil) return false;
-  if (!pass.timeFrom || !pass.timeTo) return true;
-  const local = new Intl.DateTimeFormat('en-GB', {
-    timeZone: timezone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(now);
-  const from = pass.timeFrom.slice(0, 5);
-  const to = pass.timeTo.slice(0, 5);
-  return local >= from && local <= to;
 }
 
 async function loadOpenShiftContext(personId: string): Promise<ShiftContext | null> {
@@ -237,6 +220,7 @@ async function writeDeniedEntry(
               vehiclePlate: pass.vehiclePlate,
               destinationName: destination?.name ?? null,
               destinationKind: destination?.kind ?? null,
+              rule: describeSchedule(pass),
             }
           : {}),
         ...details,
@@ -302,11 +286,12 @@ export async function scanPass(
   }
   if (pass.status === 'used') return denied('pass_used');
   if (pass.status === 'revoked') return denied('revoked');
-  if (pass.status === 'expired' || now > pass.validUntil) {
-    if (action !== 'exit') return denied('expired');
-  }
-  if (action === 'entry' && !isInsideSchedule(pass, timezone, now)) {
-    return denied('out_of_schedule');
+  if (pass.status === 'expired' && action !== 'exit') return denied('expired');
+  // The scan rejects early with the exact reason; `confirmScan` re-evaluates the
+  // same rule because only the confirmation writes state and consumes a use.
+  if (action === 'entry') {
+    const denial = await evaluateEntryAccess(pass, now, timezone);
+    if (denial) return denied(denial);
   }
 
   let scan: PassScanRow;
@@ -415,6 +400,15 @@ export async function confirmScan(
     return { ok: false, code: 'pass_expired' };
   }
 
+  if (scan.action === 'entry') {
+    const timezone = await loadTimezone(pass.communityId);
+    const denial = await evaluateEntryAccess(pass, now, timezone);
+    if (denial) {
+      await writeDeniedEntry(requester, personId, context, pass, scan.action, denial);
+      return { ok: false, code: denial };
+    }
+  }
+
   const nextPresence = scan.action === 'entry' ? 'inside' : 'outside';
   // A use is a completed pair, so the pass is consumed when the exit count
   // reaches the declared uses. An entry never consumes on its own.
@@ -423,7 +417,8 @@ export async function confirmScan(
       ? pass.type === 'entry_only'
         ? 'used'
         : pass.status
-      : pass.type === 'entry_only' || pass.exitCount + 1 >= pass.maxUses
+      : pass.type === 'entry_only' ||
+          (pass.recurrence === 'once' && pass.exitCount + 1 >= pass.maxUses)
         ? 'used'
         : 'active';
 
@@ -525,6 +520,7 @@ export async function confirmScan(
           locationPath: destinationPath,
           destinationName: destination?.name ?? null,
           destinationKind: destination?.kind ?? null,
+          rule: describeSchedule(pass),
         },
       });
       bitacoraEntryId = entry.id;
@@ -638,6 +634,7 @@ export async function rejectScan(
           locationPath: destinationPath,
           destinationName: destination?.name ?? null,
           destinationKind: destination?.kind ?? null,
+          rule: describeSchedule(pass),
         },
       });
       bitacoraEntryId = entry.id;
@@ -730,6 +727,11 @@ export interface IdentityCandidate {
   validUntil: Date;
   destinationName: string;
   destinationPath: string;
+  /**
+   * The same readable rule the resident sees, including how many uses are left
+   * today. The guard needs it before deciding, not after denying.
+   */
+  rule: PassRuleSummary;
 }
 
 /**
@@ -751,6 +753,7 @@ export async function searchAuthorizationsByDocument(
   const normalized = normalizeDocument(document);
   if (normalized.length < 4) return { ok: false, code: 'invalid' };
 
+  const now = new Date();
   const rows = await db
     .select()
     .from(accessPasses)
@@ -759,7 +762,7 @@ export async function searchAuthorizationsByDocument(
         eq(accessPasses.communityId, context.communityId),
         // The stored document may carry dots or spaces: compare the bare digits.
         sql`regexp_replace(lower(${accessPasses.visitorDocument}), '[^0-9a-z]', '', 'g') = ${normalized}`,
-        gte(accessPasses.validUntil, new Date()),
+        gte(accessPasses.validUntil, now),
         // A consumed pass is not offered: for the guard it looks exactly like a
         // document with no authorization, and showing it only invites a denial
         // that cannot change anything.
@@ -769,6 +772,7 @@ export async function searchAuthorizationsByDocument(
     .orderBy(desc(accessPasses.validFrom))
     .limit(10);
 
+  const timezone = rows.length > 0 ? await loadTimezone(context.communityId) : 'UTC';
   const candidates: IdentityCandidate[] = [];
   for (const row of rows) {
     const destination = await resolveDestinationById(row.locationUnitId);
@@ -786,6 +790,7 @@ export async function searchAuthorizationsByDocument(
       validUntil: row.validUntil,
       destinationName: destination?.name ?? '',
       destinationPath: destination?.path ?? '',
+      rule: await buildPassRule(row, timezone, now),
     });
   }
 
@@ -827,12 +832,19 @@ export async function confirmIdentityEntry(
   const now = new Date();
   if (pass.validUntil < now || pass.validFrom > now) return { ok: false, code: 'not_valid_now' };
 
+  if (action === 'entry') {
+    const timezone = await loadTimezone(pass.communityId);
+    const denial = await evaluateEntryAccess(pass, now, timezone);
+    if (denial) return { ok: false, code: denial };
+  }
+
   const nextStatus: PassStatus =
     action === 'entry'
       ? pass.type === 'entry_only'
         ? 'used'
         : pass.status
-      : pass.type === 'entry_only' || pass.exitCount + 1 >= pass.maxUses
+      : pass.type === 'entry_only' ||
+          (pass.recurrence === 'once' && pass.exitCount + 1 >= pass.maxUses)
         ? 'used'
         : 'active';
   let bitacoraEntryId: string | null = null;
@@ -880,6 +892,7 @@ export async function confirmIdentityEntry(
         destinationName: destination?.name ?? null,
         destinationKind: destination?.kind ?? null,
         locationPath: destination?.path ?? null,
+        rule: describeSchedule(pass),
       },
     });
     bitacoraEntryId = entry.id;
@@ -933,6 +946,7 @@ export async function denyIdentityEntry(
       },
       destinationName: destination?.name ?? null,
       destinationKind: destination?.kind ?? null,
+      rule: describeSchedule(pass),
     },
   });
 

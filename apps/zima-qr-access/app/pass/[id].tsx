@@ -267,8 +267,10 @@ export default function PassDetailScreen() {
             tone="info"
           />
         </View>
-        <Text style={ui.muted}>{formatValidity(pass.validFrom, pass.validUntil)}</Text>
-        {pass.timeFrom && pass.timeTo ? (
+        <Text style={ui.muted}>
+          {pass.rule?.summary ?? formatValidity(pass.validFrom, pass.validUntil)}
+        </Text>
+        {!pass.rule && pass.timeFrom && pass.timeTo ? (
           <Text style={ui.muted}>
             Horario diario {pass.timeFrom.slice(0, 5)}–{pass.timeTo.slice(0, 5)}
           </Text>

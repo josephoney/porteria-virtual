@@ -1,3 +1,5 @@
+import { isPermanentPass } from '@porteria/shared';
+
 const dateFormatter = new Intl.DateTimeFormat('es-AR', {
   day: '2-digit',
   month: 'short',
@@ -28,6 +30,7 @@ export function formatDateTime(value: string | Date): string {
 }
 
 export function formatValidity(from: string | Date, until: string | Date): string {
+  if (isPermanentPass(until)) return `${formatDateTime(from)} → sin fecha de fin`;
   return `${formatDateTime(from)} → ${formatDateTime(until)}`;
 }
 

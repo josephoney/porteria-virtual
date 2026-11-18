@@ -186,41 +186,72 @@ export const inviteOrgAdminSchema = z.object({
 const passTypeSchema = z.enum(PassTypeValues as [PassType, ...PassType[]]);
 const passStatusSchema = z.enum(PassStatusValues as [PassStatus, ...PassStatus[]]);
 
-export const createPassSchema = z.object({
-  /** Entry and exit pairs. Ignored for entry-only passes, which always use one. */
-  maxUses: z.coerce.number().int().min(1).max(20).optional(),
-  recurrence: z.enum(['once', 'range', 'weekly']).optional(),
-  /**
-   * Any node of the structure is a valid candidate. Whether it is a home or a
-   * common area — and whether the requester may use it — is decided in the
-   * service, because it needs the node and its level-1 ancestor.
-   */
-  locationUnitId: z.string().uuid(),
-  visitorFirstName: z.string().trim().min(1).max(120),
-  visitorLastName: z.string().trim().min(1).max(120),
-  visitorDocument: z.string().trim().min(1).max(50),
-  hasVehicle: z.boolean().optional(),
-  vehiclePlate: z.string().trim().max(20).nullable().optional(),
-  type: passTypeSchema,
-  validFrom: z.string().datetime(),
-  validUntil: z.string().datetime(),
-  allowedDays: z.array(z.number().int().min(0).max(6)).nullable().optional(),
-  timeFrom: z
-    .string()
-    .regex(/^\d{2}:\d{2}(:\d{2})?$/)
-    .nullable()
-    .optional(),
-  timeTo: z
-    .string()
-    .regex(/^\d{2}:\d{2}(:\d{2})?$/)
-    .nullable()
-    .optional(),
-  pin: z
-    .string()
-    .regex(/^\d{4}$/)
-    .nullable()
-    .optional(),
-});
+export const createPassSchema = z
+  .object({
+    /** Entry and exit pairs. Ignored for entry-only passes, which always use one. */
+    maxUses: z.coerce.number().int().min(1).max(20).optional(),
+    recurrence: z.enum(['once', 'range', 'weekly']).optional(),
+    /**
+     * Any node of the structure is a valid candidate. Whether it is a home or a
+     * common area — and whether the requester may use it — is decided in the
+     * service, because it needs the node and its level-1 ancestor.
+     */
+    locationUnitId: z.string().uuid(),
+    visitorFirstName: z.string().trim().min(1).max(120),
+    visitorLastName: z.string().trim().min(1).max(120),
+    visitorDocument: z.string().trim().min(1).max(50),
+    hasVehicle: z.boolean().optional(),
+    vehiclePlate: z.string().trim().max(20).nullable().optional(),
+    type: passTypeSchema,
+    validFrom: z.string().datetime(),
+    validUntil: z.string().datetime(),
+    /**
+     * Weekday mask (0 = Sunday). Only meaningful for `weekly`; the other modes
+     * never restrict days, so sending a mask there is a client bug, not data to
+     * silently ignore.
+     */
+    allowedDays: z.array(z.number().int().min(0).max(6)).nullable().optional(),
+    timeFrom: z
+      .string()
+      .regex(/^\d{2}:\d{2}(:\d{2})?$/)
+      .nullable()
+      .optional(),
+    timeTo: z
+      .string()
+      .regex(/^\d{2}:\d{2}(:\d{2})?$/)
+      .nullable()
+      .optional(),
+    pin: z
+      .string()
+      .regex(/^\d{4}$/)
+      .nullable()
+      .optional(),
+  })
+  .superRefine((input, ctx) => {
+    const recurrence = input.recurrence ?? 'once';
+    const days = input.allowedDays ?? [];
+
+    if (recurrence === 'weekly') {
+      // A weekly mode without days has no rule to evaluate at the gate, so it
+      // would either allow every day or none. Both are lies: reject it.
+      if (days.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['allowedDays'],
+          message: 'weekly_requires_days',
+        });
+      }
+      return;
+    }
+
+    if (days.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['allowedDays'],
+        message: 'allowed_days_only_for_weekly',
+      });
+    }
+  });
 
 export const bindPassSchema = z.object({
   pin: z

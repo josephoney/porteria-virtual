@@ -1,6 +1,7 @@
 import { CameraView } from 'expo-camera';
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { isPermanentPass } from '@porteria/shared';
 
 import {
   confirmIdentityEntry,
@@ -20,7 +21,17 @@ type RequestFn = <T>(
 const formatWindow = (from: string, until: string) => {
   const format = (value: string) =>
     new Date(value).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+  if (isPermanentPass(until)) return `${format(from)} → sin fecha de fin`;
   return `${format(from)} → ${format(until)}`;
+};
+
+const ENTRY_ERRORS: Record<string, string> = {
+  pass_used: 'Esa autorización ya fue usada.',
+  conflict: 'Esa persona ya está registrada dentro o fuera, según el caso.',
+  not_valid_now: 'La autorización no está vigente en este momento.',
+  out_of_days: 'Hoy no es un día autorizado para esta persona.',
+  out_of_schedule: 'Estamos fuera del horario permitido para esta autorización.',
+  daily_uses_exhausted: 'Esta autorización ya agotó los usos permitidos para hoy.',
 };
 
 /**
@@ -95,15 +106,7 @@ export function IdentityCheck({
       onConfirmed();
     } catch (err) {
       const code = (err as { body?: { message?: string } })?.body?.message;
-      setError(
-        code === 'pass_used'
-          ? 'Esa autorización ya fue usada.'
-          : code === 'conflict'
-            ? 'Esa persona ya está registrada dentro o fuera, según el caso.'
-            : code === 'not_valid_now'
-              ? 'La autorización no está vigente en este momento.'
-              : 'No se pudo registrar el ingreso. Reintenta.',
-      );
+      setError(ENTRY_ERRORS[code ?? ''] ?? 'No se pudo registrar el ingreso. Reintenta.');
     } finally {
       setConfirmingId(null);
     }
@@ -221,7 +224,7 @@ export function IdentityCheck({
               <Text style={styles.modalCloseText}>X</Text>
             </Pressable>
             {candidates?.map((candidate) => {
-              const remaining = Math.max(0, candidate.maxUses - candidate.exitCount);
+              const remaining = candidate.rule.remainingUses;
               const expired = new Date(candidate.validUntil).getTime() < Date.now();
               const consumed = remaining === 0 || candidate.status === 'used';
               // A pass with nothing left or past its window is only informative: the
@@ -229,6 +232,7 @@ export function IdentityCheck({
               const inside = candidate.presenceState === 'inside' && !consumed && !expired;
               const action: 'entry' | 'exit' = inside ? 'exit' : 'entry';
               const label = inside ? 'Registrar salida' : 'Confirmar ingreso';
+              const usedLabel = candidate.rule.recurrence === 'once' ? 'Usado' : 'Sin usos hoy';
               return (
                 <View key={candidate.passId} style={styles.candidate}>
                   <View style={styles.candidateHeader}>
@@ -237,7 +241,7 @@ export function IdentityCheck({
                     </Text>
                     <Badge
                       label={
-                        expired ? 'Vencido' : consumed ? 'Usado' : inside ? 'Dentro' : 'Activa'
+                        expired ? 'Vencido' : consumed ? usedLabel : inside ? 'Dentro' : 'Activa'
                       }
                       tone={expired || consumed ? 'danger' : inside ? 'warning' : 'success'}
                     />
@@ -248,14 +252,21 @@ export function IdentityCheck({
                   <Text style={ui.muted}>
                     {formatWindow(candidate.validFrom, candidate.validUntil)}
                   </Text>
-                  <Text style={ui.muted}>
-                    {remaining} de {candidate.maxUses} usos disponibles
-                  </Text>
+                  <Text style={ui.muted}>{candidate.rule.summary}</Text>
                   {consumed || expired ? (
                     <Button
                       label="Denegar"
                       variant="danger"
-                      onPress={() => void deny(candidate.passId, expired ? 'expired' : 'used')}
+                      onPress={() =>
+                        void deny(
+                          candidate.passId,
+                          expired
+                            ? 'expired'
+                            : candidate.rule.recurrence === 'once'
+                              ? 'used'
+                              : 'denied',
+                        )
+                      }
                       loading={confirmingId === candidate.passId}
                       disabled={confirmingId !== null}
                     />

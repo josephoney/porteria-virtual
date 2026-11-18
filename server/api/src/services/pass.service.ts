@@ -18,6 +18,7 @@ import {
   type PassBatchVisitorInput,
   type PassLinkResponse,
   type PassQrResponse,
+  type PassRuleSummary,
 } from '@porteria/shared';
 import config from '../config.js';
 import { decryptLinkToken, encryptLinkToken, randomToken, sha256Hex } from '../lib/pass-tokens.js';
@@ -33,10 +34,17 @@ import {
 } from './pass-destination.service.js';
 import { enqueueEventDefault } from './outbox.service.js';
 import { publishPassEvent } from '../lib/pass-bus.js';
+import { buildPassRule, loadCommunityTimezone } from './pass-schedule.service.js';
 import { signPassQrToken } from './pass-qr-token.service.js';
 import type { PassResult } from './pass-errors.js';
 
 const db = createDb();
+
+/** `HH:MM` or `HH:MM:SS` to minutes since midnight, ignoring seconds. */
+function timeToMinutes(value: string): number {
+  const [hours = '0', minutes = '0'] = value.split(':');
+  return Number(hours) * 60 + Number(minutes);
+}
 
 type AccessPassRow = typeof accessPasses.$inferSelect;
 
@@ -139,7 +147,11 @@ export async function createPass(
   if ((input.timeFrom && !input.timeTo) || (!input.timeFrom && input.timeTo)) {
     return { ok: false, code: 'invalid' };
   }
-  if (input.timeFrom && input.timeTo && input.timeFrom >= input.timeTo) {
+  if (
+    input.timeFrom &&
+    input.timeTo &&
+    timeToMinutes(input.timeFrom) >= timeToMinutes(input.timeTo)
+  ) {
     return { ok: false, code: 'invalid' };
   }
 
@@ -215,7 +227,10 @@ export async function createPass(
       type: input.type,
       maxUses: input.type === 'entry_only' ? 1 : (input.maxUses ?? 1),
       recurrence: input.recurrence ?? 'once',
-      allowedDays: input.recurrence === 'weekly' ? (input.allowedDays ?? null) : null,
+      allowedDays:
+        input.recurrence === 'weekly' && input.allowedDays
+          ? [...new Set(input.allowedDays)].sort((a, b) => a - b)
+          : null,
       validFrom,
       validUntil,
       timeFrom: input.timeFrom ?? null,
@@ -594,6 +609,8 @@ export type PassListItem = Omit<AccessPassRow, 'linkTokenEncrypted'> & {
   locationPath: string;
   destination: DestinationSummary;
   shareUrl: string | null;
+  /** Present on the detail endpoint; list rows omit it. */
+  rule?: PassRuleSummary;
 };
 
 /** The encrypted copy is for the server only: never send it to a client. */
@@ -723,7 +740,11 @@ export async function getPassById(
   const owned = await findOwnedPass(requester, passId);
   if (!owned.ok) return owned;
 
-  const destination = await resolveDestinationById(owned.data.locationUnitId);
+  const [destination, timezone] = await Promise.all([
+    resolveDestinationById(owned.data.locationUnitId),
+    loadCommunityTimezone(owned.data.communityId),
+  ]);
+  const rule = await buildPassRule(owned.data, timezone, new Date());
 
   return {
     ok: true,
@@ -734,6 +755,7 @@ export async function getPassById(
         ? toDestinationSummary(destination)
         : { id: owned.data.locationUnitId, name: '', path: '', kind: 'home' },
       shareUrl: shareUrlFor(owned.data),
+      rule,
     },
   };
 }

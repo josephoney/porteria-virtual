@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   RiAddLine,
+  RiArrowDownSLine,
+  RiArrowRightSLine,
   RiFileCopyLine,
   RiFileList3Line,
   RiForbidLine,
@@ -10,11 +12,18 @@ import {
   RiRefreshLine,
 } from '@remixicon/react';
 import { QRCodeSVG } from 'qrcode.react';
-import type { DestinationOption } from '@porteria/shared';
+import {
+  isPermanentPass,
+  type DestinationOption,
+  type PassRecurrence,
+  type PassRuleSummary,
+} from '@porteria/shared';
 import { ApiError, get, post } from '../lib/apiClient';
 import { usePassStream } from '../lib/use-pass-stream';
+import { expandableRowProps, useExpandedRow } from '../lib/use-expanded-row';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { DetailField, DetailGrid } from '../components/ui/detail-field';
 import {
   Dialog,
   DialogContent,
@@ -66,13 +75,24 @@ interface ResidentPass {
   status: string;
   /** `inside` means the visitor already went through the gate. */
   presenceState?: string;
+  type?: string;
+  recurrence?: PassRecurrence;
+  allowedDays?: number[] | null;
+  timeFrom?: string | null;
+  timeTo?: string | null;
   maxUses?: number;
+  entryCount?: number;
   exitCount?: number;
   batchId: string | null;
   batchLabel: string | null;
   shareUrl: string | null;
   destination?: PassDestination;
   locationPath?: string;
+}
+
+/** The detail endpoint adds the server-built rule to the same row shape. */
+interface PassDetail extends ResidentPass {
+  rule?: PassRuleSummary;
 }
 
 interface PassQr {
@@ -117,7 +137,57 @@ function visitorName(pass: ResidentPass) {
 }
 
 function formatRange(from: string, until: string) {
-  return `${dateFormat.format(new Date(from))} → ${dateFormat.format(new Date(until))}`;
+  const start = dateFormat.format(new Date(from));
+  if (isPermanentPass(until)) return `${start} → sin fecha de fin`;
+  return `${start} → ${dateFormat.format(new Date(until))}`;
+}
+
+const SHORT_DAY_LABELS: Record<number, string> = {
+  0: 'D',
+  1: 'L',
+  2: 'M',
+  3: 'X',
+  4: 'J',
+  5: 'V',
+  6: 'S',
+};
+
+/** Monday first, like the picker, even though the payload stores 0 = Sunday. */
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/**
+ * One compact line for the history row. Default `once` passes without a time
+ * window stay unlabelled so the table does not grow for legacy rows.
+ */
+function compactRule(pass: ResidentPass): string | null {
+  const hasWindow = Boolean(pass.timeFrom && pass.timeTo);
+  const recurrence = pass.recurrence ?? 'once';
+  if (recurrence === 'once' && !hasWindow) return null;
+
+  let mode: string;
+  if (recurrence === 'weekly') {
+    const days = WEEK_ORDER.filter((day) => pass.allowedDays?.includes(day)).map(
+      (day) => SHORT_DAY_LABELS[day],
+    );
+    mode = days.length > 0 ? days.join(' · ') : 'Semanal';
+  } else if (recurrence === 'range') {
+    mode = 'Todos los días';
+  } else {
+    mode = 'Un solo uso';
+  }
+
+  if (!hasWindow) return mode;
+  return `${mode} · ${pass.timeFrom!.slice(0, 5)}–${pass.timeTo!.slice(0, 5)}`;
+}
+
+function detailUses(detail: PassDetail) {
+  const rule = detail.rule;
+  if (!rule) return '—';
+  if (detail.type === 'entry_only') return '1 uso, se consume al entrar';
+  const noun = rule.maxUses === 1 ? 'uso' : 'usos';
+  if (rule.recurrence === 'once')
+    return `${rule.remainingUses} de ${rule.maxUses} ${noun} disponibles`;
+  return `${rule.remainingUses} de ${rule.maxUses} ${noun} hoy`;
 }
 
 export function ResidentAuthorizationsPage() {
@@ -155,6 +225,11 @@ export function ResidentAuthorizationsPage() {
   const [revoking, setRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const passRow = useExpandedRow();
+  const [detail, setDetail] = useState<PassDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
 
   const stopQrTimer = useCallback(() => {
     if (qrTimer.current !== null) {
@@ -249,6 +324,37 @@ export function ResidentAuthorizationsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The list stays at one query per page. The rule (with today's remaining
+  // uses) is loaded only when a row is expanded, and re-fetched every time so
+  // a scan that happened meanwhile is reflected.
+  useEffect(() => {
+    if (!passRow.expandedId) {
+      setDetail(null);
+      setDetailError('');
+      return;
+    }
+
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetail(null);
+    setDetailError('');
+
+    void (async () => {
+      try {
+        const result = await get<PassDetail>(`/api/passes/${passRow.expandedId}`);
+        if (!cancelled) setDetail(result.data);
+      } catch {
+        if (!cancelled) setDetailError('No se pudo cargar el detalle del pase.');
+      } finally {
+        if (!cancelled) setDetailLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [passRow.expandedId]);
 
   // The guard scans in the app while this page is open, so the row has to move
   // to "Usada" without the resident touching anything.
@@ -552,109 +658,190 @@ export function ResidentAuthorizationsPage() {
                     const state = displayStatus(pass);
                     const name = visitorName(pass);
                     const isActive = state === 'active';
+                    const isExpanded = passRow.isExpanded(pass.id);
+                    const ruleLine = compactRule(pass);
+                    const usesPerDay = pass.recurrence === 'range' || pass.recurrence === 'weekly';
                     return (
-                      <TableRow key={pass.id}>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium">{name}</span>
-                            <span className="text-xs text-muted-foreground">
-                              Doc. {pass.visitorDocument}
-                            </span>
-                            {pass.batchLabel && (
-                              <button
-                                type="button"
-                                onClick={() => filterByBatch(pass)}
-                                className="mt-1 self-start text-xs text-primary underline underline-offset-2"
-                                aria-label={`Filtrar por el lote ${pass.batchLabel}`}
+                      <Fragment key={pass.id}>
+                        <TableRow
+                          className="cursor-pointer hover:bg-muted/40"
+                          {...expandableRowProps(pass.id, isExpanded, passRow.toggle)}
+                        >
+                          <TableCell>
+                            <div className="flex items-start gap-2">
+                              <span className="mt-0.5 text-muted-foreground" aria-hidden="true">
+                                {isExpanded ? <RiArrowDownSLine /> : <RiArrowRightSLine />}
+                              </span>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium">{name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  Doc. {pass.visitorDocument}
+                                </span>
+                                {pass.batchLabel && (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      filterByBatch(pass);
+                                    }}
+                                    onKeyDown={(event) => event.stopPropagation()}
+                                    className="mt-1 self-start text-xs text-primary underline underline-offset-2"
+                                    aria-label={`Filtrar por el lote ${pass.batchLabel}`}
+                                  >
+                                    {pass.batchLabel}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <Badge
+                                variant={
+                                  pass.destination?.kind === 'common_area' ? 'secondary' : 'outline'
+                                }
                               >
-                                {pass.batchLabel}
-                              </button>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <Badge
-                              variant={
-                                pass.destination?.kind === 'common_area' ? 'secondary' : 'outline'
-                              }
-                            >
-                              {pass.destination?.kind === 'common_area' ? 'Zona común' : 'Vivienda'}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {pass.locationPath || pass.destination?.path || 'Destino'}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-xs text-muted-foreground">
-                            {formatRange(pass.validFrom, pass.validUntil)}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={STATUS_VARIANTS[state]}>{STATUS_LABELS[state]}</Badge>
-                          {(pass.maxUses ?? 1) > 1 ? (
-                            <Badge variant="secondary">
-                              {Math.max(0, (pass.maxUses ?? 1) - (pass.exitCount ?? 0))} de{' '}
-                              {pass.maxUses} usos
-                            </Badge>
-                          ) : null}
-                          {pass.presenceState === 'inside' && state === 'active' ? (
-                            <Badge variant="outline">Dentro</Badge>
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              title="Ver QR"
-                              aria-label={`Ver QR de ${name}`}
-                              disabled={!isActive}
-                              onClick={() => setQrPass(pass)}
-                            >
-                              <RiQrCodeLine />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              title="Copiar enlace"
-                              aria-label={`Copiar enlace de ${name}`}
-                              disabled={!pass.shareUrl}
-                              onClick={() => void copyLink(pass)}
-                            >
-                              <RiFileCopyLine />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              title="Regenerar enlace"
-                              aria-label={`Regenerar enlace de ${name}`}
-                              disabled={!isActive || busyId === pass.id}
-                              onClick={() => void regenerateLink(pass)}
-                            >
-                              {busyId === pass.id ? <RiPencilLine /> : <RiRefreshLine />}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              title="Revocar"
-                              aria-label={`Revocar autorización de ${name}`}
-                              disabled={!isActive}
-                              onClick={() => {
-                                setRevokeError('');
-                                setRevokePass(pass);
-                              }}
-                            >
-                              <RiForbidLine />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                                {pass.destination?.kind === 'common_area'
+                                  ? 'Zona común'
+                                  : 'Vivienda'}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {pass.locationPath || pass.destination?.path || 'Destino'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs text-muted-foreground">
+                                {formatRange(pass.validFrom, pass.validUntil)}
+                              </span>
+                              {ruleLine && (
+                                <span className="text-[11px] text-muted-foreground">
+                                  {ruleLine}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={STATUS_VARIANTS[state]}>{STATUS_LABELS[state]}</Badge>
+                            {usesPerDay ? (
+                              <Badge variant="secondary">
+                                {pass.maxUses ?? 1}{' '}
+                                {(pass.maxUses ?? 1) === 1 ? 'uso por día' : 'usos por día'}
+                              </Badge>
+                            ) : (pass.maxUses ?? 1) > 1 ? (
+                              <Badge variant="secondary">
+                                {Math.max(0, (pass.maxUses ?? 1) - (pass.exitCount ?? 0))} de{' '}
+                                {pass.maxUses} usos
+                              </Badge>
+                            ) : null}
+                            {pass.presenceState === 'inside' && state === 'active' ? (
+                              <Badge variant="outline">Dentro</Badge>
+                            ) : null}
+                          </TableCell>
+                          <TableCell
+                            className="text-right"
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
+                          >
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                title="Ver QR"
+                                aria-label={`Ver QR de ${name}`}
+                                disabled={!isActive}
+                                onClick={() => setQrPass(pass)}
+                              >
+                                <RiQrCodeLine />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                title="Copiar enlace"
+                                aria-label={`Copiar enlace de ${name}`}
+                                disabled={!pass.shareUrl}
+                                onClick={() => void copyLink(pass)}
+                              >
+                                <RiFileCopyLine />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                title="Regenerar enlace"
+                                aria-label={`Regenerar enlace de ${name}`}
+                                disabled={!isActive || busyId === pass.id}
+                                onClick={() => void regenerateLink(pass)}
+                              >
+                                {busyId === pass.id ? <RiPencilLine /> : <RiRefreshLine />}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                title="Revocar"
+                                aria-label={`Revocar autorización de ${name}`}
+                                disabled={!isActive}
+                                onClick={() => {
+                                  setRevokeError('');
+                                  setRevokePass(pass);
+                                }}
+                              >
+                                <RiForbidLine />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="bg-muted/30">
+                              {detailLoading ? (
+                                <Skeleton className="h-20 w-full" />
+                              ) : detailError ? (
+                                <p role="alert" className="text-sm text-destructive">
+                                  {detailError}
+                                </p>
+                              ) : detail ? (
+                                <div className="space-y-3 py-2">
+                                  <div>
+                                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                      Regla del pase
+                                    </p>
+                                    <p className="mt-1 text-sm font-medium">
+                                      {detail.rule?.summary ??
+                                        ruleLine ??
+                                        'Sin restricciones adicionales'}
+                                    </p>
+                                  </div>
+                                  <DetailGrid>
+                                    <DetailField
+                                      label="Tipo"
+                                      value={
+                                        detail.type === 'entry_only'
+                                          ? 'Sólo entrada'
+                                          : 'Ingreso y egreso'
+                                      }
+                                    />
+                                    <DetailField label="Usos" value={detailUses(detail)} />
+                                    <DetailField label="Documento" value={detail.visitorDocument} />
+                                    <DetailField
+                                      label="Presencia"
+                                      value={
+                                        detail.presenceState === 'inside'
+                                          ? 'Dentro del conjunto'
+                                          : 'Fuera del conjunto'
+                                      }
+                                    />
+                                  </DetailGrid>
+                                </div>
+                              ) : null}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </TableBody>

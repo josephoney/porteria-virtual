@@ -1,4 +1,4 @@
-import type { ScanDecisionResponse, ScanPassResponse } from '@porteria/shared';
+import type { PassRuleSummary, ScanDecisionResponse, ScanPassResponse } from '@porteria/shared';
 
 type RequestFn = <T>(
   path: string,
@@ -39,6 +39,8 @@ export interface IdentityCandidate {
   validUntil: string;
   destinationName: string;
   destinationPath: string;
+  /** Readable rule built by the API: days, window and uses left today. */
+  rule: PassRuleSummary;
 }
 
 /** Authorizations registered for a document, for the guard to confirm by hand. */

@@ -3,6 +3,7 @@ import type {
   CreatePassDto,
   PassLinkResponse,
   PassQrResponse,
+  PassRuleSummary,
   PassStatus,
 } from '@porteria/shared';
 
@@ -10,6 +11,8 @@ import { apiFetch } from './client';
 
 export interface PassWithPath extends AccessPass {
   locationPath: string;
+  /** The detail endpoint builds the readable rule; list rows omit it. */
+  rule?: PassRuleSummary;
 }
 
 export function listPasses(token: string, status?: PassStatus) {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import type { PassQrResponse, PublicPassPreview } from '@porteria/shared';
+import { isPermanentPass, type PassQrResponse, type PublicPassPreview } from '@porteria/shared';
 import { ApiError, getQr, getStatus } from '../api';
 import { formatDateTime, formatRemaining, formatTime } from '../lib/format';
 
@@ -111,7 +111,11 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
           </div>
           <div>
             <dt>Válido hasta</dt>
-            <dd>{formatDateTime(preview.validUntil)}</dd>
+            <dd>
+              {isPermanentPass(preview.validUntil)
+                ? 'Sin fecha de fin'
+                : formatDateTime(preview.validUntil)}
+            </dd>
           </div>
           {preview.timeFrom && preview.timeTo && (
             <div>

@@ -2,13 +2,14 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import type {
-  AccessPoint,
-  BitacoraEntryDto,
-  GuardShiftCurrentResponse,
-  GuardShiftHistoryItem,
-  ScanDecisionResponse,
-  ScanPassResponse,
+import {
+  isPermanentPass,
+  type AccessPoint,
+  type BitacoraEntryDto,
+  type GuardShiftCurrentResponse,
+  type GuardShiftHistoryItem,
+  type ScanDecisionResponse,
+  type ScanPassResponse,
 } from '@porteria/shared';
 
 import { confirmScan, rejectScan, scanPass } from '@/api/access';
@@ -309,7 +310,7 @@ export default function GuardScanScreen() {
     setBusy(true);
     setScanError(null);
     try {
-      const result = await rejectScan(request, scanResult.scanId);
+      const result = await rejectScan(request, scanResult.scanId, 'denied_by_guard');
       setDecision(result);
       await refresh();
       setFlash('Ingreso rechazado. Listo para el siguiente.');
@@ -533,7 +534,9 @@ export default function GuardScanScreen() {
                     <Text style={ui.muted}>Autoriza: {scanResult.authorizedByName}</Text>
                     <Text style={ui.muted}>
                       Vigencia: {formatDateTime(scanResult.schedule.validFrom)} →{' '}
-                      {formatDateTime(scanResult.schedule.validUntil)}
+                      {isPermanentPass(scanResult.schedule.validUntil)
+                        ? 'sin fecha de fin'
+                        : formatDateTime(scanResult.schedule.validUntil)}
                     </Text>
                     {scanResult.reason ? (
                       <Text style={ui.error}>{reasonText(scanResult.reason)}</Text>
@@ -604,6 +607,7 @@ export default function GuardScanScreen() {
                     {item.document ? ` · Doc. ${item.document}` : ''}
                   </Text>
                   {item.destination ? <Text style={ui.muted}>{item.destination}</Text> : null}
+                  {item.rule ? <Text style={ui.muted}>{item.rule}</Text> : null}
                   {item.vehiclePlate ? (
                     <Text style={ui.muted}>Vehículo: {item.vehiclePlate}</Text>
                   ) : null}

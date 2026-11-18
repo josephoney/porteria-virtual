@@ -1,6 +1,7 @@
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { isPermanentPass } from '@porteria/shared';
 
 import type { PassWithPath } from '@/api/passes';
 import { useAuth } from '@/auth/AuthContext';
@@ -118,7 +119,10 @@ export default function ResidentHomeScreen() {
             </View>
             <Text style={ui.muted}>{pass.locationPath}</Text>
             <Text style={ui.muted}>
-              Vence {formatDate(pass.validUntil)} · {presenceLabel(pass.presenceState)}
+              {isPermanentPass(pass.validUntil)
+                ? 'Sin vencimiento'
+                : `Vence ${formatDate(pass.validUntil)}`}{' '}
+              · {presenceLabel(pass.presenceState)}
             </Text>
             {pass.vehiclePlate ? <Text style={ui.muted}>Vehículo {pass.vehiclePlate}</Text> : null}
           </Card>
