@@ -13,7 +13,7 @@ import { homeForRole, modeForRole } from '@/auth/roles';
 import { Badge, Button, Card, LoadingView, Screen, ui } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDateTime, formatValidity } from '@/lib/format';
-import { colors, spacing } from '@/theme';
+import { colors, radius, spacing } from '@/theme';
 
 function finalMessage(status: PassStatus): string {
   switch (status) {
@@ -28,11 +28,18 @@ function finalMessage(status: PassStatus): string {
   }
 }
 
-const TICKET_TONE_COLORS: Record<PassTicketTone, string> = {
+const TICKET_TONE_BACKGROUNDS: Record<PassTicketTone, string> = {
   success: colors.success,
   warning: colors.warning,
   danger: colors.danger,
-  neutral: colors.textMuted,
+  neutral: colors.surfaceElevated,
+};
+
+const TICKET_TONE_TEXT: Record<PassTicketTone, string> = {
+  success: colors.background,
+  warning: colors.background,
+  danger: colors.background,
+  neutral: colors.text,
 };
 
 export default function PassDetailScreen() {
@@ -272,17 +279,17 @@ export default function PassDetailScreen() {
         <Text style={ui.muted}>Link válido hasta {formatDateTime(pass.linkExpiresAt)}</Text>
       </Card>
 
-      <Card>
-        <View style={styles.ticketState}>
-          <Text style={[styles.ticketIcon, { color: TICKET_TONE_COLORS[ticket.tone] }]}>
-            {ticket.icon}
+      <View style={[styles.ticketState, { backgroundColor: TICKET_TONE_BACKGROUNDS[ticket.tone] }]}>
+        <Text style={[styles.ticketIcon, { color: TICKET_TONE_TEXT[ticket.tone] }]}>
+          {ticket.icon}
+        </Text>
+        <View style={styles.ticketText}>
+          <Text style={[ui.heading, { color: TICKET_TONE_TEXT[ticket.tone] }]}>{ticket.label}</Text>
+          <Text style={[ui.muted, { color: TICKET_TONE_TEXT[ticket.tone], opacity: 0.78 }]}>
+            {ticket.detail}
           </Text>
-          <View style={styles.ticketText}>
-            <Text style={ui.heading}>{ticket.label}</Text>
-            <Text style={ui.muted}>{ticket.detail}</Text>
-          </View>
         </View>
-      </Card>
+      </View>
 
       {isActive ? (
         <Card>
@@ -357,6 +364,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
   },
   ticketIcon: {
     fontSize: 28,

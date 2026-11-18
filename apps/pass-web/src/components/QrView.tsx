@@ -16,11 +16,18 @@ interface QrViewProps {
   onExit: (code: string) => void;
 }
 
-const TICKET_TONE_COLORS: Record<PassTicketTone, string> = {
-  success: '#1f9d63',
-  warning: '#b7791f',
-  danger: '#c53030',
-  neutral: '#4a5568',
+const TICKET_TONE_BACKGROUNDS: Record<PassTicketTone, string> = {
+  success: '#39C27F',
+  warning: '#F2B84B',
+  danger: '#F26D6D',
+  neutral: '#E2E8F0',
+};
+
+const TICKET_TONE_TEXT: Record<PassTicketTone, string> = {
+  success: '#081018',
+  warning: '#081018',
+  danger: '#081018',
+  neutral: '#0B1220',
 };
 
 export function QrView({ token, preview, onExit }: QrViewProps) {
@@ -108,17 +115,17 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
             display: 'flex',
             gap: 12,
             alignItems: 'flex-start',
-            margin: '12px 0 0',
-            padding: '12px 14px',
+            margin: '12px 0 20px',
+            padding: '14px 16px',
             borderRadius: 14,
-            border: `1px solid ${TICKET_TONE_COLORS[ticket.tone]}`,
-            background: `${TICKET_TONE_COLORS[ticket.tone]}14`,
+            background: TICKET_TONE_BACKGROUNDS[ticket.tone],
+            color: TICKET_TONE_TEXT[ticket.tone],
           }}
         >
           <span
             aria-hidden="true"
             style={{
-              color: TICKET_TONE_COLORS[ticket.tone],
+              color: TICKET_TONE_TEXT[ticket.tone],
               fontSize: 22,
               lineHeight: '22px',
             }}
@@ -127,7 +134,7 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
           </span>
           <div>
             <p style={{ margin: 0, fontWeight: 700 }}>{ticket.label}</p>
-            <p className="muted" style={{ margin: '2px 0 0' }}>
+            <p className="muted" style={{ margin: '2px 0 0', color: 'inherit', opacity: 0.78 }}>
               {ticket.detail}
             </p>
           </div>
