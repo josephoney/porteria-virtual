@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { apiBaseUrl, currentAccessToken } from './apiClient';
+import { apiBaseUrl, currentAccessToken, refreshAccessToken } from './apiClient';
 
 /** Where the server listens for new bitacora entries. */
 const STREAM_PATH = '/api/bitacora/stream';
@@ -50,19 +50,34 @@ export function useBitacoraStream(options: {
     let buffer = '';
 
     async function connect() {
-      controller = new AbortController();
+      if (cancelled) return;
       const token = currentAccessToken();
+      if (!token) {
+        retry = window.setTimeout(connect, RECONNECT_DELAY_MS);
+        return;
+      }
+
+      controller = new AbortController();
       try {
         const response = await fetch(
           `${apiBaseUrl()}${STREAM_PATH}?communityId=${encodeURIComponent(communityId as string)}`,
           {
             headers: {
               Accept: 'text/event-stream',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              Authorization: `Bearer ${token}`,
             },
             signal: controller.signal,
           },
         );
+
+        if (response.status === 401) {
+          const refreshed = await refreshAccessToken();
+          if (cancelled) return;
+          if (!refreshed || refreshed === token) return;
+          retry = window.setTimeout(connect, 0);
+          return;
+        }
+
         if (!response.ok || !response.body) throw new Error('stream unavailable');
 
         const reader = response.body.getReader();

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { apiBaseUrl, currentAccessToken } from './apiClient';
+import { apiBaseUrl, currentAccessToken, refreshAccessToken } from './apiClient';
 
 /** Shape the server writes on `event: pass`. */
 export interface PassStreamEvent {
@@ -41,17 +41,36 @@ export function usePassStream({
 
     async function connect() {
       if (cancelled) return;
-      controller = new AbortController();
       const token = currentAccessToken();
+      if (!token) {
+        // The regular API calls trigger the auth refresh; wait for it instead of
+        // sending an empty bearer and collecting a 401 on every retry.
+        retry = window.setTimeout(connect, RECONNECT_DELAY_MS);
+        return;
+      }
+
+      controller = new AbortController();
 
       try {
         const response = await fetch(`${apiBaseUrl()}${STREAM_PATH}`, {
           headers: {
-            Authorization: token ? `Bearer ${token}` : '',
+            Authorization: `Bearer ${token}`,
             Accept: 'text/event-stream',
           },
           signal: controller.signal,
         });
+
+        if (response.status === 401) {
+          const refreshed = await refreshAccessToken();
+          if (cancelled) return;
+          // If the refresh failed, or handed back the same token, retrying would
+          // only hammer the API with the same 401. The auth layer decides when
+          // the session is gone.
+          if (!refreshed || refreshed === token) return;
+          retry = window.setTimeout(connect, 0);
+          return;
+        }
+
         if (!response.ok || !response.body) throw new Error('stream_unavailable');
 
         const reader = response.body.getReader();
@@ -88,7 +107,8 @@ export function usePassStream({
         // retry below, which reconnects and lets the caller refetch.
       }
 
-      if (!cancelled) retry = window.setTimeout(connect, RECONNECT_DELAY_MS);
+      if (cancelled) return;
+      retry = window.setTimeout(connect, RECONNECT_DELAY_MS);
     }
 
     void connect();

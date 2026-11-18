@@ -47,6 +47,22 @@ export function currentAccessToken(): string | null {
   return getToken();
 }
 
+/**
+ * Refreshes the access token once, sharing the in-flight promise with regular
+ * requests. The streams use `fetch` directly, so they need this to avoid
+ * reconnecting forever with an expired token.
+ */
+export async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = onRefresh();
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+}
+
 async function request<T>(
   method: string,
   path: string,
