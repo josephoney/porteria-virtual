@@ -1387,9 +1387,10 @@ describe('dynamic pass integration', () => {
     const qr = parse(await publicQr(token, cookie)).token as string;
     const scanned = parse(await scan(qr));
 
+    // Older than the 180 s default so the test does not sit on the boundary.
     await db
       .update(passScans)
-      .set({ scannedAt: new Date(Date.now() - 3 * 60_000) })
+      .set({ scannedAt: new Date(Date.now() - 4 * 60_000) })
       .where(eq(passScans.id, scanned.scanId as string));
 
     const expired = await confirm(scanned.scanId as string);

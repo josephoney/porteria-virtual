@@ -101,7 +101,7 @@ ORDER BY started_at;
 ## 7. Escaneo duplicado o pendiente
 
 - Cada QR tiene un `jti` único; un segundo escaneo del mismo token devuelve `token_already_used` (409).
-- Un escaneo pendiente expira a los 120 segundos (`PASS_SCAN_PENDING_TTL_SECONDS`). Confirmar después devuelve `scan_expired`.
+- Un escaneo pendiente expira a los 180 segundos (`PASS_SCAN_PENDING_TTL_SECONDS`). Confirmar después devuelve `scan_expired`.
 - Si el guardia confirma dos veces, la segunda devuelve `scan_already_processed`.
 - Consulta:
 

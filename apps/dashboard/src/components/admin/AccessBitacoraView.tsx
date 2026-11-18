@@ -17,6 +17,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { DetailField, DetailGrid } from '../ui/detail-field';
 
 interface CommunityOption {
   id: string;
@@ -147,6 +148,39 @@ function formatDate(value: string): string {
     minute: '2-digit',
   });
 }
+
+/** The `details` payload is free-form JSON: read it defensively. */
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function technicalJson(value: unknown): string {
+  try {
+    return JSON.stringify(value ?? {}, null, 2) ?? '{}';
+  } catch {
+    return 'No se pudieron mostrar los detalles técnicos.';
+  }
+}
+
+/** Reason codes the scan flow stores in `details.reason`. */
+const reasonLabels: Record<string, string> = {
+  denied_by_guard: 'Denegado por el guardia',
+  pass_used: 'Pase ya utilizado',
+  revoked: 'Pase revocado',
+  expired: 'Pase vencido',
+  not_valid_now: 'Fuera de vigencia',
+  out_of_days: 'Día no autorizado',
+  out_of_schedule: 'Fuera del horario permitido',
+  daily_uses_exhausted: 'Sin usos disponibles hoy',
+  wrong_direction: 'Sentido de acceso incorrecto',
+  token_already_used: 'QR ya utilizado',
+};
 
 export function AccessBitacoraView({
   communityId: fixedCommunityId,
@@ -343,6 +377,26 @@ export function AccessBitacoraView({
     () => accessPoints.filter((item) => item.active),
     [accessPoints],
   );
+
+  const selectedDetails = asRecord(selected?.details);
+  const selectedVisitor = asRecord(selectedDetails?.visitor);
+  const selectedVisitorName =
+    [readText(selectedVisitor?.firstName), readText(selectedVisitor?.lastName)]
+      .filter(Boolean)
+      .join(' ') || null;
+  const selectedVisitorDocument = readText(selectedVisitor?.document);
+  const selectedAction = readText(selectedDetails?.action);
+  const selectedActionLabel =
+    selectedAction === 'entry' ? 'Ingreso' : selectedAction === 'exit' ? 'Egreso' : null;
+  const selectedDetailDestination = readText(selectedDetails?.destinationName);
+  const selectedReason = readText(selectedDetails?.reason);
+  const selectedGuardNote = readText(selectedDetails?.note);
+  const selectedReasonLabel = selectedReason
+    ? selectedReason === selectedGuardNote
+      ? 'Denegado por el guardia (ver novedad)'
+      : (reasonLabels[selectedReason] ?? selectedReason)
+    : null;
+  const selectedRule = readText(selectedDetails?.rule);
 
   async function openDetail(entry: BitacoraEntryRow) {
     setDetailOpen(true);
@@ -653,44 +707,37 @@ export function AccessBitacoraView({
             <Skeleton className="h-40 w-full" />
           ) : (
             <div className="space-y-4">
-              <div className="grid gap-2 text-sm sm:grid-cols-2">
-                <p>
-                  <span className="text-muted-foreground">Acceso:</span> {selected.accessPointName}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Tipo:</span>{' '}
-                  {typeLabels[selected.type] ?? selected.type}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Autor:</span>{' '}
-                  {selected.authorName ?? 'Sistema'}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Destino:</span>{' '}
-                  {selected.destinationPath ?? '—'}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Autorizó:</span>{' '}
-                  {selected.authorizedByName ?? '—'}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Fecha:</span>{' '}
-                  {formatDate(selected.createdAt)}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Origen:</span> {selected.source}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Turno:</span> {selected.shiftId ?? '—'}
-                </p>
-              </div>
+              <DetailGrid>
+                <DetailField label="Acceso" value={selected.accessPointName} />
+                <DetailField label="Tipo" value={typeLabels[selected.type] ?? selected.type} />
+                <DetailField label="Autor" value={selected.authorName ?? 'Sistema'} />
+                <DetailField label="Autorizó" value={selected.authorizedByName ?? '—'} />
+                <DetailField label="Fecha" value={formatDate(selected.createdAt)} />
+                <DetailField label="Origen" value={selected.source} />
+                <DetailField label="Turno" value={selected.shiftId ?? '—'} />
+                <DetailField
+                  label="Destino"
+                  value={selectedDetailDestination ?? selected.destinationPath ?? '—'}
+                />
+                <DetailField label="Visitante" value={selectedVisitorName ?? '—'} />
+                <DetailField label="Documento" value={selectedVisitorDocument ?? '—'} />
+                <DetailField label="Acción" value={selectedActionLabel ?? '—'} />
+                <DetailField label="Motivo" value={selectedReasonLabel ?? '—'} />
+                <DetailField label="Regla" value={selectedRule ?? '—'} span="full" />
+              </DetailGrid>
               <p className="rounded-3xl bg-muted/50 px-4 py-3 text-sm">{selected.summary}</p>
-              <div>
-                <p className="mb-1 text-xs font-medium text-muted-foreground">DETALLE</p>
-                <pre className="max-h-56 overflow-auto rounded-3xl bg-muted/50 p-4 text-xs">
-                  {JSON.stringify(selected.details, null, 2)}
-                </pre>
-              </div>
+              <section className="space-y-1 rounded-3xl border border-border bg-muted/30 px-4 py-3">
+                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Novedad del guardia
+                </h3>
+                {selectedGuardNote ? (
+                  <p className="whitespace-pre-wrap text-sm">{selectedGuardNote}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Sin novedad registrada para este movimiento.
+                  </p>
+                )}
+              </section>
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
                   COMENTARIOS ({selected.comments.length})
@@ -722,6 +769,14 @@ export function AccessBitacoraView({
                   </Button>
                 </div>
               </div>
+              <details className="rounded-3xl border border-border">
+                <summary className="cursor-pointer px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Detalles técnicos
+                </summary>
+                <pre className="max-h-56 overflow-auto border-t border-border bg-muted/30 p-4 text-xs">
+                  {technicalJson(selected.details)}
+                </pre>
+              </details>
             </div>
           )}
         </DialogContent>

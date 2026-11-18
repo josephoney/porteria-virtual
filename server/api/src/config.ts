@@ -69,7 +69,7 @@ const config = {
     linkTtlMinutes: parseInt(process.env.PASS_LINK_TTL_MINUTES || '1440', 10),
     pinAttempts: parseInt(process.env.PASS_PIN_ATTEMPTS || '5', 10),
     pinLockMinutes: parseInt(process.env.PASS_PIN_LOCK_MINUTES || '15', 10),
-    scanPendingTtlSeconds: parseInt(process.env.PASS_SCAN_PENDING_TTL_SECONDS || '120', 10),
+    scanPendingTtlSeconds: parseInt(process.env.PASS_SCAN_PENDING_TTL_SECONDS || '180', 10),
     missingExitGraceMinutes: parseInt(process.env.PASS_MISSING_EXIT_GRACE_MINUTES || '15', 10),
     dailyLimitPerUnit: parseInt(process.env.PASS_DAILY_LIMIT_PER_UNIT || '50', 10),
     rateLimits: {
