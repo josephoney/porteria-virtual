@@ -12,6 +12,7 @@ import {
 import config from '../config.js';
 import { randomToken, sha256Hex, verifyDeviceCookie } from '../lib/pass-tokens.js';
 import { buildLocationPath } from './location-path.service.js';
+import { buildPassRule } from './pass-schedule.service.js';
 import { signPassQrToken } from './pass-qr-token.service.js';
 import type { PassResult } from './pass-errors.js';
 
@@ -115,6 +116,11 @@ export async function previewPass(
       status: found.pass.status,
       presenceState: found.pass.presenceState,
       pinRequired: found.pass.pinEnabled,
+      type: found.pass.type,
+      recurrence: found.pass.recurrence,
+      maxUses: found.pass.maxUses,
+      exitCount: found.pass.exitCount,
+      remainingUses: (await buildPassRule(found.pass, found.timezone, new Date())).remainingUses,
     },
   };
 }
@@ -236,6 +242,8 @@ export async function getPublicStatus(
       status: found.pass.status,
       presenceState: found.pass.presenceState,
       nextWindow: null,
+      exitCount: found.pass.exitCount,
+      remainingUses: (await buildPassRule(found.pass, found.timezone, new Date())).remainingUses,
     },
   };
 }

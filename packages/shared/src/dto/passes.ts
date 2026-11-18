@@ -54,6 +54,11 @@ export interface PublicPassPreview {
   timeFrom: string | null;
   timeTo: string | null;
   vehiclePlate: string | null;
+  type: PassType;
+  recurrence: 'once' | 'range' | 'weekly';
+  maxUses: number;
+  exitCount: number;
+  remainingUses: number;
   status: PassStatus;
   presenceState: PresenceState;
   pinRequired: boolean;
@@ -62,6 +67,8 @@ export interface PublicPassPreview {
 export interface PassStatusResponse {
   status: PassStatus;
   presenceState: PresenceState;
+  exitCount: number;
+  remainingUses: number;
   nextWindow: { from: string; to: string } | null;
 }
 

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { isPermanentPass, type PassQrResponse, type PublicPassPreview } from '@porteria/shared';
+import {
+  isPermanentPass,
+  passTicketState,
+  type PassQrResponse,
+  type PassTicketTone,
+  type PublicPassPreview,
+} from '@porteria/shared';
 import { ApiError, getQr, getStatus } from '../api';
 import { formatDateTime, formatRemaining, formatTime } from '../lib/format';
 
@@ -10,21 +16,20 @@ interface QrViewProps {
   onExit: (code: string) => void;
 }
 
-function statusLabel(
-  status: PublicPassPreview['status'],
-  presence: PublicPassPreview['presenceState'],
-): string {
-  if (status === 'used') return 'Utilizado';
-  if (status === 'revoked') return 'Revocado';
-  if (status === 'expired') return 'Expirado';
-  return presence === 'inside' ? 'Dentro' : 'Fuera';
-}
+const TICKET_TONE_COLORS: Record<PassTicketTone, string> = {
+  success: '#1f9d63',
+  warning: '#b7791f',
+  danger: '#c53030',
+  neutral: '#4a5568',
+};
 
 export function QrView({ token, preview, onExit }: QrViewProps) {
   const [qr, setQr] = useState<PassQrResponse | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [presence, setPresence] = useState(preview.presenceState);
   const [status, setStatus] = useState(preview.status);
+  const [exitCount, setExitCount] = useState(preview.exitCount);
+  const [remainingUses, setRemainingUses] = useState(preview.remainingUses);
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
 
@@ -50,6 +55,8 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
           const next = await getStatus(token);
           setPresence(next.presenceState);
           setStatus(next.status);
+          setExitCount(next.exitCount);
+          setRemainingUses(next.remainingUses);
           if (next.status !== 'active') {
             onExitRef.current(next.status === 'used' ? 'pass_used' : next.status);
           }
@@ -76,12 +83,55 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
     return () => window.clearInterval(timer);
   }, [qr]);
 
+  const ticket = passTicketState({
+    type: preview.type,
+    status,
+    presenceState: presence,
+    recurrence: preview.recurrence,
+    maxUses: preview.maxUses,
+    exitCount,
+    validUntil: preview.validUntil,
+    rule: { remainingUses },
+  });
+
   return (
     <main className="page">
       <section className="card">
         <p className="eyebrow">{preview.communityName}</p>
         <h1>{preview.visitorFirstName}</h1>
         <p className="muted">{preview.locationPath}</p>
+
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            display: 'flex',
+            gap: 12,
+            alignItems: 'flex-start',
+            margin: '12px 0 0',
+            padding: '12px 14px',
+            borderRadius: 14,
+            border: `1px solid ${TICKET_TONE_COLORS[ticket.tone]}`,
+            background: `${TICKET_TONE_COLORS[ticket.tone]}14`,
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              color: TICKET_TONE_COLORS[ticket.tone],
+              fontSize: 22,
+              lineHeight: '22px',
+            }}
+          >
+            {ticket.icon}
+          </span>
+          <div>
+            <p style={{ margin: 0, fontWeight: 700 }}>{ticket.label}</p>
+            <p className="muted" style={{ margin: '2px 0 0' }}>
+              {ticket.detail}
+            </p>
+          </div>
+        </div>
 
         <div className="qr-box">
           {qr ? (
@@ -131,10 +181,6 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
               <dd>{preview.vehiclePlate}</dd>
             </div>
           )}
-          <div>
-            <dt>Estado</dt>
-            <dd>{statusLabel(status, presence)}</dd>
-          </div>
         </dl>
 
         <p className="hint">

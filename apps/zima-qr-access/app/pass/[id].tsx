@@ -1,6 +1,7 @@
-import type { PassQrResponse, PassStatus } from '@porteria/shared';
+import type { PassQrResponse, PassStatus, PassTicketTone } from '@porteria/shared';
+import { passTicketState } from '@porteria/shared';
 import * as Clipboard from 'expo-clipboard';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Share, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -11,23 +12,8 @@ import { useAuth } from '@/auth/AuthContext';
 import { homeForRole, modeForRole } from '@/auth/roles';
 import { Badge, Button, Card, LoadingView, Screen, ui } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
-import { formatDateTime, formatValidity, presenceLabel, statusLabel } from '@/lib/format';
+import { formatDateTime, formatValidity } from '@/lib/format';
 import { colors, spacing } from '@/theme';
-
-function statusTone(status: PassStatus): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
-  switch (status) {
-    case 'active':
-      return 'success';
-    case 'used':
-      return 'info';
-    case 'revoked':
-      return 'danger';
-    case 'expired':
-      return 'warning';
-    default:
-      return 'neutral';
-  }
-}
 
 function finalMessage(status: PassStatus): string {
   switch (status) {
@@ -41,6 +27,13 @@ function finalMessage(status: PassStatus): string {
       return '';
   }
 }
+
+const TICKET_TONE_COLORS: Record<PassTicketTone, string> = {
+  success: colors.success,
+  warning: colors.warning,
+  danger: colors.danger,
+  neutral: colors.textMuted,
+};
 
 export default function PassDetailScreen() {
   const { session, request } = useAuth();
@@ -75,9 +68,11 @@ export default function PassDetailScreen() {
     }
   }, [request, passId]);
 
-  useEffect(() => {
-    void loadPass();
-  }, [loadPass]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadPass();
+    }, [loadPass]),
+  );
 
   const isActive = pass?.status === 'active';
 
@@ -106,6 +101,7 @@ export default function PassDetailScreen() {
     void loadQr();
     const timer = setInterval(() => {
       void loadQr();
+      void loadPass();
     }, 20_000);
     return () => clearInterval(timer);
   }, [isActive, loadQr]);
@@ -246,6 +242,8 @@ export default function PassDetailScreen() {
     );
   };
 
+  const ticket = passTicketState(pass);
+
   return (
     <Screen>
       <Card>
@@ -253,15 +251,10 @@ export default function PassDetailScreen() {
           <Text style={ui.heading}>
             {pass.visitorFirstName} {pass.visitorLastName}
           </Text>
-          <Badge label={statusLabel(pass.status)} tone={statusTone(pass.status)} />
         </View>
         <Text style={ui.muted}>Documento {pass.visitorDocument}</Text>
         <Text style={ui.muted}>{pass.locationPath}</Text>
         <View style={styles.badges}>
-          <Badge
-            label={presenceLabel(pass.presenceState)}
-            tone={pass.presenceState === 'inside' ? 'warning' : 'neutral'}
-          />
           <Badge
             label={pass.type === 'entry_only' ? 'Solo entrada' : 'Entrada y salida'}
             tone="info"
@@ -277,6 +270,18 @@ export default function PassDetailScreen() {
         ) : null}
         {pass.vehiclePlate ? <Text style={ui.muted}>Vehículo {pass.vehiclePlate}</Text> : null}
         <Text style={ui.muted}>Link válido hasta {formatDateTime(pass.linkExpiresAt)}</Text>
+      </Card>
+
+      <Card>
+        <View style={styles.ticketState}>
+          <Text style={[styles.ticketIcon, { color: TICKET_TONE_COLORS[ticket.tone] }]}>
+            {ticket.icon}
+          </Text>
+          <View style={styles.ticketText}>
+            <Text style={ui.heading}>{ticket.label}</Text>
+            <Text style={ui.muted}>{ticket.detail}</Text>
+          </View>
+        </View>
       </Card>
 
       {isActive ? (
@@ -347,6 +352,19 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
     marginVertical: spacing.xs,
+  },
+  ticketState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  ticketIcon: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  ticketText: {
+    flex: 1,
+    gap: 2,
   },
   qrBox: {
     alignSelf: 'center',
