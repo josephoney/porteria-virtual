@@ -113,6 +113,7 @@ export async function previewPass(
       timeFrom: found.pass.timeFrom,
       timeTo: found.pass.timeTo,
       vehiclePlate: found.pass.vehiclePlate,
+      companionCount: found.pass.companions.length,
       status: found.pass.status,
       presenceState: found.pass.presenceState,
       pinRequired: found.pass.pinEnabled,

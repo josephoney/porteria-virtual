@@ -188,6 +188,12 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
               <dd>{preview.vehiclePlate}</dd>
             </div>
           )}
+          {preview.companionCount > 0 && (
+            <div>
+              <dt>Acompañantes</dt>
+              <dd>{preview.companionCount}</dd>
+            </div>
+          )}
         </dl>
 
         <p className="hint">

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PERMANENT_PASS_UNTIL, isPermanentPass } from '@porteria/shared';
+import { PERMANENT_PASS_UNTIL, isPermanentPass, type PassCompanion } from '@porteria/shared';
 import { cn } from 'cn';
 import { ApiError, get, post } from '../lib/apiClient';
 import { Button } from '../components/ui/button';
@@ -29,12 +29,15 @@ type Recurrence = 'once' | 'range' | 'weekly';
 type FieldKey =
   | 'destination'
   | 'visitor'
+  | 'companions'
   | 'window'
   | 'vehicle'
   | 'schedule'
   | 'days'
   | 'recurrenceUntil'
   | 'uses';
+
+const MAX_COMPANIONS = 10;
 
 const dateTimeFormatter = new Intl.DateTimeFormat('es-CO', {
   dateStyle: 'short',
@@ -371,6 +374,7 @@ export function ResidentAuthorizationNewPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [document, setDocument] = useState('');
+  const [companions, setCompanions] = useState<PassCompanion[]>([]);
   const [hasVehicle, setHasVehicle] = useState(false);
   const [plate, setPlate] = useState('');
 
@@ -468,6 +472,37 @@ export function ResidentAuthorizationNewPage() {
     clearFieldError('days');
   }
 
+  function addCompanion() {
+    setCompanions((current) =>
+      current.length >= MAX_COMPANIONS
+        ? current
+        : [...current, { firstName: '', lastName: '', document: '' }],
+    );
+    clearFieldError('companions');
+  }
+
+  function updateCompanion(index: number, field: keyof PassCompanion, value: string) {
+    setCompanions((current) =>
+      current.map((companion, position) =>
+        position === index ? { ...companion, [field]: value } : companion,
+      ),
+    );
+    clearFieldError('companions');
+  }
+
+  function removeCompanion(index: number) {
+    setCompanions((current) => current.filter((_, position) => position !== index));
+    clearFieldError('companions');
+  }
+
+  function trimmedCompanions(): PassCompanion[] {
+    return companions.map((companion) => ({
+      firstName: companion.firstName.trim(),
+      lastName: companion.lastName.trim(),
+      document: companion.document.trim(),
+    }));
+  }
+
   function validate(): boolean {
     const next: Partial<Record<FieldKey, string>> = {};
 
@@ -476,6 +511,23 @@ export function ResidentAuthorizationNewPage() {
     }
     if (!firstName.trim() || !lastName.trim() || !document.trim()) {
       next.visitor = 'Completa nombre, apellido y documento del visitante.';
+    }
+
+    const companionValues = trimmedCompanions();
+    if (
+      companionValues.length > MAX_COMPANIONS ||
+      companionValues.some(
+        (companion) => !companion.firstName || !companion.lastName || !companion.document,
+      )
+    ) {
+      next.companions = `Completa nombre, apellido y documento de cada acompañante (máximo ${MAX_COMPANIONS}).`;
+    } else {
+      const documents = new Set(
+        companionValues.map((companion) => companion.document.toLowerCase()),
+      );
+      if (documents.size !== companionValues.length) {
+        next.companions = 'Hay acompañantes con el mismo documento.';
+      }
     }
 
     const window = computeWindow({
@@ -579,6 +631,7 @@ export function ResidentAuthorizationNewPage() {
         visitorFirstName: firstName.trim(),
         visitorLastName: lastName.trim(),
         visitorDocument: document.trim(),
+        ...(companions.length > 0 ? { companions: trimmedCompanions() } : {}),
         hasVehicle,
         vehiclePlate: hasVehicle ? plate.trim().toUpperCase() : null,
         type: entryOnly ? 'entry_only' : 'entry_exit',
@@ -600,6 +653,14 @@ export function ResidentAuthorizationNewPage() {
 
       if (detail === 'weekly_requires_days') {
         setFieldErrors({ days: 'Marca al menos un día de la semana.' });
+        setStep('form');
+      } else if (detail === 'max_companions') {
+        setFieldErrors({
+          companions: `Podés agregar hasta ${MAX_COMPANIONS} acompañantes por autorización.`,
+        });
+        setStep('form');
+      } else if (detail === 'duplicate_companion_document') {
+        setFieldErrors({ companions: 'Hay acompañantes con el mismo documento.' });
         setStep('form');
       } else if (destinationError) {
         setFieldErrors({ destination: destinationError });
@@ -689,6 +750,27 @@ export function ResidentAuthorizationNewPage() {
               <DetailField
                 label="Vehículo"
                 value={hasVehicle ? plate.trim().toUpperCase() : 'No ingresa en vehículo'}
+              />
+              <DetailField
+                label={companions.length === 1 ? 'Acompañante' : 'Acompañantes'}
+                span="full"
+                value={
+                  companions.length === 0 ? (
+                    'Sin acompañantes'
+                  ) : (
+                    <ul className="space-y-1">
+                      {trimmedCompanions().map((companion, index) => (
+                        <li key={`${companion.document}-${index}`}>
+                          {companion.firstName} {companion.lastName}
+                          <span className="text-muted-foreground">
+                            {' '}
+                            · Doc. {companion.document}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                }
               />
             </DetailGrid>
           </div>
@@ -852,6 +934,79 @@ export function ResidentAuthorizationNewPage() {
               {fieldErrors.uses}
             </p>
           )}
+
+          <section className="space-y-3 rounded-2xl border border-border/70 bg-muted/30 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-1">
+                <h2 className="text-sm font-semibold">Acompañantes (opcional)</h2>
+                <p className="text-xs text-muted-foreground">
+                  Personas que llegan con el visitante principal. Comparten el mismo QR y no
+                  consumen usos aparte. Máximo {MAX_COMPANIONS}.
+                </p>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {companions.length}/{MAX_COMPANIONS}
+              </span>
+            </div>
+
+            {companions.map((companion, index) => (
+              <div
+                key={`companion-${index}`}
+                className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end"
+              >
+                <div className="space-y-1">
+                  <Label htmlFor={`resident-companion-first-${index}`}>Nombre</Label>
+                  <Input
+                    id={`resident-companion-first-${index}`}
+                    value={companion.firstName}
+                    onChange={(event) => updateCompanion(index, 'firstName', event.target.value)}
+                    aria-invalid={Boolean(fieldErrors.companions)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`resident-companion-last-${index}`}>Apellido</Label>
+                  <Input
+                    id={`resident-companion-last-${index}`}
+                    value={companion.lastName}
+                    onChange={(event) => updateCompanion(index, 'lastName', event.target.value)}
+                    aria-invalid={Boolean(fieldErrors.companions)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`resident-companion-document-${index}`}>Documento</Label>
+                  <Input
+                    id={`resident-companion-document-${index}`}
+                    value={companion.document}
+                    onChange={(event) => updateCompanion(index, 'document', event.target.value)}
+                    aria-invalid={Boolean(fieldErrors.companions)}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => removeCompanion(index)}
+                  aria-label={`Quitar acompañante ${index + 1}`}
+                >
+                  Quitar
+                </Button>
+              </div>
+            ))}
+
+            {fieldErrors.companions && (
+              <p role="alert" className="text-xs text-destructive">
+                {fieldErrors.companions}
+              </p>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addCompanion}
+              disabled={companions.length >= MAX_COMPANIONS}
+            >
+              Agregar acompañante
+            </Button>
+          </section>
 
           <section className="space-y-3 rounded-2xl border border-border/70 bg-muted/30 p-4">
             <div className="space-y-2">

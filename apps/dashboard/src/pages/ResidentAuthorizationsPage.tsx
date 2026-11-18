@@ -15,6 +15,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   isPermanentPass,
   type DestinationOption,
+  type PassCompanion,
   type PassRecurrence,
   type PassRuleSummary,
 } from '@porteria/shared';
@@ -67,6 +68,7 @@ interface ResidentPass {
   visitorFirstName: string;
   visitorLastName: string;
   visitorDocument: string;
+  companions?: PassCompanion[];
   validFrom: string;
   validUntil: string;
   createdAt: string;
@@ -747,6 +749,12 @@ export function ResidentAuthorizationsPage() {
                                 <span className="text-xs text-muted-foreground">
                                   Doc. {pass.visitorDocument}
                                 </span>
+                                {pass.companions && pass.companions.length > 0 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {pass.companions.length}{' '}
+                                    {pass.companions.length === 1 ? 'acompañante' : 'acompañantes'}
+                                  </span>
+                                )}
                                 {pass.batchLabel && (
                                   <button
                                     type="button"
@@ -911,6 +919,24 @@ export function ResidentAuthorizationsPage() {
                                       }
                                     />
                                   </DetailGrid>
+                                  {detail.companions && detail.companions.length > 0 && (
+                                    <div>
+                                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                        Acompañantes
+                                      </p>
+                                      <ul className="mt-1 space-y-1 text-sm">
+                                        {detail.companions.map((companion, index) => (
+                                          <li key={`${companion.document}-${index}`}>
+                                            {companion.firstName} {companion.lastName}
+                                            <span className="text-muted-foreground">
+                                              {' '}
+                                              · Doc. {companion.document}
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
                                 </div>
                               ) : null}
                             </TableCell>

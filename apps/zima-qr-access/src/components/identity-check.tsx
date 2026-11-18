@@ -253,6 +253,20 @@ export function IdentityCheck({
                     {formatWindow(candidate.validFrom, candidate.validUntil)}
                   </Text>
                   <Text style={ui.muted}>{candidate.rule.summary}</Text>
+                  {candidate.companions?.length ? (
+                    <View style={styles.companions}>
+                      <Text style={styles.companionsTitle}>
+                        {candidate.companions.length === 1
+                          ? 'Acompañante'
+                          : `Acompañantes (${candidate.companions.length})`}
+                      </Text>
+                      {candidate.companions.map((companion, index) => (
+                        <Text key={`${companion.document}-${index}`} style={styles.companionLine}>
+                          {companion.firstName} {companion.lastName} · Doc. {companion.document}
+                        </Text>
+                      ))}
+                    </View>
+                  ) : null}
                   {consumed || expired ? (
                     <Button
                       label="Denegar"
@@ -370,5 +384,18 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: typography.heading,
     fontWeight: '600',
+  },
+  companions: {
+    gap: 2,
+    marginTop: spacing.xs,
+  },
+  companionsTitle: {
+    color: colors.text,
+    fontSize: typography.small,
+    fontWeight: '700',
+  },
+  companionLine: {
+    color: colors.textMuted,
+    fontSize: typography.small,
   },
 });

@@ -186,6 +186,36 @@ export const inviteOrgAdminSchema = z.object({
 const passTypeSchema = z.enum(PassTypeValues as [PassType, ...PassType[]]);
 const passStatusSchema = z.enum(PassStatusValues as [PassStatus, ...PassStatus[]]);
 
+export const MAX_PASS_COMPANIONS = 10;
+
+/**
+ * A companion is informational, but the pass is a legal authorization: every
+ * field is required and the same document cannot appear twice inside one pass.
+ */
+export const passCompanionSchema = z.object({
+  firstName: z.string().trim().min(1).max(120),
+  lastName: z.string().trim().min(1).max(120),
+  document: z.string().trim().min(1).max(50),
+});
+
+export const passCompanionsSchema = z
+  .array(passCompanionSchema)
+  .max(MAX_PASS_COMPANIONS, 'max_companions')
+  .superRefine((companions, ctx) => {
+    const seen = new Set<string>();
+    companions.forEach((companion, index) => {
+      const document = companion.document.trim().toLowerCase();
+      if (seen.has(document)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index, 'document'],
+          message: 'duplicate_companion_document',
+        });
+      }
+      seen.add(document);
+    });
+  });
+
 export const createPassSchema = z
   .object({
     /** Entry and exit pairs. Ignored for entry-only passes, which always use one. */
@@ -200,6 +230,8 @@ export const createPassSchema = z
     visitorFirstName: z.string().trim().min(1).max(120),
     visitorLastName: z.string().trim().min(1).max(120),
     visitorDocument: z.string().trim().min(1).max(50),
+    /** People who arrive with the primary visitor. Never get their own QR. */
+    companions: passCompanionsSchema.optional(),
     hasVehicle: z.boolean().optional(),
     vehiclePlate: z.string().trim().max(20).nullable().optional(),
     type: passTypeSchema,
@@ -298,6 +330,7 @@ export const createPassBatchSchema = z.object({
         lastName: z.string().trim().min(1).max(120),
         document: z.string().trim().min(1).max(50),
         vehiclePlate: z.string().trim().max(20).nullable().optional(),
+        companions: passCompanionsSchema.optional(),
       }),
     )
     .min(1)

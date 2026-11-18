@@ -39,6 +39,16 @@ export interface DestinationOption extends DestinationSummary {
  */
 export type PassRecurrence = 'once' | 'range' | 'weekly';
 
+/**
+ * Someone who arrives with the primary visitor. Informational only: companions
+ * share the pass, its QR and its use counter.
+ */
+export interface PassCompanion {
+  firstName: string;
+  lastName: string;
+  document: string;
+}
+
 export interface AccessPass {
   id: string;
   communityId: string;
@@ -50,6 +60,8 @@ export interface AccessPass {
   visitorFirstName: string;
   visitorLastName: string;
   visitorDocument: string;
+  /** Snapshot of the group that arrives with the primary visitor. */
+  companions: PassCompanion[];
   hasVehicle: boolean;
   vehiclePlate: string | null;
   type: PassType;
@@ -129,6 +141,8 @@ export interface PassBatchVisitorInput {
   document: string;
   /** When present, the visitor is authorized with a vehicle. */
   vehiclePlate?: string | null;
+  /** Group that arrives with this visitor; informational only. */
+  companions?: PassCompanion[];
 }
 
 /**

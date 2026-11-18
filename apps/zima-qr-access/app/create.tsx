@@ -2,7 +2,12 @@ import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { PERMANENT_PASS_UNTIL, isPermanentPass, type PassLinkResponse } from '@porteria/shared';
+import {
+  PERMANENT_PASS_UNTIL,
+  isPermanentPass,
+  type PassCompanion,
+  type PassLinkResponse,
+} from '@porteria/shared';
 import { useAuth } from '@/auth/AuthContext';
 import { homeForRole, modeForRole } from '@/auth/roles';
 import { Button, Card, Field, Screen, ui } from '@/components/ui';
@@ -12,6 +17,8 @@ import { colors, radius, spacing, typography } from '@/theme';
 type ValidityMode = 'today' | 'tomorrow' | 'range' | 'recurrent';
 type Recurrence = 'once' | 'range' | 'weekly';
 type PickerMode = 'date' | 'time';
+
+const MAX_COMPANIONS = 10;
 
 interface UnitDestination {
   id: string;
@@ -249,6 +256,7 @@ export default function CreatePassScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [document, setDocument] = useState('');
+  const [companions, setCompanions] = useState<PassCompanion[]>([]);
   const [hasVehicle, setHasVehicle] = useState(false);
   const [plate, setPlate] = useState('');
   const [pin, setPin] = useState('');
@@ -322,6 +330,37 @@ export default function CreatePassScreen() {
     setError('');
   }
 
+  function addCompanion() {
+    setCompanions((current) =>
+      current.length >= MAX_COMPANIONS
+        ? current
+        : [...current, { firstName: '', lastName: '', document: '' }],
+    );
+    setError('');
+  }
+
+  function updateCompanion(index: number, field: keyof PassCompanion, value: string) {
+    setCompanions((current) =>
+      current.map((companion, position) =>
+        position === index ? { ...companion, [field]: value } : companion,
+      ),
+    );
+    setError('');
+  }
+
+  function removeCompanion(index: number) {
+    setCompanions((current) => current.filter((_, position) => position !== index));
+    setError('');
+  }
+
+  function trimmedCompanions(): PassCompanion[] {
+    return companions.map((companion) => ({
+      firstName: companion.firstName.trim(),
+      lastName: companion.lastName.trim(),
+      document: companion.document.trim(),
+    }));
+  }
+
   function validityStart(day: Date) {
     return hasSchedule ? atTime(day, startTime) : startOfDay(day);
   }
@@ -384,6 +423,24 @@ export default function CreatePassScreen() {
     if (!unitId) return 'Tu usuario no tiene una unidad asignada.';
     if (!firstName.trim() || !lastName.trim() || !document.trim()) {
       return 'Completa nombre, apellido y documento.';
+    }
+
+    if (companions.length > MAX_COMPANIONS) {
+      return `Podés agregar hasta ${MAX_COMPANIONS} acompañantes.`;
+    }
+    const companionValues = trimmedCompanions();
+    if (
+      companionValues.some(
+        (companion) => !companion.firstName || !companion.lastName || !companion.document,
+      )
+    ) {
+      return 'Completa nombre, apellido y documento de cada acompañante.';
+    }
+    const companionDocuments = new Set(
+      companionValues.map((companion) => companion.document.toLowerCase()),
+    );
+    if (companionDocuments.size !== companionValues.length) {
+      return 'Hay acompañantes con el mismo documento.';
     }
 
     if (mode === 'range' && startOfDay(rangeUntil).getTime() < startOfDay(rangeFrom).getTime()) {
@@ -452,6 +509,7 @@ export default function CreatePassScreen() {
           visitorFirstName: firstName.trim(),
           visitorLastName: lastName.trim(),
           visitorDocument: document.trim(),
+          ...(companions.length > 0 ? { companions: trimmedCompanions() } : {}),
           hasVehicle,
           vehiclePlate: hasVehicle ? plate.trim().toUpperCase() : null,
           type: entryOnly ? 'entry_only' : 'entry_exit',
@@ -505,6 +563,48 @@ export default function CreatePassScreen() {
           onChangeText={setDocument}
           placeholder="Número de documento"
           autoCapitalize="none"
+        />
+      </Card>
+
+      <Card>
+        <Text style={ui.sectionTitle}>Acompañantes (opcional)</Text>
+        <Text style={ui.muted}>
+          Llegan con el visitante principal y comparten el mismo QR. Máximo {MAX_COMPANIONS}.
+        </Text>
+        {companions.map((companion, index) => (
+          <View key={`companion-${index}`} style={styles.companionRow}>
+            <View style={styles.companionHeader}>
+              <Text style={styles.fieldLabel}>Acompañante {index + 1}</Text>
+              <Pressable onPress={() => removeCompanion(index)} hitSlop={8}>
+                <Text style={ui.link}>Quitar</Text>
+              </Pressable>
+            </View>
+            <Field
+              label="Nombre"
+              value={companion.firstName}
+              onChangeText={(value) => updateCompanion(index, 'firstName', value)}
+              placeholder="Nombre"
+            />
+            <Field
+              label="Apellido"
+              value={companion.lastName}
+              onChangeText={(value) => updateCompanion(index, 'lastName', value)}
+              placeholder="Apellido"
+            />
+            <Field
+              label="Documento"
+              value={companion.document}
+              onChangeText={(value) => updateCompanion(index, 'document', value)}
+              placeholder="Número de documento"
+              autoCapitalize="none"
+            />
+          </View>
+        ))}
+        <Button
+          label="Agregar acompañante"
+          variant="secondary"
+          onPress={addCompanion}
+          disabled={companions.length >= MAX_COMPANIONS}
         />
       </Card>
 
@@ -734,6 +834,17 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.small,
     fontWeight: '600',
+  },
+  companionRow: {
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  companionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   input: {
     minHeight: 50,

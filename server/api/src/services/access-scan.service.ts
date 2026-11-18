@@ -12,6 +12,7 @@ import {
 } from '@porteria/database/schema';
 import { createEventEnvelope } from '@porteria/shared';
 import type {
+  PassCompanion,
   PassRuleSummary,
   PassStatus,
   ScanAction,
@@ -217,6 +218,7 @@ async function writeDeniedEntry(
         ...(pass
           ? {
               visitor: toVisitor(pass),
+              companions: pass.companions,
               vehiclePlate: pass.vehiclePlate,
               destinationName: destination?.name ?? null,
               destinationKind: destination?.kind ?? null,
@@ -513,6 +515,7 @@ export async function confirmScan(
         details: {
           action: scan.action,
           visitor: toVisitor(pass),
+          companions: pass.companions,
           vehiclePlate: pass.vehiclePlate,
           locationUnitId: pass.locationUnitId,
           structureId: pass.structureId,
@@ -630,6 +633,7 @@ export async function rejectScan(
           reason: reason ?? null,
           action: scan.action,
           visitor: toVisitor(pass),
+          companions: pass.companions,
           vehiclePlate: pass.vehiclePlate,
           locationPath: destinationPath,
           destinationName: destination?.name ?? null,
@@ -732,6 +736,8 @@ export interface IdentityCandidate {
    * today. The guard needs it before deciding, not after denying.
    */
   rule: PassRuleSummary;
+  /** People arriving with the primary visitor, checked against their documents. */
+  companions: PassCompanion[];
 }
 
 /**
@@ -791,6 +797,7 @@ export async function searchAuthorizationsByDocument(
       destinationName: destination?.name ?? '',
       destinationPath: destination?.path ?? '',
       rule: await buildPassRule(row, timezone, now),
+      companions: row.companions ?? [],
     });
   }
 
@@ -889,6 +896,7 @@ export async function confirmIdentityEntry(
           lastName: pass.visitorLastName,
           document: pass.visitorDocument,
         },
+        companions: pass.companions,
         destinationName: destination?.name ?? null,
         destinationKind: destination?.kind ?? null,
         locationPath: destination?.path ?? null,
@@ -944,6 +952,7 @@ export async function denyIdentityEntry(
         lastName: pass.visitorLastName,
         document: pass.visitorDocument,
       },
+      companions: pass.companions,
       destinationName: destination?.name ?? null,
       destinationKind: destination?.kind ?? null,
       rule: describeSchedule(pass),

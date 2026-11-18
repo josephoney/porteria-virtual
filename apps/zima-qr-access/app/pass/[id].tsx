@@ -276,6 +276,18 @@ export default function PassDetailScreen() {
           </Text>
         ) : null}
         {pass.vehiclePlate ? <Text style={ui.muted}>Vehículo {pass.vehiclePlate}</Text> : null}
+        {pass.companions.length > 0 ? (
+          <View style={styles.companions}>
+            <Text style={styles.companionTitle}>
+              {pass.companions.length === 1 ? 'Acompañante' : 'Acompañantes'}
+            </Text>
+            {pass.companions.map((companion, index) => (
+              <Text key={`${companion.document}-${index}`} style={ui.muted}>
+                {companion.firstName} {companion.lastName} · Doc. {companion.document}
+              </Text>
+            ))}
+          </View>
+        ) : null}
         <Text style={ui.muted}>Link válido hasta {formatDateTime(pass.linkExpiresAt)}</Text>
       </Card>
 
@@ -359,6 +371,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
     marginVertical: spacing.xs,
+  },
+  companions: {
+    gap: 2,
+    marginTop: spacing.xs,
+  },
+  companionTitle: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
   },
   ticketState: {
     flexDirection: 'row',

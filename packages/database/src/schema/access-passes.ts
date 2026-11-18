@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { PassCompanion } from '@porteria/shared';
 import {
   boolean,
   char,
@@ -54,11 +55,16 @@ export const accessPasses = pgTable(
     visitorFirstName: varchar('visitor_first_name', { length: 120 }).notNull(),
     visitorLastName: varchar('visitor_last_name', { length: 120 }).notNull(),
     visitorDocument: varchar('visitor_document', { length: 50 }).notNull(),
+    /** Snapshot of the group that arrives with the primary visitor. */
+    companions: jsonb('companions')
+      .$type<PassCompanion[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     hasVehicle: boolean('has_vehicle').notNull().default(false),
     vehiclePlate: varchar('vehicle_plate', { length: 20 }),
     type: passTypeEnum('type').notNull(),
-  /** Entry and exit pairs this pass authorizes. Entry-only passes always use 1. */
-  maxUses: integer('max_uses').notNull().default(1),
+    /** Entry and exit pairs this pass authorizes. Entry-only passes always use 1. */
+    maxUses: integer('max_uses').notNull().default(1),
     validFrom: timestamp('valid_from', { withTimezone: true }).notNull(),
     validUntil: timestamp('valid_until', { withTimezone: true }).notNull(),
     /** once: una sola vez · range: todos los días del rango · weekly: días marcados. */

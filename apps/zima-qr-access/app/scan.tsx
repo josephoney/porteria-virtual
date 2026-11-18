@@ -608,6 +608,18 @@ export default function GuardScanScreen() {
                   </Text>
                   {item.destination ? <Text style={ui.muted}>{item.destination}</Text> : null}
                   {item.rule ? <Text style={ui.muted}>{item.rule}</Text> : null}
+                  {item.companions.length > 0 ? (
+                    <Text style={ui.muted}>
+                      Acompañantes:{' '}
+                      {item.companions
+                        .map((companion) =>
+                          companion.document
+                            ? `${companion.name} (${companion.document})`
+                            : companion.name,
+                        )
+                        .join(' · ')}
+                    </Text>
+                  ) : null}
                   {item.vehiclePlate ? (
                     <Text style={ui.muted}>Vehículo: {item.vehiclePlate}</Text>
                   ) : null}

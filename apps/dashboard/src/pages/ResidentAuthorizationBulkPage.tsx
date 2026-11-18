@@ -6,7 +6,7 @@ import {
   RiFileUploadLine,
   RiUploadCloud2Line,
 } from '@remixicon/react';
-import type { PassBatchResult } from '@porteria/shared';
+import type { PassBatchResult, PassCompanion } from '@porteria/shared';
 import { ApiError, get, post } from '../lib/apiClient';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -31,9 +31,10 @@ import {
 } from '../components/ui/table';
 
 const MAX_VISITORS = 200;
+const MAX_COMPANIONS = 10;
 
 const TEMPLATE_CSV =
-  'nombre,apellido,documento,placa\nAna,Torres,10203040,\nLuis,Gómez,55667788,ABC123\n';
+  'nombre,apellido,documento,placa,acompañantes\nAna,Torres,10203040,,Ana Pérez|123456;Luis Gómez|789012\nLuis,Gómez,55667788,ABC123,\n';
 
 type PassTypeValue = 'entry_only' | 'entry_exit';
 
@@ -51,6 +52,9 @@ interface CsvRow {
   lastName: string;
   document: string;
   plate: string;
+  companions: PassCompanion[];
+  /** Row-level problem with the `companions` cell, if any. */
+  companionsError: string | null;
 }
 
 interface ParsedCsv {
@@ -71,6 +75,7 @@ interface BatchVisitor {
   lastName: string;
   document: string;
   vehiclePlate: string | null;
+  companions?: PassCompanion[];
 }
 
 interface BatchPreviewResponse {
@@ -85,7 +90,10 @@ interface BatchPreviewResponse {
   }>;
 }
 
-const HEADER_FIELDS: Record<string, 'firstName' | 'lastName' | 'document' | 'plate'> = {
+const HEADER_FIELDS: Record<
+  string,
+  'firstName' | 'lastName' | 'document' | 'plate' | 'companions'
+> = {
   nombre: 'firstName',
   nombres: 'firstName',
   apellido: 'lastName',
@@ -97,6 +105,9 @@ const HEADER_FIELDS: Record<string, 'firstName' | 'lastName' | 'document' | 'pla
   placa: 'plate',
   placas: 'plate',
   patente: 'plate',
+  acompanantes: 'companions',
+  companions: 'companions',
+  acompanante: 'companions',
 };
 
 const FIELD_LABELS: Record<'firstName' | 'lastName' | 'document', string> = {
@@ -117,6 +128,59 @@ function normalizeHeader(value: string): string {
 
 function normalizeDocument(value: string): string {
   return value.trim().toLowerCase();
+}
+
+/**
+ * Bulk format: `Nombre Apellido|Documento;Otro Nombre|Documento`. A single
+ * readable cell is easier to edit in Excel than embedded JSON, and a malformed
+ * cell becomes a row-level error instead of a broken pass.
+ */
+function parseCompanions(raw: string): { companions: PassCompanion[]; error: string | null } {
+  const value = raw.trim();
+  if (!value) return { companions: [], error: null };
+
+  // A trailing separator is a natural Excel artifact: it is trimmed away
+  // instead of turning the whole row invalid.
+  const parts = value
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length > MAX_COMPANIONS) {
+    return { companions: [], error: `Máximo ${MAX_COMPANIONS} acompañantes por fila.` };
+  }
+
+  const companions: PassCompanion[] = [];
+  const documents = new Set<string>();
+
+  for (const [index, part] of parts.entries()) {
+    const [name = '', document = '', ...rest] = part.split('|').map((cell) => cell.trim());
+    const nameParts = name.split(/\s+/).filter(Boolean);
+
+    if (!name || !document || rest.length > 0 || nameParts.length < 2) {
+      return {
+        companions: [],
+        error: `Acompañante ${index + 1}: usá el formato "Nombre Apellido|Documento".`,
+      };
+    }
+
+    const key = normalizeDocument(document);
+    if (documents.has(key)) {
+      return {
+        companions: [],
+        error: `El documento ${document} está repetido entre los acompañantes.`,
+      };
+    }
+    documents.add(key);
+
+    companions.push({
+      firstName: nameParts.slice(0, -1).join(' '),
+      lastName: nameParts[nameParts.length - 1]!,
+      document,
+    });
+  }
+
+  return { companions, error: null };
 }
 
 /** Splits one CSV line, honouring double quotes and escaped quotes. */
@@ -190,6 +254,7 @@ function parseCsv(raw: string): ParsedCsv {
       const position = columns.get(field);
       return position === undefined ? '' : (cells[position] ?? '').trim();
     };
+    const parsedCompanions = parseCompanions(read('companions'));
 
     return {
       line: index + 2,
@@ -197,6 +262,8 @@ function parseCsv(raw: string): ParsedCsv {
       lastName: read('lastName'),
       document: read('document'),
       plate: read('plate'),
+      companions: parsedCompanions.companions,
+      companionsError: parsedCompanions.error,
     };
   });
 
@@ -234,7 +301,7 @@ function selectVisitors(rows: CsvRow[]): BatchVisitor[] {
   const visitors: BatchVisitor[] = [];
 
   for (const row of rows) {
-    if (missingProblem(row)) continue;
+    if (missingProblem(row) || row.companionsError) continue;
 
     const key = normalizeDocument(row.document);
     if (seen.has(key)) continue;
@@ -245,6 +312,7 @@ function selectVisitors(rows: CsvRow[]): BatchVisitor[] {
       lastName: row.lastName,
       document: row.document,
       vehiclePlate: row.plate ? row.plate.toUpperCase() : null,
+      ...(row.companions.length > 0 ? { companions: row.companions } : {}),
     });
   }
 
@@ -266,6 +334,7 @@ function buildPreviewRows(
   return rows.map((row) => {
     const problem = missingProblem(row);
     if (problem) return { ...row, reason: problem };
+    if (row.companionsError) return { ...row, reason: row.companionsError };
 
     const key = normalizeDocument(row.document);
     if (seen.has(key)) return { ...row, reason: 'documento duplicado en el archivo' };
@@ -791,7 +860,11 @@ export function ResidentAuthorizationBulkPage() {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Columnas: nombre, apellido, documento y placa (opcional).
+                Columnas: nombre, apellido, documento y placa (opcional). Para acompañantes, agregá
+                la columna <span className="font-medium">acompañantes</span> con el formato{' '}
+                <span className="font-mono">Nombre Apellido|Documento</span>, separados por punto y
+                coma (máximo {MAX_COMPANIONS}). Si el archivo usa punto y coma como separador de
+                columnas, encerrá la celda entre comillas.
               </p>
             </div>
 
@@ -809,7 +882,7 @@ export function ResidentAuthorizationBulkPage() {
                 rows={6}
                 spellCheck={false}
                 placeholder={
-                  'nombre,apellido,documento,placa\nAna,Torres,10203040,\nLuis,Gómez,55667788,ABC123'
+                  'nombre,apellido,documento,placa,acompañantes\nAna,Torres,10203040,,Ana Pérez|123456;Luis Gómez|789012\nLuis,Gómez,55667788,ABC123,'
                 }
                 className="min-h-32 w-full rounded-3xl border border-transparent bg-input/50 px-3 py-2 font-mono text-sm outline-none transition-[color,box-shadow,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
               />
@@ -858,6 +931,7 @@ export function ResidentAuthorizationBulkPage() {
                       <TableHead>Apellido</TableHead>
                       <TableHead>Documento</TableHead>
                       <TableHead>Placa</TableHead>
+                      <TableHead>Acompañantes</TableHead>
                       <TableHead>Resultado</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -868,6 +942,16 @@ export function ResidentAuthorizationBulkPage() {
                         <TableCell>{row.lastName || '—'}</TableCell>
                         <TableCell>{row.document || '—'}</TableCell>
                         <TableCell>{row.plate ? row.plate.toUpperCase() : '—'}</TableCell>
+                        <TableCell className="whitespace-normal text-xs text-muted-foreground">
+                          {row.companions.length === 0
+                            ? '—'
+                            : row.companions
+                                .map(
+                                  (companion) =>
+                                    `${companion.firstName} ${companion.lastName} (${companion.document})`,
+                                )
+                                .join(' · ')}
+                        </TableCell>
                         <TableCell className="whitespace-normal">
                           {row.reason ? (
                             <div className="space-y-1">

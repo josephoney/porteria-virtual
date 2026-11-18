@@ -1,0 +1,1 @@
+ALTER TABLE "access_passes" ADD COLUMN "companions" jsonb DEFAULT '[]'::jsonb NOT NULL;

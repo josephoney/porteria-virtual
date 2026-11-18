@@ -514,6 +514,37 @@ describe('pass destinations integration', () => {
     assert.ok(items.every((item) => item.batchLabel === 'Cumpleaños QA'));
   });
 
+  it('stores companions per visitor in a batch', async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const companions = [
+      { firstName: 'Ana', lastName: 'Pérez', document: `B-GROUP-A-${suffix}` },
+      { firstName: 'Luis', lastName: 'Gómez', document: `B-GROUP-B-${suffix}` },
+    ];
+
+    const response = await request(
+      'POST',
+      '/api/passes/batch',
+      batchPayload([
+        {
+          firstName: 'Grupo',
+          lastName: 'Familiar',
+          document: `B-GROUP-${suffix}`,
+          companions,
+        },
+      ]),
+    );
+
+    assert.equal(response.statusCode, 201, response.body);
+    const result = parse(response);
+    assert.equal(result.createdCount, 1);
+
+    const filtered = await request('GET', `/api/passes?batchId=${result.batchId}`);
+    assert.equal(filtered.statusCode, 200, filtered.body);
+    const items = parse(filtered) as Json[];
+    assert.equal(items.length, 1);
+    assert.deepEqual(items[0].companions, companions);
+  });
+
   it('does not apply the community daily limit to a batch', async () => {
     // The limit is a rule of the community and it applies to individual
     // authorizations. A batch is an explicit administrative action with its own

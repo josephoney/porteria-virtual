@@ -6,7 +6,7 @@ import type {
   ScanResult,
   ScanStatus,
 } from '../enums/index.js';
-import type { AccessPass } from '../types/pass.js';
+import type { AccessPass, PassCompanion } from '../types/pass.js';
 
 export interface CreatePassDto {
   /** Entry and exit pairs. Ignored for entry-only passes, which always use one. */
@@ -17,6 +17,8 @@ export interface CreatePassDto {
   visitorFirstName: string;
   visitorLastName: string;
   visitorDocument: string;
+  /** Group that arrives with the primary visitor. Informational only. */
+  companions?: PassCompanion[];
   hasVehicle?: boolean;
   vehiclePlate?: string | null;
   type: PassType;
@@ -54,6 +56,8 @@ export interface PublicPassPreview {
   timeFrom: string | null;
   timeTo: string | null;
   vehiclePlate: string | null;
+  /** Only the number of companions: names and documents stay private. */
+  companionCount: number;
   type: PassType;
   recurrence: 'once' | 'range' | 'weekly';
   maxUses: number;

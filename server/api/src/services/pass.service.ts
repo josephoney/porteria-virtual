@@ -16,6 +16,7 @@ import {
   type PassBatchResult,
   type PassBatchPreview,
   type PassBatchVisitorInput,
+  type PassCompanion,
   type PassLinkResponse,
   type PassQrResponse,
   type PassRuleSummary,
@@ -47,6 +48,15 @@ function timeToMinutes(value: string): number {
 }
 
 type AccessPassRow = typeof accessPasses.$inferSelect;
+
+/** Companions are a snapshot: trim once so the stored and shown shapes match. */
+function normalizeCompanions(companions: PassCompanion[] | undefined): PassCompanion[] {
+  return (companions ?? []).map((companion) => ({
+    firstName: companion.firstName.trim(),
+    lastName: companion.lastName.trim(),
+    document: companion.document.trim(),
+  }));
+}
 
 export interface PassRequester {
   sub: string;
@@ -221,6 +231,7 @@ export async function createPass(
       visitorFirstName: input.visitorFirstName.trim(),
       visitorLastName: input.visitorLastName.trim(),
       visitorDocument: input.visitorDocument.trim(),
+      companions: normalizeCompanions(input.companions),
       hasVehicle: input.hasVehicle ?? false,
       vehiclePlate:
         input.hasVehicle && input.vehiclePlate ? input.vehiclePlate.trim().toUpperCase() : null,
@@ -540,6 +551,7 @@ export async function createPassBatch(
             visitorFirstName: visitor.firstName.trim(),
             visitorLastName: visitor.lastName.trim(),
             visitorDocument: visitor.document,
+            companions: normalizeCompanions(visitor.companions),
             hasVehicle: plate.length > 0,
             vehiclePlate: plate.length > 0 ? plate : null,
             type: input.type,

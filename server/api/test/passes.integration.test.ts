@@ -664,6 +664,82 @@ describe('dynamic pass integration', () => {
     assert.match(String(previewBody.communityName), /^Pass Test Community /);
   });
 
+  it('stores companions and exposes only their count in the public preview', async () => {
+    const companions = [
+      { firstName: '  Ana ', lastName: ' Pérez ', document: ' COMP-A1 ' },
+      { firstName: 'Luis', lastName: 'Gómez', document: 'COMP-A2' },
+    ];
+    const created = await createPass({
+      visitorDocument: 'COMP-1001',
+      companions,
+    });
+
+    const detail = await request('GET', `/api/passes/${created.pass.id}`, undefined, residentToken);
+    assert.equal(detail.statusCode, 200, detail.body);
+    const detailBody = parse(detail);
+    assert.deepEqual(detailBody.companions, [
+      { firstName: 'Ana', lastName: 'Pérez', document: 'COMP-A1' },
+      { firstName: 'Luis', lastName: 'Gómez', document: 'COMP-A2' },
+    ]);
+
+    const list = await request('GET', '/api/passes', undefined, residentToken);
+    assert.equal(list.statusCode, 200, list.body);
+    const listed = (parse(list) as Json[]).find((row) => row.id === created.pass.id);
+    assert.ok(listed, 'the created pass must be listed');
+    assert.deepEqual(listed.companions, detailBody.companions);
+
+    const preview = await request('GET', `/api/public/passes/${linkToken(created)}`);
+    assert.equal(preview.statusCode, 200, preview.body);
+    const previewBody = parse(preview);
+    assert.equal(previewBody.companionCount, 2);
+    // Names and documents must never reach the shared link.
+    assert.equal(previewBody.companions, undefined);
+  });
+
+  it('creates a pass without companions as an empty list', async () => {
+    const created = await createPass({ visitorDocument: 'COMP-1002' });
+
+    const detail = await request('GET', `/api/passes/${created.pass.id}`, undefined, residentToken);
+    assert.equal(detail.statusCode, 200, detail.body);
+    assert.deepEqual(parse(detail).companions, []);
+
+    const preview = await request('GET', `/api/public/passes/${linkToken(created)}`);
+    assert.equal(parse(preview).companionCount, 0);
+  });
+
+  it('rejects incomplete, duplicated and oversized companion lists', async () => {
+    const incomplete = await postPass({
+      companions: [{ firstName: 'Ana', lastName: 'Pérez' }],
+    });
+    assert.equal(incomplete.statusCode, 400, incomplete.body);
+    assert.equal(parse(incomplete).message, 'Validation error');
+
+    const duplicated = await postPass({
+      companions: [
+        { firstName: 'Ana', lastName: 'Pérez', document: 'DUP-1' },
+        { firstName: 'Luis', lastName: 'Gómez', document: 'dup-1' },
+      ],
+    });
+    assert.equal(duplicated.statusCode, 400, duplicated.body);
+    assert.ok(
+      (parse(duplicated).details as Json[]).some(
+        (issue) => issue.message === 'duplicate_companion_document',
+      ),
+    );
+
+    const tooMany = await postPass({
+      companions: Array.from({ length: 11 }, (_, index) => ({
+        firstName: `Acompañante ${index}`,
+        lastName: 'Prueba',
+        document: `MAX-${index}`,
+      })),
+    });
+    assert.equal(tooMany.statusCode, 400, tooMany.body);
+    assert.ok(
+      (parse(tooMany).details as Json[]).some((issue) => issue.message === 'max_companions'),
+    );
+  });
+
   it('rejects non-leaf and foreign units and accepts schedule options', async () => {
     const nonLeaf = await postPass({ locationUnitId: floorId }, badResidentToken);
     assert.equal(nonLeaf.statusCode, 400, nonLeaf.body);

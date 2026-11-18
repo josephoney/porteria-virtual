@@ -13,6 +13,8 @@ export interface ActivityItem {
   reason: string | null;
   /** Static schedule rule of the pass at the moment of the event. */
   rule: string | null;
+  /** Group that arrived with the visitor, exactly as the audit snapshot stored it. */
+  companions: Array<{ name: string; document: string | null }>;
   createdAt: string;
 }
 
@@ -42,6 +44,28 @@ function objectField(value: unknown): Record<string, unknown> | null {
 
 function textField(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
+}
+
+/**
+ * Companion snapshots live in the untyped `details` object of the audit entry.
+ * Anything that is not a complete companion is skipped instead of rendered as
+ * an empty name.
+ */
+function companionsField(value: unknown): Array<{ name: string; document: string | null }> {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    const companion = objectField(item);
+    if (!companion) return [];
+
+    const firstName = textField(companion.firstName);
+    const lastName = textField(companion.lastName);
+    const name = [firstName, lastName].filter(Boolean).join(' ');
+    const document = textField(companion.document);
+
+    if (!name && !document) return [];
+    return [{ name: name || 'Acompañante', document }];
+  });
 }
 
 function movementFor(type: string): { movement: string; tone: ActivityTone } {
@@ -86,6 +110,7 @@ export function toActivityItem(entry: BitacoraEntryDto): ActivityItem {
     destination: textField(entry.details.destinationName) ?? entry.destinationPath,
     reason: textField(entry.details.reason),
     rule: textField(entry.details.rule),
+    companions: companionsField(entry.details.companions),
     createdAt: entry.createdAt,
   };
 }

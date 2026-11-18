@@ -45,7 +45,9 @@ function parseBatchBody(request: FastifyRequest, reply: FastifyReply): BatchBody
   const parsed = createPassBatchSchema.safeParse(request.body);
   if (parsed.success) return parsed.data;
 
-  const tooBig = parsed.error.issues.some((issue) => issue.code === 'too_big');
+  const tooBig = parsed.error.issues.some(
+    (issue) => issue.code === 'too_big' && issue.path.length === 1 && issue.path[0] === 'visitors',
+  );
   if (tooBig) {
     reply.status(400).send({
       statusCode: 400,

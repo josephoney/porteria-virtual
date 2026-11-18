@@ -12,6 +12,7 @@ export type { Call } from './types/call.js';
 export type { Event, EventMetadata } from './types/event.js';
 export type {
   AccessPass,
+  PassCompanion,
   PassScan,
   PassAlert,
   PassRecurrence,

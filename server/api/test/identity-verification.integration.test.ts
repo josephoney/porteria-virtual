@@ -10,7 +10,7 @@ process.env.PASS_WEB_URL = 'http://localhost:5176';
 process.env.PASS_ALERT_WORKER_ENABLED = 'false';
 
 import { createDb } from '@porteria/database';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   accessPasses,
   accessPoints,
@@ -532,5 +532,54 @@ describe('identity verification by document', () => {
     );
     assert.equal(denied.statusCode, 409, denied.body);
     assert.equal(parse(denied).message, 'daily_uses_exhausted');
+  });
+
+  it('shows companions in the identity candidate and snapshots them in the audit entry', async () => {
+    const visitorDocument = `${document}-GRUPO`;
+    const companions = [
+      { firstName: 'Ana', lastName: 'Pérez', document: 'GRUPO-A' },
+      { firstName: 'Luis', lastName: 'Gómez', document: 'GRUPO-B' },
+    ];
+
+    const created = await request('POST', '/api/passes', residentToken, {
+      locationUnitId: unitId,
+      visitorFirstName: 'Grupo',
+      visitorLastName: 'Familiar',
+      visitorDocument,
+      companions,
+      type: 'entry_exit',
+      maxUses: 1,
+      validFrom: new Date(Date.now() - 60_000).toISOString(),
+      validUntil: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const passId = parse(created).pass.id as string;
+
+    const found = await request(
+      'GET',
+      `/api/access/authorizations?document=${encodeURIComponent(visitorDocument)}`,
+      guardToken,
+    );
+    assert.equal(found.statusCode, 200, found.body);
+    const candidate = (parse(found) as unknown as Json[]).find((row) => row.passId === passId);
+    assert.ok(candidate, 'the pass must appear as an identity candidate');
+    assert.deepEqual(candidate.companions, companions);
+
+    const entry = await request(
+      'POST',
+      `/api/access/authorizations/${passId}/confirm`,
+      guardToken,
+      { action: 'entry' },
+    );
+    assert.equal(entry.statusCode, 200, entry.body);
+
+    const [row] = await db
+      .select()
+      .from(bitacoraEntries)
+      .where(and(eq(bitacoraEntries.passId, passId), eq(bitacoraEntries.type, 'pass_entry')))
+      .limit(1);
+    assert.ok(row, 'the entry must be audited');
+    const details = row.details as Json;
+    assert.deepEqual(details.companions, companions);
   });
 });
