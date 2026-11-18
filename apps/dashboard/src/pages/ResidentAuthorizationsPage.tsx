@@ -53,10 +53,6 @@ import { ListToolbar } from '../components/layout/ListToolbar';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Pagination } from '../components/layout/Pagination';
 
-/** Rows start at ten and adapt to the screen so the pager never needs a scroll. */
-const MIN_PAGE_SIZE = 5;
-const MAX_PAGE_SIZE = 50;
-
 type DisplayStatus = 'active' | 'used' | 'revoked' | 'expired';
 
 interface PassDestination {
@@ -209,7 +205,7 @@ export function ResidentAuthorizationsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const tableAreaRef = useRef<HTMLDivElement>(null);
+  const requestIdRef = useRef(0);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -313,6 +309,10 @@ export function ResidentAuthorizationsPage() {
   }, []);
 
   const load = useCallback(async () => {
+    // Rapid filter or page changes can overlap. Keep only the newest response;
+    // older ones would otherwise overwrite the table with a different page.
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setLoading(true);
     setError('');
 
@@ -328,16 +328,18 @@ export function ResidentAuthorizationsPage() {
 
     try {
       const result = await get<ResidentPass[]>(`/api/passes?${params.toString()}`);
+      if (requestId !== requestIdRef.current) return;
       setPasses(result.data);
       setTotal(result.total ?? result.data.length);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       if (err instanceof ApiError && err.status === 404) {
         setDisabled(true);
       } else {
         setError('No se pudo cargar el historial.');
       }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [
     page,
@@ -479,45 +481,6 @@ export function ResidentAuthorizationsPage() {
     setPage(1);
   }
 
-  useEffect(() => {
-    // While a page loads the table unmounts; measuring a detached node would
-    // shrink the page size and bounce the pager back to page one.
-    if (loading) return;
-    const element = tableAreaRef.current;
-    if (!element) return;
-
-    // The table has no inner scroll: the page size is whatever fits the space the
-    // layout leaves. Heights are measured from the rendered table instead of
-    // assumed, so zoom or a taller row (a batch chip, a wrapped name) cannot clip
-    // the last line.
-    const update = () => {
-      const header = element.querySelector('thead')?.getBoundingClientRect().height ?? 48;
-      const rows = Array.from(element.querySelectorAll('tbody tr')).slice(0, 5);
-      const tallest = rows.reduce(
-        (max, row) => Math.max(max, row.getBoundingClientRect().height),
-        0,
-      );
-      const rowHeight = tallest > 0 ? tallest : 48;
-
-      const available = element.clientHeight - header;
-      const next = Math.max(
-        MIN_PAGE_SIZE,
-        Math.min(MAX_PAGE_SIZE, Math.floor(available / rowHeight)),
-      );
-      setPageSize((current) => (current === next ? current : next));
-    };
-
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    // Zoom does not always fire the observer for every browser; resize does.
-    window.addEventListener('resize', update);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', update);
-    };
-  }, [passes.length, loading]);
-
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   useEffect(() => {
@@ -599,6 +562,23 @@ export function ResidentAuthorizationsPage() {
                     {destination.active ? '' : ' (archivado)'}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                setPageSize(Number(value));
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-32" aria-label="Filas por página">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10 filas</SelectItem>
+                <SelectItem value="20">20 filas</SelectItem>
+                <SelectItem value="50">50 filas</SelectItem>
               </SelectContent>
             </Select>
 
@@ -718,10 +698,7 @@ export function ResidentAuthorizationsPage() {
           )}
 
           {!error && !loading && passes.length > 0 && (
-            <div
-              ref={tableAreaRef}
-              className="min-h-0 flex-1 overflow-hidden rounded-4xl border border-border bg-card [&_td]:h-12"
-            >
+            <div className="min-h-0 flex-1 overflow-auto rounded-4xl border border-border bg-card [&_td]:h-12">
               <Table>
                 <TableHeader>
                   <TableRow>
