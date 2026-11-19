@@ -209,6 +209,9 @@ export function PlatformPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [platformUsers, setPlatformUsers] = useState<PlatformUser[]>([]);
   const [inviteLink, setInviteLink] = useState('');
+  const [inviteEmailSent, setInviteEmailSent] = useState(false);
+  const [inviteSentTo, setInviteSentTo] = useState('');
+  const [inviteCopied, setInviteCopied] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [formDialog, setFormDialog] = useState<string | null>(null);
@@ -498,15 +501,21 @@ export function PlatformPage() {
     e.preventDefault();
     setError('');
     setInviteLink('');
+    setInviteEmailSent(false);
+    setInviteSentTo('');
+    setInviteCopied(false);
+    const email = inviteForm.email;
     try {
-      const { data } = await post<{ acceptUrl: string }>('/api/invitations', {
-        email: inviteForm.email,
+      const { data } = await post<{ acceptUrl: string; emailSent: boolean }>('/api/invitations', {
+        email,
         role: inviteForm.role,
         organizationId: inviteForm.organizationId || undefined,
         communityId: inviteForm.communityId || null,
         locationUnitId: inviteForm.unitId || null,
       });
       setInviteLink(data.acceptUrl);
+      setInviteEmailSent(data.emailSent);
+      setInviteSentTo(email);
       setInviteForm({
         email: '',
         role: 'resident',
@@ -526,13 +535,28 @@ export function PlatformPage() {
     loadAll();
   }
 
-  async function resendInvitation(id: string) {
+  async function resendInvitation(invitation: Invitation) {
     try {
-      const { data } = await post<{ acceptUrl: string }>(`/api/invitations/${id}/resend`);
+      const { data } = await post<{ acceptUrl: string; emailSent: boolean }>(
+        `/api/invitations/${invitation.id}/resend`,
+      );
       setInviteLink(data.acceptUrl);
+      setInviteEmailSent(data.emailSent);
+      setInviteSentTo(invitation.email);
+      setInviteCopied(false);
       loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error reenviando invitación');
+    }
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setInviteCopied(true);
+    } catch {
+      setError('No se pudo copiar el enlace. Selecciónalo y cópialo manualmente.');
     }
   }
 
@@ -1204,15 +1228,18 @@ export function PlatformPage() {
               </FormDialog>
 
               {inviteLink && (
-                <div className="flex items-center gap-2 rounded border border-border bg-muted/40 p-2">
-                  <code className="text-xs break-all flex-1">{inviteLink}</code>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => navigator.clipboard.writeText(inviteLink)}
-                  >
-                    Copiar
-                  </Button>
+                <div className="space-y-2 rounded border border-border bg-muted/40 p-2">
+                  <p role="status" className="px-1 text-sm font-medium">
+                    {inviteEmailSent
+                      ? `Invitación enviada a ${inviteSentTo}.`
+                      : 'No se pudo enviar el correo. Comparte este enlace:'}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 break-all text-xs">{inviteLink}</code>
+                    <Button size="sm" variant="outline" onClick={() => void copyInviteLink()}>
+                      {inviteCopied ? 'Copiado' : 'Copiar'}
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -1243,11 +1270,7 @@ export function PlatformPage() {
                       <TableCell className="space-x-2">
                         {i.status === 'pending' && (
                           <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => resendInvitation(i.id)}
-                            >
+                            <Button size="sm" variant="outline" onClick={() => resendInvitation(i)}>
                               Reenviar
                             </Button>
                             <Button

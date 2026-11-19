@@ -16,6 +16,7 @@ import type { MembershipRole, PublicInvitationPreview } from '@porteria/shared';
 import config from '../config.js';
 import { validateMembershipScope } from './memberships.service.js';
 import { validateLocationUnit } from './location-unit.service.js';
+import { sendInvitationEmail } from './mail.service.js';
 import * as authService from './auth.service.js';
 
 const db = createDb();
@@ -58,6 +59,12 @@ export type InvitationErrorCode =
 
 export type InvitationResult<T> = { ok: true; data: T } | { ok: false; code: InvitationErrorCode };
 
+export interface InvitationDelivery {
+  invitation: typeof invitations.$inferSelect;
+  acceptUrl: string;
+  emailSent: boolean;
+}
+
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
@@ -75,6 +82,50 @@ function maskEmail(email: string): string {
 
 function buildAcceptUrl(token: string): string {
   return `${config.publicAppUrl}/invite/${token}`;
+}
+
+async function communityNameFor(communityId: string | null): Promise<string | null> {
+  if (!communityId) return null;
+  const [row] = await db
+    .select({ name: communities.name })
+    .from(communities)
+    .where(eq(communities.id, communityId))
+    .limit(1);
+  return row?.name ?? null;
+}
+
+async function deliverInvitationEmail(input: {
+  invitationId: string;
+  to: string;
+  acceptUrl: string;
+  role: string;
+  expiresAt: Date;
+  communityName: string | null;
+}): Promise<boolean> {
+  try {
+    const result = await sendInvitationEmail({
+      to: input.to,
+      acceptUrl: input.acceptUrl,
+      role: input.role,
+      expiresAt: input.expiresAt,
+      communityName: input.communityName,
+    });
+
+    if (!result.sent) {
+      console.warn('[invitations] Invitation email was not sent', {
+        invitationId: input.invitationId,
+        reason: result.reason,
+      });
+    }
+
+    return result.sent;
+  } catch (err) {
+    console.error('[invitations] Invitation email failed unexpectedly', {
+      invitationId: input.invitationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
 }
 
 function expiryDate(days?: number): Date {
@@ -161,7 +212,7 @@ async function findMembership(
 export async function createInvitation(
   data: CreateInvitationInput,
   requester: InvitationRequester,
-): Promise<InvitationResult<{ invitation: typeof invitations.$inferSelect; acceptUrl: string }>> {
+): Promise<InvitationResult<InvitationDelivery>> {
   if (
     !requester.isPlatformAdmin &&
     requester.role !== 'org_admin' &&
@@ -219,7 +270,17 @@ export async function createInvitation(
     })
     .returning();
 
-  return { ok: true, data: { invitation, acceptUrl: buildAcceptUrl(token) } };
+  const acceptUrl = buildAcceptUrl(token);
+  const emailSent = await deliverInvitationEmail({
+    invitationId: invitation.id,
+    to: email,
+    acceptUrl,
+    role: data.role,
+    expiresAt: invitation.expiresAt,
+    communityName: await communityNameFor(scope.communityId),
+  });
+
+  return { ok: true, data: { invitation, acceptUrl, emailSent } };
 }
 
 export async function listInvitations(
@@ -267,7 +328,7 @@ export async function revokeInvitation(
 export async function resendInvitation(
   id: string,
   requester: InvitationRequester,
-): Promise<InvitationResult<{ invitation: typeof invitations.$inferSelect; acceptUrl: string }>> {
+): Promise<InvitationResult<InvitationDelivery>> {
   const [invitation] = await db.select().from(invitations).where(eq(invitations.id, id)).limit(1);
   if (!invitation) return { ok: false, code: 'not_found' };
   if (!canManage(invitation, requester)) return { ok: false, code: 'forbidden' };
@@ -284,7 +345,17 @@ export async function resendInvitation(
     .where(eq(invitations.id, id))
     .returning();
 
-  return { ok: true, data: { invitation: updated, acceptUrl: buildAcceptUrl(token) } };
+  const acceptUrl = buildAcceptUrl(token);
+  const emailSent = await deliverInvitationEmail({
+    invitationId: updated.id,
+    to: updated.email,
+    acceptUrl,
+    role: updated.role,
+    expiresAt: updated.expiresAt,
+    communityName: await communityNameFor(updated.communityId),
+  });
+
+  return { ok: true, data: { invitation: updated, acceptUrl, emailSent } };
 }
 
 async function buildLocationPath(locationUnitId: string): Promise<string | null> {

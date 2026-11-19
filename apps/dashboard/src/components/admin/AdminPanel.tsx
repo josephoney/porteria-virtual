@@ -325,6 +325,9 @@ export function AdminPanel() {
   const [adminInviteCommunity, setAdminInviteCommunity] = useState<Community | null>(null);
   const [adminInviteEmail, setAdminInviteEmail] = useState('');
   const [adminInviteLink, setAdminInviteLink] = useState('');
+  const [adminInviteEmailSent, setAdminInviteEmailSent] = useState(false);
+  const [adminInviteSentTo, setAdminInviteSentTo] = useState('');
+  const [adminInviteCopied, setAdminInviteCopied] = useState(false);
   const [adminInviteSaving, setAdminInviteSaving] = useState(false);
   const [adminInviteError, setAdminInviteError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -475,22 +478,38 @@ export function AdminPanel() {
   async function inviteCommunityAdmin(event: React.FormEvent) {
     event.preventDefault();
     if (!adminInviteCommunity) return;
+    const email = adminInviteEmail;
     setAdminInviteSaving(true);
     setAdminInviteError('');
     setAdminInviteLink('');
+    setAdminInviteEmailSent(false);
+    setAdminInviteSentTo('');
+    setAdminInviteCopied(false);
     try {
-      const response = await post<{ acceptUrl: string }>('/api/invitations', {
-        email: adminInviteEmail,
+      const response = await post<{ acceptUrl: string; emailSent: boolean }>('/api/invitations', {
+        email,
         role: 'community_admin',
         communityId: adminInviteCommunity.id,
       });
       setAdminInviteLink(response.data.acceptUrl);
+      setAdminInviteEmailSent(response.data.emailSent);
+      setAdminInviteSentTo(email);
       setAdminInviteEmail('');
       await load();
     } catch (err) {
       setAdminInviteError(err instanceof Error ? err.message : 'No se pudo crear la invitación.');
     } finally {
       setAdminInviteSaving(false);
+    }
+  }
+
+  async function copyAdminInviteLink() {
+    if (!adminInviteLink) return;
+    try {
+      await navigator.clipboard.writeText(adminInviteLink);
+      setAdminInviteCopied(true);
+    } catch {
+      setAdminInviteError('No se pudo copiar el enlace. Selecciónalo y cópialo manualmente.');
     }
   }
 
@@ -1040,6 +1059,9 @@ export function AdminPanel() {
                                     setAdminInviteCommunity(community);
                                     setAdminInviteEmail('');
                                     setAdminInviteLink('');
+                                    setAdminInviteEmailSent(false);
+                                    setAdminInviteSentTo('');
+                                    setAdminInviteCopied(false);
                                     setAdminInviteError('');
                                   }}
                                 >
@@ -1288,9 +1310,23 @@ export function AdminPanel() {
               </p>
             )}
             {adminInviteLink && (
-              <div className="space-y-1 rounded-lg border border-border bg-muted/40 p-3">
-                <p className="text-xs font-medium text-muted-foreground">Link de invitación</p>
-                <p className="break-all font-mono text-xs">{adminInviteLink}</p>
+              <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+                <p role="status" className="text-sm font-medium">
+                  {adminInviteEmailSent
+                    ? `Invitación enviada a ${adminInviteSentTo}.`
+                    : 'No se pudo enviar el correo. Comparte este enlace:'}
+                </p>
+                <div className="flex items-center gap-2">
+                  <p className="flex-1 break-all font-mono text-xs">{adminInviteLink}</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void copyAdminInviteLink()}
+                  >
+                    {adminInviteCopied ? 'Copiado' : 'Copiar'}
+                  </Button>
+                </div>
               </div>
             )}
             <Button type="submit" disabled={adminInviteSaving}>

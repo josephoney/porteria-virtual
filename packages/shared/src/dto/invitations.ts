@@ -18,4 +18,5 @@ export interface AcceptInvitationDto {
 export interface InvitationCreatedResponse {
   invitation: Invitation;
   acceptUrl: string;
+  emailSent: boolean;
 }

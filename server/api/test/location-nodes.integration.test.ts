@@ -6,6 +6,9 @@ import type { FastifyInstance } from 'fastify';
 
 // The app starts the outbox worker from config at import time.
 process.env.OUTBOX_WORKER_ENABLED = 'false';
+// This suite creates invitations; keep them from reaching a real mail provider.
+process.env.ZEPTOMAIL_TOKEN = '';
+process.env.MAIL_FROM = '';
 
 import { createDb } from '@porteria/database';
 import {

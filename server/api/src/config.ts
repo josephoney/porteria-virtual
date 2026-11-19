@@ -58,6 +58,11 @@ const config = {
   mqttBridgeUrl: process.env.MQTT_BRIDGE_URL || 'http://localhost:3002',
   publicAppUrl: process.env.PUBLIC_APP_URL || 'http://localhost:5174',
   invitationExpiryDays: parseInt(process.env.INVITATION_EXPIRY_DAYS || '7', 10),
+  mail: {
+    zeptomailApiUrl: process.env.ZEPTOMAIL_API_URL || 'https://api.zeptomail.com',
+    zeptomailToken: process.env.ZEPTOMAIL_TOKEN || '',
+    from: process.env.MAIL_FROM || '',
+  },
   features: {
     configurableLocationHierarchy: process.env.CONFIGURABLE_LOCATION_HIERARCHY !== 'false',
     dynamicQrEnabled: process.env.DYNAMIC_QR_ENABLED === 'true',
