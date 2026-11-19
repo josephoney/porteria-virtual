@@ -945,19 +945,30 @@ describe('location node integration', () => {
     assert.equal((JSON.parse(malformedUnit.body) as { statusCode: number }).statusCode, 400);
   });
 
-  it('blocks platform tenant writes', async () => {
+  it('allows platform community creation but keeps tenant writes read-only', async () => {
     const response = await request(
       'POST',
       '/api/platform/communities',
       {
         organizationId,
-        name: 'Platform Forbidden',
+        name: 'Platform Community',
         address: 'Calle 0',
         timezone: 'UTC',
       },
       token,
     );
-    assert.equal(response.statusCode, 403);
+    assert.equal(response.statusCode, 201, response.body);
+    const created = JSON.parse(response.body) as { id: string };
+
+    const tenantUpdate = await request(
+      'PATCH',
+      `/api/communities/${created.id}`,
+      { phone: '000' },
+      token,
+    );
+    assert.equal(tenantUpdate.statusCode, 403);
+
+    await db.delete(communities).where(eq(communities.id, created.id));
   });
 
   it('creates a resident invitation with a location unit', async () => {

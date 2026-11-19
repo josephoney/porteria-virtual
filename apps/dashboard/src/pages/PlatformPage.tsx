@@ -22,6 +22,13 @@ import { ListToolbar } from '../components/layout/ListToolbar';
 import { StructureTreeDialog } from '../components/layout/StructureTreeDialog';
 import { UnitsWorkspace } from '../components/admin/UnitsWorkspace';
 import { Skeleton } from '../components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 import { DetailField, DetailGrid } from '../components/ui/detail-field';
 import { expandableRowProps, useExpandedRow } from '../lib/use-expanded-row';
 
@@ -240,6 +247,18 @@ export function PlatformPage() {
   const [orgAdministratorLoading, setOrgAdministratorLoading] = useState(false);
   const [orgAdminEmail, setOrgAdminEmail] = useState('');
   const [orgInviteUrl, setOrgInviteUrl] = useState('');
+  const [orgInviteEmailSent, setOrgInviteEmailSent] = useState(false);
+  const [orgInviteCopied, setOrgInviteCopied] = useState(false);
+  const [communityInviteTarget, setCommunityInviteTarget] = useState<Community | null>(null);
+  const [communityInviteEmail, setCommunityInviteEmail] = useState('');
+  const [communityInviteSaving, setCommunityInviteSaving] = useState(false);
+  const [communityInviteError, setCommunityInviteError] = useState('');
+  const [communityInviteResult, setCommunityInviteResult] = useState<{
+    email: string;
+    acceptUrl: string;
+    emailSent: boolean;
+  } | null>(null);
+  const [communityInviteCopied, setCommunityInviteCopied] = useState(false);
   const [communityForm, setCommunityForm] = useState({
     organizationId: '',
     name: '',
@@ -371,6 +390,8 @@ export function PlatformPage() {
     setOrgAdministrator(null);
     setOrgAdminEmail('');
     setOrgInviteUrl('');
+    setOrgInviteEmailSent(false);
+    setOrgInviteCopied(false);
     setFormDialog('organizations');
   }
 
@@ -386,6 +407,8 @@ export function PlatformPage() {
     setOrgAdministrator(null);
     setOrgAdminEmail('');
     setOrgInviteUrl('');
+    setOrgInviteEmailSent(false);
+    setOrgInviteCopied(false);
     setFormDialog('organizations');
     setOrgAdministratorLoading(true);
     try {
@@ -427,7 +450,7 @@ export function PlatformPage() {
         const result = await patch<{
           administrator:
             | { status: 'active'; email: string; name: string }
-            | { status: 'pending'; email: string; acceptUrl: string }
+            | { status: 'pending'; email: string; acceptUrl: string; emailSent: boolean }
             | null;
         }>(`/api/platform/organizations/${editingOrganizationId}`, {
           name: orgForm.name,
@@ -436,9 +459,13 @@ export function PlatformPage() {
         const administrator = result.data.administrator;
         if (administrator?.status === 'pending') {
           setOrgInviteUrl(administrator.acceptUrl);
+          setOrgInviteEmailSent(administrator.emailSent);
+          setOrgInviteCopied(false);
           setOrgAdministrator({ status: 'pending', email: administrator.email });
         } else if (administrator?.status === 'active') {
           setOrgInviteUrl('');
+          setOrgInviteEmailSent(false);
+          setOrgInviteCopied(false);
           setOrgAdministrator({
             status: 'active',
             email: administrator.email,
@@ -557,6 +584,64 @@ export function PlatformPage() {
       setInviteCopied(true);
     } catch {
       setError('No se pudo copiar el enlace. Selecciónalo y cópialo manualmente.');
+    }
+  }
+
+  async function copyOrgInviteLink() {
+    if (!orgInviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(orgInviteUrl);
+      setOrgInviteCopied(true);
+    } catch {
+      setError('No se pudo copiar el enlace. Selecciónalo y cópialo manualmente.');
+    }
+  }
+
+  function openCommunityInvite(community: Community) {
+    setCommunityInviteTarget(community);
+    setCommunityInviteEmail('');
+    setCommunityInviteSaving(false);
+    setCommunityInviteError('');
+    setCommunityInviteResult(null);
+    setCommunityInviteCopied(false);
+  }
+
+  async function inviteCommunityAdmin(event: React.FormEvent) {
+    event.preventDefault();
+    if (!communityInviteTarget) return;
+    const email = communityInviteEmail;
+    setCommunityInviteSaving(true);
+    setCommunityInviteError('');
+    setCommunityInviteResult(null);
+    setCommunityInviteCopied(false);
+    try {
+      const { data } = await post<{ acceptUrl: string; emailSent: boolean }>(
+        `/api/platform/communities/${communityInviteTarget.id}/invitations`,
+        { email },
+      );
+      setCommunityInviteResult({
+        email,
+        acceptUrl: data.acceptUrl,
+        emailSent: data.emailSent,
+      });
+      setCommunityInviteEmail('');
+      loadAll();
+    } catch (err) {
+      setCommunityInviteError(
+        err instanceof Error ? err.message : 'No se pudo crear la invitación.',
+      );
+    } finally {
+      setCommunityInviteSaving(false);
+    }
+  }
+
+  async function copyCommunityInviteLink() {
+    if (!communityInviteResult) return;
+    try {
+      await navigator.clipboard.writeText(communityInviteResult.acceptUrl);
+      setCommunityInviteCopied(true);
+    } catch {
+      setCommunityInviteError('No se pudo copiar el enlace. Selecciónalo y cópialo manualmente.');
     }
   }
 
@@ -682,17 +767,19 @@ export function PlatformPage() {
                       </div>
                       {orgInviteUrl && (
                         <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
-                          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                            Invitación pendiente
+                          <p role="status" className="text-sm font-medium">
+                            {orgInviteEmailSent
+                              ? `Invitación enviada a ${orgAdministrator?.email ?? ''}.`
+                              : 'No se pudo enviar el correo. Comparte este enlace:'}
                           </p>
                           <p className="break-all font-mono text-xs">{orgInviteUrl}</p>
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => navigator.clipboard?.writeText(orgInviteUrl)}
+                            onClick={() => void copyOrgInviteLink()}
                           >
-                            Copiar enlace
+                            {orgInviteCopied ? 'Copiado' : 'Copiar enlace'}
                           </Button>
                         </div>
                       )}
@@ -1042,11 +1129,12 @@ export function PlatformPage() {
                     <TableHead>Slug</TableHead>
                     <TableHead>Organización</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredCommunities.length === 0 && (
-                    <EmptyRow colSpan={4}>No hay comunidades para mostrar</EmptyRow>
+                    <EmptyRow colSpan={5}>No hay comunidades para mostrar</EmptyRow>
                   )}
                   {filteredCommunities.map((c) => (
                     <TableRow key={c.id}>
@@ -1055,6 +1143,11 @@ export function PlatformPage() {
                       <TableCell>{c.organizationName}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{c.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" onClick={() => openCommunityInvite(c)}>
+                          Invitar administrador
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1291,6 +1384,64 @@ export function PlatformPage() {
           </Tabs>
         </>
       )}
+
+      <Dialog
+        open={Boolean(communityInviteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setCommunityInviteTarget(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invitar administrador de comunidad</DialogTitle>
+            <DialogDescription>
+              Asigna un administrador a {communityInviteTarget?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={inviteCommunityAdmin} className="space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="platform-community-admin-email">Email</Label>
+              <Input
+                id="platform-community-admin-email"
+                type="email"
+                value={communityInviteEmail}
+                onChange={(event) => setCommunityInviteEmail(event.target.value)}
+                required
+              />
+            </div>
+            {communityInviteError && (
+              <p role="alert" className="text-sm text-destructive">
+                {communityInviteError}
+              </p>
+            )}
+            {communityInviteResult && (
+              <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+                <p role="status" className="text-sm font-medium">
+                  {communityInviteResult.emailSent
+                    ? `Invitación enviada a ${communityInviteResult.email}.`
+                    : 'No se pudo enviar el correo. Comparte este enlace:'}
+                </p>
+                <div className="flex items-center gap-2">
+                  <p className="flex-1 break-all font-mono text-xs">
+                    {communityInviteResult.acceptUrl}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void copyCommunityInviteLink()}
+                  >
+                    {communityInviteCopied ? 'Copiado' : 'Copiar'}
+                  </Button>
+                </div>
+              </div>
+            )}
+            <Button type="submit" disabled={communityInviteSaving}>
+              {communityInviteSaving ? 'Invitando…' : 'Generar invitación'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {structureTarget && (
         <StructureTreeDialog

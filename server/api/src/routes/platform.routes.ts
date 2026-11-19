@@ -83,6 +83,7 @@ type OrganizationAdministrator =
       email: string;
       invitationId: string;
       acceptUrl: string;
+      emailSent: boolean;
     }
   | null;
 
@@ -233,6 +234,7 @@ async function transferOrganizationAdministrator(
       email,
       invitationId: result.data.invitation.id,
       acceptUrl: result.data.acceptUrl,
+      emailSent: result.data.emailSent,
     },
   };
 }
@@ -601,76 +603,94 @@ export async function platformRoutes(app: FastifyInstance) {
     return { data, total: totalRow[0]?.count ?? 0, page, pageSize };
   });
 
-  app.post(
-    '/communities',
-    { preHandler: [readOnlyTenant] },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const body = createCommunitySchema.parse(request.body);
-      const [org] = await db
-        .select()
-        .from(organizations)
-        .where(eq(organizations.id, body.organizationId))
-        .limit(1);
-      if (!org) return reply.status(400).send({ error: 'Organization not found' });
+  app.post('/communities', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = createCommunitySchema.parse(request.body);
+    const [org] = await db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, body.organizationId))
+      .limit(1);
+    if (!org) return reply.status(400).send({ error: 'Organization not found' });
 
-      try {
-        const slug = await slugService.uniqueCommunitySlug(body.slug, body.name);
-        const [created] = await db
-          .insert(communities)
-          .values({
-            name: body.name,
-            slug,
-            address: body.address,
-            timezone: body.timezone,
-            organizationId: body.organizationId,
-          })
-          .returning();
-        audit(request, 'community.created', created.organizationId, created.id, {
-          slug: created.slug,
-        });
-        return reply.status(201).send(created);
-      } catch (err) {
-        const info = errorInfo(err);
-        return reply.status(info.status).send({ error: info.message });
-      }
-    },
-  );
+    try {
+      const slug = await slugService.uniqueCommunitySlug(body.slug, body.name);
+      const [created] = await db
+        .insert(communities)
+        .values({
+          name: body.name,
+          slug,
+          address: body.address,
+          timezone: body.timezone,
+          organizationId: body.organizationId,
+        })
+        .returning();
+      audit(request, 'community.created', created.organizationId, created.id, {
+        slug: created.slug,
+      });
+      return reply.status(201).send(created);
+    } catch (err) {
+      const info = errorInfo(err);
+      return reply.status(info.status).send({ error: info.message });
+    }
+  });
 
-  app.patch(
-    '/communities/:id',
-    { preHandler: [readOnlyTenant] },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const { id } = request.params as { id: string };
-      const body = updateCommunitySchema.parse(request.body);
-      const [existing] = await db.select().from(communities).where(eq(communities.id, id)).limit(1);
-      if (!existing) return reply.status(404).send({ error: 'Community not found' });
+  app.patch('/communities/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const body = updateCommunitySchema.parse(request.body);
+    const [existing] = await db.select().from(communities).where(eq(communities.id, id)).limit(1);
+    if (!existing) return reply.status(404).send({ error: 'Community not found' });
 
-      try {
-        const slug = body.slug
-          ? await slugService.uniqueCommunitySlug(body.slug, existing.name, id)
-          : existing.slug;
-        const [updated] = await db
-          .update(communities)
-          .set({
-            name: body.name ?? existing.name,
-            address: body.address ?? existing.address,
-            timezone: body.timezone ?? existing.timezone,
-            status: body.status ?? existing.status,
-            slug,
-            updatedAt: new Date(),
-          })
-          .where(eq(communities.id, id))
-          .returning();
-        audit(request, 'community.updated', updated.organizationId, updated.id, {
-          slug: updated.slug,
-        });
-        return updated;
-      } catch (err) {
-        const info = errorInfo(err);
-        return reply.status(info.status).send({ error: info.message });
-      }
-    },
-  );
+    try {
+      const slug = body.slug
+        ? await slugService.uniqueCommunitySlug(body.slug, existing.name, id)
+        : existing.slug;
+      const [updated] = await db
+        .update(communities)
+        .set({
+          name: body.name ?? existing.name,
+          address: body.address ?? existing.address,
+          timezone: body.timezone ?? existing.timezone,
+          status: body.status ?? existing.status,
+          slug,
+          updatedAt: new Date(),
+        })
+        .where(eq(communities.id, id))
+        .returning();
+      audit(request, 'community.updated', updated.organizationId, updated.id, {
+        slug: updated.slug,
+      });
+      return updated;
+    } catch (err) {
+      const info = errorInfo(err);
+      return reply.status(info.status).send({ error: info.message });
+    }
+  });
+
+  app.post('/communities/:id/invitations', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const body = inviteOrgAdminSchema.parse(request.body);
+    const [community] = await db.select().from(communities).where(eq(communities.id, id)).limit(1);
+    if (!community) return reply.status(404).send({ error: 'Community not found' });
+
+    const result = await invitationService.createInvitation(
+      {
+        email: body.email,
+        role: 'community_admin',
+        organizationId: community.organizationId,
+        communityId: community.id,
+      },
+      getRequester(request),
+    );
+    if (!result.ok) {
+      return reply.status(result.code === 'conflict' ? 409 : 400).send({ error: result.code });
+    }
+
+    audit(request, 'invitation.created', community.organizationId, community.id, {
+      invitationId: result.data.invitation.id,
+      role: 'community_admin',
+    });
+    return reply.status(201).send(result.data);
+  });
 
   // Buildings
   app.get('/buildings', async (request: FastifyRequest) => {
