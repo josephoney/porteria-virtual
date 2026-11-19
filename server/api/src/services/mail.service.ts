@@ -157,7 +157,13 @@ async function readProviderError(response: Response, secrets: string[]): Promise
       }
       return 'unexpected response shape';
     } catch {
-      return 'non-JSON response';
+      // ZeptoMail devuelve HTML (o vacío) en algunos 5xx: sin el cuerpo es
+      // imposible saber si fue un problema del remitente, del token o de la
+      // región, así que se guarda un fragmento corto y redactado.
+      return {
+        contentType: response.headers.get('content-type') ?? 'unknown',
+        body: redactForLog(text, secrets).replace(/\s+/g, ' ').trim().slice(0, 400),
+      };
     }
   } catch {
     return 'unreadable response';
