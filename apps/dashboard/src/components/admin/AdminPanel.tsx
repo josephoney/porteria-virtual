@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   RiArrowDownSLine,
@@ -22,6 +22,7 @@ import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
+import { CardsSkeleton, ChartSkeleton, TableSkeleton } from '../ui/content-skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { UsersTable } from './UsersTable';
 import { CallHistoryTable } from './CallHistoryTable';
@@ -297,6 +298,27 @@ const sectionMeta: Record<string, { title: string; description: string }> = {
   },
 };
 
+function AdminSectionSkeleton({ section }: { section: string }) {
+  if (section === 'dashboard') {
+    return (
+      <div className="space-y-4">
+        <CardsSkeleton count={5} />
+        <ChartSkeleton />
+      </div>
+    );
+  }
+
+  if (section === 'invitations') {
+    return <TableSkeleton headers={['Email', 'Rol', 'Estado', 'Vence', 'Acciones']} />;
+  }
+
+  if (section === 'units') {
+    return <TableSkeleton headers={['Unidad', 'Comunidad', 'Agrupador', 'Estado']} />;
+  }
+
+  return <TableSkeleton headers={['Nombre', 'Dirección', 'Estado', 'Acciones']} />;
+}
+
 export function AdminPanel() {
   const location = useLocation();
   const { refresh: refreshWorkspace } = useWorkspace();
@@ -309,7 +331,8 @@ export function AdminPanel() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [userTotal, setUserTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   const [search, setSearch] = useState('');
@@ -341,9 +364,16 @@ export function AdminPanel() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
+  const hasLoaded = useRef(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // Solo la primera carga muestra esqueletos: al refrescar después de una
+    // acción los datos actuales se quedan en pantalla para evitar el parpadeo.
+    if (hasLoaded.current) {
+      setRefreshing(true);
+    } else {
+      setInitialLoading(true);
+    }
     setError('');
 
     // Independent resources: one failed request must not blank the whole panel.
@@ -390,7 +420,9 @@ export function AdminPanel() {
       setError('No se pudo cargar parte de la información. Reintenta en unos segundos.');
     }
 
-    setLoading(false);
+    hasLoaded.current = true;
+    setInitialLoading(false);
+    setRefreshing(false);
   }, [refreshKey]);
 
   useEffect(() => {
@@ -717,7 +749,17 @@ export function AdminPanel() {
 
   return (
     <div className="p-6 space-y-6">
-      <PageHeader title={meta.title} description={meta.description} />
+      <PageHeader
+        title={meta.title}
+        description={meta.description}
+        actions={
+          refreshing ? (
+            <span role="status" className="text-xs text-muted-foreground">
+              Actualizando…
+            </span>
+          ) : null
+        }
+      />
 
       {error && (
         <div
@@ -731,12 +773,8 @@ export function AdminPanel() {
         </div>
       )}
 
-      {loading ? (
-        <div className="space-y-2">
-          {[...Array(5)].map((_, index) => (
-            <Skeleton key={index} className="h-10 w-full" />
-          ))}
-        </div>
+      {initialLoading ? (
+        <AdminSectionSkeleton section={section} />
       ) : (
         <>
           {section === 'dashboard' && (

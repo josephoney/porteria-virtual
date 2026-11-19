@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { get, post, patch } from '../lib/apiClient';
 import { Tabs, TabsContent } from '../components/ui/tabs';
@@ -22,6 +22,7 @@ import { ListToolbar } from '../components/layout/ListToolbar';
 import { StructureTreeDialog } from '../components/layout/StructureTreeDialog';
 import { UnitsWorkspace } from '../components/admin/UnitsWorkspace';
 import { Skeleton } from '../components/ui/skeleton';
+import { CardsSkeleton, TableSkeleton } from '../components/ui/content-skeleton';
 import {
   Dialog,
   DialogContent,
@@ -205,11 +206,48 @@ function EmptyRow({ colSpan, children }: { colSpan: number; children: string }) 
   );
 }
 
+function PlatformSectionSkeleton({ section }: { section: string }) {
+  if (section === 'dashboard') {
+    return <CardsSkeleton count={6} />;
+  }
+
+  if (section === 'organizations') {
+    return <TableSkeleton headers={['Nombre', 'Slug', 'Acciones']} />;
+  }
+
+  if (section === 'communities') {
+    return <TableSkeleton headers={['Nombre', 'Slug', 'Organización', 'Estado', 'Acciones']} />;
+  }
+
+  if (section === 'users') {
+    return (
+      <TableSkeleton
+        headers={[
+          'Email',
+          'Nombre',
+          'Organización',
+          'Comunidad / unidad',
+          'Rol',
+          'Estado',
+          'Platform admin',
+        ]}
+      />
+    );
+  }
+
+  if (section === 'invitations') {
+    return <TableSkeleton headers={['Email', 'Rol', 'Estado', 'Expira', 'Acciones']} />;
+  }
+
+  return <TableSkeleton headers={['Unidad', 'Comunidad', 'Agrupador', 'Estado']} />;
+}
+
 export function PlatformPage() {
   const location = useLocation();
   const rawSection = location.pathname.split('/').pop() ?? 'organizations';
   const section = rawSection === 'platform' ? 'dashboard' : rawSection;
   const meta = PAGE_META[section] ?? PAGE_META.dashboard;
+  const hasLoaded = useRef(false);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -221,7 +259,8 @@ export function PlatformPage() {
   const [inviteSentTo, setInviteSentTo] = useState('');
   const [inviteCopied, setInviteCopied] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [formDialog, setFormDialog] = useState<string | null>(null);
   const [organizationSearch, setOrganizationSearch] = useState('');
   const organizationRow = useExpandedRow();
@@ -276,7 +315,13 @@ export function PlatformPage() {
   });
 
   const loadAll = useCallback(async () => {
-    setLoading(true);
+    // Solo la primera carga muestra esqueletos: al refrescar después de una
+    // acción los datos actuales se quedan en pantalla para evitar el parpadeo.
+    if (hasLoaded.current) {
+      setRefreshing(true);
+    } else {
+      setInitialLoading(true);
+    }
     setError('');
     try {
       const [orgs, comms, builds, us, invs, platUsers] = await Promise.all([
@@ -302,7 +347,9 @@ export function PlatformPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error cargando plataforma');
     } finally {
-      setLoading(false);
+      hasLoaded.current = true;
+      setInitialLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -660,14 +707,20 @@ export function PlatformPage() {
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto">
-      <PageHeader title={meta.title} description={meta.description} />
+      <PageHeader
+        title={meta.title}
+        description={meta.description}
+        actions={
+          refreshing ? (
+            <span role="status" className="text-xs text-muted-foreground">
+              Actualizando…
+            </span>
+          ) : null
+        }
+      />
 
-      {loading ? (
-        <div className="space-y-2">
-          {[...Array(6)].map((_, index) => (
-            <Skeleton key={index} className="h-10 w-full" />
-          ))}
-        </div>
+      {initialLoading ? (
+        <PlatformSectionSkeleton section={section} />
       ) : (
         <>
           {error && (
