@@ -117,3 +117,12 @@
     opacity: 0.5;
   }
 }
+
+/*
+ * El spinner de carga sigue la misma idea: el espacio esta reservado, pero no
+ * se muestra en los primeros 250 ms para que una respuesta rapida no produzca
+ * un destello.
+ */
+.loading-state {
+  animation: skeleton-reveal 0s linear 250ms both;
+}

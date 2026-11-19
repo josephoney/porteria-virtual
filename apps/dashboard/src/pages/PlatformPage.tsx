@@ -23,7 +23,7 @@ import { ListToolbar } from '../components/layout/ListToolbar';
 import { StructureTreeDialog } from '../components/layout/StructureTreeDialog';
 import { UnitsWorkspace } from '../components/admin/UnitsWorkspace';
 import { Skeleton } from '../components/ui/skeleton';
-import { CardsSkeleton, TableSkeleton } from '../components/ui/content-skeleton';
+import { LoadingState } from '../components/ui/loading-state';
 import {
   Dialog,
   DialogContent,
@@ -215,40 +215,17 @@ function EmptyRow({ colSpan, children }: { colSpan: number; children: string }) 
   );
 }
 
-function PlatformSectionSkeleton({ section }: { section: string }) {
-  if (section === 'dashboard') {
-    return <CardsSkeleton count={6} />;
-  }
+const sectionLoadingLabel: Record<string, string> = {
+  dashboard: 'Cargando panel…',
+  organizations: 'Cargando organizaciones…',
+  communities: 'Cargando comunidades…',
+  invitations: 'Cargando invitaciones…',
+  users: 'Cargando usuarios…',
+  units: 'Cargando unidades…',
+};
 
-  if (section === 'organizations') {
-    return <TableSkeleton headers={['Nombre', 'Slug', 'Acciones']} />;
-  }
-
-  if (section === 'communities') {
-    return <TableSkeleton headers={['Nombre', 'Slug', 'Organización', 'Estado', 'Acciones']} />;
-  }
-
-  if (section === 'users') {
-    return (
-      <TableSkeleton
-        headers={[
-          'Email',
-          'Nombre',
-          'Organización',
-          'Comunidad / unidad',
-          'Rol',
-          'Estado',
-          'Platform admin',
-        ]}
-      />
-    );
-  }
-
-  if (section === 'invitations') {
-    return <TableSkeleton headers={['Email', 'Rol', 'Estado', 'Expira', 'Acciones']} />;
-  }
-
-  return <TableSkeleton headers={['Unidad', 'Comunidad', 'Agrupador', 'Estado']} />;
+function PlatformSectionLoading({ section }: { section: string }) {
+  return <LoadingState label={sectionLoadingLabel[section] ?? 'Cargando…'} />;
 }
 
 export function PlatformPage() {
@@ -758,7 +735,7 @@ export function PlatformPage() {
       />
 
       {initialLoading ? (
-        <PlatformSectionSkeleton section={section} />
+        <PlatformSectionLoading section={section} />
       ) : (
         <>
           {errorMessage && (

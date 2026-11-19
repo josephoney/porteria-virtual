@@ -23,7 +23,7 @@ import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
-import { CardsSkeleton, ChartSkeleton, TableSkeleton } from '../ui/content-skeleton';
+import { LoadingState } from '../ui/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { UsersTable } from './UsersTable';
 import { CallHistoryTable } from './CallHistoryTable';
@@ -307,25 +307,15 @@ const sectionMeta: Record<string, { title: string; description: string }> = {
   },
 };
 
-function AdminSectionSkeleton({ section }: { section: string }) {
-  if (section === 'dashboard') {
-    return (
-      <div className="space-y-4">
-        <CardsSkeleton count={5} />
-        <ChartSkeleton />
-      </div>
-    );
-  }
+const sectionLoadingLabel: Record<string, string> = {
+  dashboard: 'Cargando panel…',
+  communities: 'Cargando comunidades…',
+  invitations: 'Cargando invitaciones…',
+  units: 'Cargando unidades…',
+};
 
-  if (section === 'invitations') {
-    return <TableSkeleton headers={['Email', 'Rol', 'Estado', 'Vence', 'Acciones']} />;
-  }
-
-  if (section === 'units') {
-    return <TableSkeleton headers={['Unidad', 'Comunidad', 'Agrupador', 'Estado']} />;
-  }
-
-  return <TableSkeleton headers={['Nombre', 'Dirección', 'Estado', 'Acciones']} />;
+function AdminSectionLoading({ section }: { section: string }) {
+  return <LoadingState label={sectionLoadingLabel[section] ?? 'Cargando…'} />;
 }
 
 export function AdminPanel() {
@@ -782,7 +772,7 @@ export function AdminPanel() {
       )}
 
       {initialLoading ? (
-        <AdminSectionSkeleton section={section} />
+        <AdminSectionLoading section={section} />
       ) : (
         <>
           {section === 'dashboard' && (
