@@ -1,5 +1,6 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, patch } from '../lib/apiClient';
 import { Tabs, TabsContent } from '../components/ui/tabs';
 import {
@@ -33,6 +34,7 @@ import {
 import { DetailField, DetailGrid } from '../components/ui/detail-field';
 import { expandableRowProps, useExpandedRow } from '../lib/use-expanded-row';
 import { invitationStatusLabel } from '../lib/invitation-status';
+import { queryKeys } from '../lib/query-keys';
 
 interface Organization {
   id: string;
@@ -158,6 +160,13 @@ interface PlatformUser {
   }>;
 }
 
+const EMPTY_ORGANIZATIONS: Organization[] = [];
+const EMPTY_COMMUNITIES: Community[] = [];
+const EMPTY_BUILDINGS: Building[] = [];
+const EMPTY_UNITS: Unit[] = [];
+const EMPTY_INVITATIONS: Invitation[] = [];
+const EMPTY_PLATFORM_USERS: PlatformUser[] = [];
+
 const ROLES = [
   'org_admin',
   'community_admin',
@@ -247,20 +256,89 @@ export function PlatformPage() {
   const rawSection = location.pathname.split('/').pop() ?? 'organizations';
   const section = rawSection === 'platform' ? 'dashboard' : rawSection;
   const meta = PAGE_META[section] ?? PAGE_META.dashboard;
-  const hasLoaded = useRef(false);
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [buildings, setBuildings] = useState<Building[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [platformUsers, setPlatformUsers] = useState<PlatformUser[]>([]);
+  const queryClient = useQueryClient();
+
+  // Cada recurso en su propia query: cache compartida con el panel de admin,
+  // deduplicación de requests y pintado en cuanto llega cada uno.
+  const organizationsQuery = useQuery({
+    queryKey: queryKeys.platformOrganizations,
+    queryFn: async () =>
+      (await get<{ data: Organization[] }>('/api/platform/organizations?pageSize=100')).data.data,
+  });
+
+  const communitiesQuery = useQuery({
+    queryKey: queryKeys.platformCommunities,
+    queryFn: async () =>
+      (await get<{ data: Community[] }>('/api/platform/communities?pageSize=100')).data.data,
+  });
+
+  const buildingsQuery = useQuery({
+    queryKey: queryKeys.buildings,
+    queryFn: async () => (await get<{ data: Building[] }>('/api/sections?pageSize=100')).data.data,
+  });
+
+  const unitsQuery = useQuery({
+    queryKey: queryKeys.units,
+    queryFn: async () =>
+      (await get<{ data: UnitApi[] }>('/api/units?pageSize=100')).data.data.map((unit) => ({
+        ...unit,
+        floor: unit.metadata?.legacyFloor ?? null,
+        type: unit.metadata?.legacyType ?? 'apartment',
+      })),
+  });
+
+  const invitationsQuery = useQuery({
+    queryKey: queryKeys.invitations,
+    queryFn: async () => (await get<Invitation[]>('/api/invitations')).data,
+  });
+
+  const platformUsersQuery = useQuery({
+    queryKey: queryKeys.platformUsers,
+    queryFn: async () =>
+      (await get<{ data: PlatformUser[]; total: number }>('/api/platform/users?pageSize=100')).data
+        .data,
+  });
+
+  const organizations = organizationsQuery.data ?? EMPTY_ORGANIZATIONS;
+  const communities = communitiesQuery.data ?? EMPTY_COMMUNITIES;
+  const buildings = buildingsQuery.data ?? EMPTY_BUILDINGS;
+  const units = unitsQuery.data ?? EMPTY_UNITS;
+  const invitations = invitationsQuery.data ?? EMPTY_INVITATIONS;
+  const platformUsers = platformUsersQuery.data ?? EMPTY_PLATFORM_USERS;
+
+  const sectionQueries = [
+    organizationsQuery,
+    communitiesQuery,
+    buildingsQuery,
+    unitsQuery,
+    invitationsQuery,
+    platformUsersQuery,
+  ];
+  const refreshing = sectionQueries.some((query) => query.isFetching && !query.isPending);
+  // Carga progresiva: cada pestaña espera sólo el recurso que muestra.
+  const initialLoading =
+    section === 'organizations'
+      ? organizationsQuery.isPending
+      : section === 'communities'
+        ? communitiesQuery.isPending
+        : section === 'invitations'
+          ? invitationsQuery.isPending
+          : section === 'users'
+            ? platformUsersQuery.isPending
+            : section === 'units'
+              ? unitsQuery.isPending || buildingsQuery.isPending
+              : sectionQueries.some((query) => query.isPending);
+
   const [inviteLink, setInviteLink] = useState('');
   const [inviteEmailSent, setInviteEmailSent] = useState(false);
   const [inviteSentTo, setInviteSentTo] = useState('');
   const [inviteCopied, setInviteCopied] = useState(false);
   const [error, setError] = useState('');
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const errorMessage =
+    error ||
+    (sectionQueries.some((query) => query.isError)
+      ? 'No se pudo cargar parte de la información. Reintenta en unos segundos.'
+      : '');
   const [formDialog, setFormDialog] = useState<string | null>(null);
   const [organizationSearch, setOrganizationSearch] = useState('');
   const organizationRow = useExpandedRow();
@@ -314,48 +392,8 @@ export function PlatformPage() {
     unitId: '',
   });
 
-  const loadAll = useCallback(async () => {
-    // Solo la primera carga muestra esqueletos: al refrescar después de una
-    // acción los datos actuales se quedan en pantalla para evitar el parpadeo.
-    if (hasLoaded.current) {
-      setRefreshing(true);
-    } else {
-      setInitialLoading(true);
-    }
-    setError('');
-    try {
-      const [orgs, comms, builds, us, invs, platUsers] = await Promise.all([
-        get<{ data: Organization[] }>('/api/platform/organizations?pageSize=100'),
-        get<{ data: Community[] }>('/api/platform/communities?pageSize=100'),
-        get<{ data: Building[] }>('/api/sections?pageSize=100'),
-        get<{ data: UnitApi[] }>('/api/units?pageSize=100'),
-        get<Invitation[]>('/api/invitations'),
-        get<{ data: PlatformUser[]; total: number }>('/api/platform/users?pageSize=100'),
-      ]);
-      setOrganizations(orgs.data.data);
-      setCommunities(comms.data.data);
-      setBuildings(builds.data.data);
-      setUnits(
-        us.data.data.map((unit) => ({
-          ...unit,
-          floor: unit.metadata?.legacyFloor ?? null,
-          type: unit.metadata?.legacyType ?? 'apartment',
-        })),
-      );
-      setInvitations(invs.data);
-      setPlatformUsers(platUsers.data.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error cargando plataforma');
-    } finally {
-      hasLoaded.current = true;
-      setInitialLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+  const invalidate = (...keys: readonly (readonly unknown[])[]) =>
+    Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
 
   const filteredPlatformUsers = useMemo(() => {
     const term = userSearch.trim().toLowerCase();
@@ -540,7 +578,7 @@ export function PlatformPage() {
           country: DEFAULT_COUNTRY,
         });
       }
-      loadAll();
+      await invalidate(queryKeys.platformOrganizations);
       if (!editingOrganizationId) setFormDialog(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error guardando organización');
@@ -565,7 +603,7 @@ export function PlatformPage() {
         timezone: communityForm.timezone,
         slug: '',
       });
-      loadAll();
+      await invalidate(queryKeys.platformCommunities);
       setFormDialog(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error creando comunidad');
@@ -598,7 +636,7 @@ export function PlatformPage() {
         communityId: inviteForm.communityId,
         unitId: inviteForm.unitId,
       });
-      loadAll();
+      await invalidate(queryKeys.invitations);
       setFormDialog(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error creando invitación');
@@ -616,7 +654,7 @@ export function PlatformPage() {
     setError('');
     try {
       await post(`/api/invitations/${invitation.id}/revoke`);
-      await loadAll();
+      await invalidate(queryKeys.invitations);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo cancelar la invitación.');
     }
@@ -631,7 +669,7 @@ export function PlatformPage() {
       setInviteEmailSent(data.emailSent);
       setInviteSentTo(invitation.email);
       setInviteCopied(false);
-      loadAll();
+      await invalidate(queryKeys.invitations);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error reenviando invitación');
     }
@@ -685,7 +723,7 @@ export function PlatformPage() {
         emailSent: data.emailSent,
       });
       setCommunityInviteEmail('');
-      loadAll();
+      await invalidate(queryKeys.invitations);
     } catch (err) {
       setCommunityInviteError(
         err instanceof Error ? err.message : 'No se pudo crear la invitación.',
@@ -723,13 +761,18 @@ export function PlatformPage() {
         <PlatformSectionSkeleton section={section} />
       ) : (
         <>
-          {error && (
+          {errorMessage && (
             <div
               role="alert"
               className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
-              <p>{error}</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={loadAll}>
+              <p>{errorMessage}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => void queryClient.invalidateQueries()}
+              >
                 Reintentar
               </Button>
             </div>
@@ -1227,7 +1270,7 @@ export function PlatformPage() {
                   id: community.id,
                   name: community.name,
                 }))}
-                onStructureChanged={() => void loadAll()}
+                onStructureChanged={() => void invalidate(queryKeys.buildings, queryKeys.units)}
               />
             </TabsContent>
 

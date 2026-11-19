@@ -1,5 +1,6 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   RiArrowDownSLine,
   RiArrowRightSLine,
@@ -33,6 +34,7 @@ import { expandableRowProps, useExpandedRow } from '../../lib/use-expanded-row';
 import { COUNTRIES, DEFAULT_COUNTRY } from '../../lib/countries';
 import { sectionTypeLabel } from '../../lib/section-types';
 import { invitationStatusLabel } from '../../lib/invitation-status';
+import { queryKeys } from '../../lib/query-keys';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 
 interface Community {
@@ -169,6 +171,13 @@ interface Invitation {
   unitId: string | null;
   expiresAt: string;
 }
+
+// Referencias estables para que los `useMemo` no se recalculen mientras la
+// query todavía no tiene datos.
+const EMPTY_COMMUNITIES: Community[] = [];
+const EMPTY_BUILDINGS: Building[] = [];
+const EMPTY_UNITS: Unit[] = [];
+const EMPTY_INVITATIONS: Invitation[] = [];
 
 function CommunityLogoField({
   community,
@@ -326,14 +335,69 @@ export function AdminPanel() {
   const section = rawSection === 'admin' ? 'dashboard' : rawSection;
   const meta = sectionMeta[section] ?? sectionMeta.dashboard;
 
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [buildings, setBuildings] = useState<Building[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [userTotal, setUserTotal] = useState(0);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
   const [error, setError] = useState('');
+
+  // Cada recurso vive en su propia query: se cachea, se comparte entre
+  // pantallas y se pinta en cuanto llega, sin esperar al request más lento.
+  const communitiesQuery = useQuery({
+    queryKey: queryKeys.tenantCommunities,
+    queryFn: async () => (await get<Community[]>('/api/communities')).data,
+  });
+
+  const buildingsQuery = useQuery({
+    queryKey: queryKeys.buildings,
+    queryFn: async () => (await get<{ data: Building[] }>('/api/sections?pageSize=100')).data.data,
+  });
+
+  const unitsQuery = useQuery({
+    queryKey: queryKeys.units,
+    queryFn: async () =>
+      (await get<{ data: UnitApi[] }>('/api/units?pageSize=100')).data.data.map((unit) => ({
+        ...unit,
+        floor: unit.metadata?.legacyFloor ?? null,
+        type: unit.metadata?.legacyType ?? 'apartment',
+      })),
+  });
+
+  const invitationsQuery = useQuery({
+    queryKey: queryKeys.invitations,
+    queryFn: async () => (await get<Invitation[]>('/api/invitations')).data,
+  });
+
+  const userTotalQuery = useQuery({
+    queryKey: queryKeys.usersTotal,
+    queryFn: async () => (await get<{ total: number }>('/api/users?page=1&pageSize=1')).data.total,
+  });
+
+  const communities = communitiesQuery.data ?? EMPTY_COMMUNITIES;
+  const buildings = buildingsQuery.data ?? EMPTY_BUILDINGS;
+  const units = unitsQuery.data ?? EMPTY_UNITS;
+  const invitations = invitationsQuery.data ?? EMPTY_INVITATIONS;
+  const userTotal = userTotalQuery.data ?? 0;
+
+  const sectionQueries = [
+    communitiesQuery,
+    buildingsQuery,
+    unitsQuery,
+    invitationsQuery,
+    userTotalQuery,
+  ];
+  const refreshing = sectionQueries.some((query) => query.isFetching && !query.isPending);
+  // Carga progresiva: cada sección espera sólo el recurso que muestra.
+  const initialLoading =
+    section === 'invitations'
+      ? invitationsQuery.isPending
+      : section === 'communities'
+        ? communitiesQuery.isPending
+        : section === 'units'
+          ? unitsQuery.isPending || buildingsQuery.isPending
+          : sectionQueries.some((query) => query.isPending);
+  const errorMessage =
+    error ||
+    (sectionQueries.some((query) => query.isError)
+      ? 'No se pudo cargar parte de la información. Reintenta en unos segundos.'
+      : '');
 
   const [search, setSearch] = useState('');
   const [structureTarget, setStructureTarget] = useState<{ id: string; name: string } | null>(null);
@@ -363,71 +427,15 @@ export function AdminPanel() {
   const [resendCopied, setResendCopied] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const hasLoaded = useRef(false);
 
-  const load = useCallback(async () => {
-    // Solo la primera carga muestra esqueletos: al refrescar después de una
-    // acción los datos actuales se quedan en pantalla para evitar el parpadeo.
-    if (hasLoaded.current) {
-      setRefreshing(true);
-    } else {
-      setInitialLoading(true);
-    }
-    setError('');
-
-    // Independent resources: one failed request must not blank the whole panel.
-    const [communityResult, sectionResult, unitResult, invitationResult, userResult] =
-      await Promise.allSettled([
-        get<Community[]>('/api/communities'),
-        get<{ data: Building[] }>('/api/sections?pageSize=100'),
-        get<{ data: UnitApi[] }>('/api/units?pageSize=100'),
-        get<Invitation[]>('/api/invitations'),
-        get<{ total: number }>('/api/users?page=1&pageSize=1'),
-      ]);
-
-    if (communityResult.status === 'fulfilled') {
-      setCommunities(communityResult.value.data);
-    }
-
-    if (sectionResult.status === 'fulfilled') {
-      setBuildings(sectionResult.value.data.data);
-    }
-
-    if (unitResult.status === 'fulfilled') {
-      setUnits(
-        unitResult.value.data.data.map((unit) => ({
-          ...unit,
-          floor: unit.metadata?.legacyFloor ?? null,
-          type: unit.metadata?.legacyType ?? 'apartment',
-        })),
-      );
-    }
-
-    if (invitationResult.status === 'fulfilled') {
-      setInvitations(invitationResult.value.data);
-    }
-
-    if (userResult.status === 'fulfilled') {
-      setUserTotal(userResult.value.data.total);
-    }
-
-    if (
-      [communityResult, sectionResult, unitResult, invitationResult, userResult].some(
-        (result) => result.status === 'rejected',
-      )
-    ) {
-      setError('No se pudo cargar parte de la información. Reintenta en unos segundos.');
-    }
-
-    hasLoaded.current = true;
-    setInitialLoading(false);
-    setRefreshing(false);
-  }, [refreshKey]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  /**
+   * Revalida los recursos cacheados. A diferencia del `load()` anterior, no
+   * desmonta la pantalla: los datos actuales siguen visibles hasta que llega
+   * la versión nueva.
+   */
+  function refreshAll() {
+    return queryClient.invalidateQueries();
+  }
 
   async function loadCommunityOverview(communityId: string) {
     setOverviewLoadingId(communityId);
@@ -494,9 +502,7 @@ export function AdminPanel() {
     setError('');
     try {
       await post(`/api/invitations/${invitation.id}/revoke`);
-      setInvitations((current) =>
-        current.map((row) => (row.id === invitation.id ? { ...row, status: 'revoked' } : row)),
-      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.invitations });
     } catch {
       setError('No se pudo cancelar la invitación.');
     }
@@ -543,7 +549,7 @@ export function AdminPanel() {
       await patch(`/api/communities/${community.id}`, {
         logoAssetId: asset.data.id,
       });
-      await load();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tenantCommunities });
       refreshWorkspace();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo subir el logo.');
@@ -570,7 +576,7 @@ export function AdminPanel() {
       setAdminInviteEmailSent(response.data.emailSent);
       setAdminInviteSentTo(email);
       setAdminInviteEmail('');
-      await load();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.invitations });
     } catch (err) {
       setAdminInviteError(err instanceof Error ? err.message : 'No se pudo crear la invitación.');
     } finally {
@@ -665,8 +671,10 @@ export function AdminPanel() {
         );
         const saved = mergeCommunity(payload, { ...result.data, id: editedCommunityId });
         if (saved) {
-          setCommunities((current) =>
-            current.map((community) => (community.id === editedCommunityId ? saved : community)),
+          queryClient.setQueryData<Community[]>(queryKeys.tenantCommunities, (current) =>
+            (current ?? []).map((community) =>
+              community.id === editedCommunityId ? saved : community,
+            ),
           );
         }
       } else {
@@ -677,16 +685,16 @@ export function AdminPanel() {
         const saved = mergeCommunity(payload, result.data);
         if (saved) {
           // The row must show up immediately, not after the background reload.
-          setCommunities((current) => [
+          queryClient.setQueryData<Community[]>(queryKeys.tenantCommunities, (current) => [
             saved,
-            ...current.filter((community) => community.id !== saved.id),
+            ...(current ?? []).filter((community) => community.id !== saved.id),
           ]);
         }
       }
       setCommunityForm({ ...emptyCommunityForm });
       setEditingCommunityId(null);
       setCommunityFormOpen(false);
-      await load();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tenantCommunities });
       refreshWorkspace();
 
       // The expanded detail reads from a cached overview; drop it so the row
@@ -761,13 +769,13 @@ export function AdminPanel() {
         }
       />
 
-      {error && (
+      {errorMessage && (
         <div
           role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
-          <p>{error}</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={load}>
+          <p>{errorMessage}</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => void refreshAll()}>
             Reintentar
           </Button>
         </div>
@@ -1282,7 +1290,10 @@ export function AdminPanel() {
                 id: community.id,
                 name: community.name,
               }))}
-              onStructureChanged={() => setRefreshKey((value) => value + 1)}
+              onStructureChanged={() => {
+                void queryClient.invalidateQueries({ queryKey: queryKeys.buildings });
+                void queryClient.invalidateQueries({ queryKey: queryKeys.units });
+              }}
             />
           )}
 
@@ -1482,7 +1493,8 @@ export function AdminPanel() {
               return next;
             });
             // Structure changes must reach the table that opened the dialog.
-            setRefreshKey((value) => value + 1);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.buildings });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.units });
             if (communityRow.isExpanded(closedId)) {
               void loadCommunityOverview(closedId);
             }
