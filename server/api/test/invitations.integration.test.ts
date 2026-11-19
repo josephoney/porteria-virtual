@@ -285,6 +285,26 @@ describe('invitation email delivery integration', () => {
     assert.ok(!payload.htmlbody.includes('community_admin'));
   });
 
+  it('strips a duplicated Zoho-enczapikey prefix from the token', async () => {
+    Object.assign(mailConfig, {
+      zeptomailToken: 'Zoho-enczapikey test-zeptomail-token',
+    });
+
+    const email = `invite-prefix-${randomUUID().slice(0, 8)}@test.local`;
+    const response = await request('POST', '/api/invitations', orgAdminToken, {
+      email,
+      role: 'community_admin',
+      communityId,
+    });
+
+    assert.equal(response.statusCode, 201, response.body);
+    assert.equal(parse(response).emailSent, true);
+    assert.equal(fetchCalls.length, 1);
+
+    const headers = new Headers(fetchCalls[0].init?.headers);
+    assert.equal(headers.get('authorization'), 'Zoho-enczapikey test-zeptomail-token');
+  });
+
   it('lets a platform superadmin create a community and email its administrator', async () => {
     const suffix = randomUUID().slice(0, 8);
     const created = await request('POST', '/api/platform/communities', platformAdminToken, {

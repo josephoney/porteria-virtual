@@ -180,7 +180,13 @@ function createTimeoutSignal(): AbortSignal | undefined {
 export async function sendInvitationEmail(
   input: SendInvitationEmailInput,
 ): Promise<SendInvitationEmailResult> {
-  const token = config.mail.zeptomailToken.trim();
+  // El panel de ZeptoMail muestra el header completo, así que es fácil pegar
+  // "Zoho-enczapikey <token>" en ZEPTOMAIL_TOKEN. Si el esquema viaja
+  // duplicado, el gateway responde 500 sin cuerpo y no deja rastro del motivo.
+  const token = config.mail.zeptomailToken
+    .trim()
+    .replace(/^Zoho-enczapikey\s+/i, '')
+    .trim();
   const from = config.mail.from.trim();
 
   if (!token || !from) {
