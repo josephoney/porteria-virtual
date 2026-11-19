@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
+import bcrypt from 'bcryptjs';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 
@@ -47,6 +48,9 @@ let communityAdminPersonId: string;
 let communityAdminToken: string;
 let guardUserId: string;
 let guardToken: string;
+let loginAccountEmail: string;
+let loginAccountUserId: string;
+let loginAccountPersonId: string;
 let legalRepresentativePersonId: string;
 let legalRepresentativeDocument: string;
 let otherCommunityId: string;
@@ -425,8 +429,45 @@ describe('location node integration', () => {
       })
       .returning();
 
+    // Login fixture: the suite must not depend on the demo seed, which CI never runs.
+    loginAccountEmail = `login-fixture-${suffix}@test.local`;
+    const [loginAccountUser] = await db
+      .insert(users)
+      .values({
+        email: loginAccountEmail,
+        passwordHash: await bcrypt.hash('porteria123', 10),
+        name: 'Login Fixture',
+      })
+      .returning();
+    loginAccountUserId = loginAccountUser.id;
+    const [loginAccountPerson] = await db
+      .insert(people)
+      .values({
+        firstName: 'Login',
+        lastName: 'Fixture',
+        contactEmail: loginAccountEmail,
+        status: 'active',
+      })
+      .returning();
+    loginAccountPersonId = loginAccountPerson.id;
+    await db.insert(accounts).values({
+      personId: loginAccountPersonId,
+      email: loginAccountEmail,
+      passwordHash: await bcrypt.hash('porteria123', 10),
+    });
+    // Login refuses users without an active membership; give the fixture one.
+    await db.insert(memberships).values({
+      userId: loginAccountUserId,
+      organizationId,
+      communityId: null,
+      unitId: null,
+      role: 'org_admin',
+      status: 'active',
+    });
+
     const { buildApp } = await import('../src/index.js');
     app = (await buildApp()).app;
+
     token = app.jwt.sign({
       sub: randomUUID(),
       email: 'integration@test.local',
@@ -478,6 +519,7 @@ describe('location node integration', () => {
   });
 
   after(async () => {
+    await db.delete(users).where(eq(users.id, loginAccountUserId));
     await db.delete(users).where(eq(users.id, residentUserId));
     await db.delete(users).where(eq(users.id, orgAdminUserId));
     await db.delete(users).where(eq(users.id, communityAdminUserId));
@@ -486,7 +528,12 @@ describe('location node integration', () => {
     await db
       .delete(people)
       .where(
-        inArray(people.id, [legalRepresentativePersonId, orgAdminPersonId, communityAdminPersonId]),
+        inArray(people.id, [
+          legalRepresentativePersonId,
+          orgAdminPersonId,
+          communityAdminPersonId,
+          loginAccountPersonId,
+        ]),
       );
     await app.close();
   });
@@ -496,7 +543,7 @@ describe('location node integration', () => {
       method: 'POST',
       url: '/api/auth/login',
       payload: {
-        email: 'admin@porteria.local',
+        email: loginAccountEmail,
         password: 'porteria123',
       },
     });
