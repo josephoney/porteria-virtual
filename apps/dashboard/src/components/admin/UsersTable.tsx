@@ -9,7 +9,7 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from 
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Alert, AlertDescription } from '../ui/alert';
-import { Skeleton } from '../ui/skeleton';
+import { LoadingState } from '../ui/loading-state';
 import {
   RiSearchLine,
   RiUserAddLine,
@@ -111,6 +111,7 @@ export function UsersTable() {
   const [communityIds, setCommunityIds] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [creating, setCreating] = useState(false);
   const [assignmentUser, setAssignmentUser] = useState<UserData | null>(null);
@@ -122,9 +123,14 @@ export function UsersTable() {
     locationUnitId: '',
   });
 
+  // Sólo la primera carga muestra el loader: al paginar o filtrar, la tabla
+  // se queda con los datos anteriores en lugar de borrarse.
+  const initialLoading = loading && !hasLoaded;
+
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     setFetchError('');
+
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: '10' });
       if (debouncedSearch) params.set('search', debouncedSearch);
@@ -143,6 +149,7 @@ export function UsersTable() {
       setFetchError('No se pudieron cargar los usuarios. Reintenta en unos segundos.');
     } finally {
       setLoading(false);
+      setHasLoaded(true);
     }
   }, [page, debouncedSearch, statusFilter]);
 
@@ -542,201 +549,197 @@ export function UsersTable() {
         )}
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Cuenta</TableHead>
-            <TableHead>Persona</TableHead>
-            <TableHead>Documento</TableHead>
-            <TableHead>Comunidad</TableHead>
-            <TableHead>Membresía</TableHead>
-            <TableHead>Estado</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading &&
-            [...Array(5)].map((_, index) => (
-              <TableRow key={`loading-${index}`}>
-                <TableCell colSpan={6}>
-                  <Skeleton className="h-8 w-full" />
+      {initialLoading ? (
+        <LoadingState label="Cargando usuarios…" />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Cuenta</TableHead>
+              <TableHead>Persona</TableHead>
+              <TableHead>Documento</TableHead>
+              <TableHead>Comunidad</TableHead>
+              <TableHead>Membresía</TableHead>
+              <TableHead>Estado</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {fetchError && (
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center">
+                  <p className="text-sm text-destructive" role="alert">
+                    {fetchError}
+                  </p>
+                  <Button variant="outline" size="sm" className="mt-3" onClick={fetchUsers}>
+                    Reintentar
+                  </Button>
                 </TableCell>
               </TableRow>
-            ))}
+            )}
 
-          {!loading && fetchError && (
-            <TableRow>
-              <TableCell colSpan={6} className="py-8 text-center">
-                <p className="text-sm text-destructive" role="alert">
-                  {fetchError}
-                </p>
-                <Button variant="outline" size="sm" className="mt-3" onClick={fetchUsers}>
-                  Reintentar
-                </Button>
-              </TableCell>
-            </TableRow>
-          )}
+            {!fetchError && users.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  No hay usuarios para mostrar
+                </TableCell>
+              </TableRow>
+            )}
 
-          {!loading && !fetchError && users.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                No hay usuarios para mostrar
-              </TableCell>
-            </TableRow>
-          )}
+            {!fetchError &&
+              users.map((u) => {
+                const memberships: (MembershipView | null)[] =
+                  u.memberships.length > 0 ? u.memberships : [null];
 
-          {!loading &&
-            !fetchError &&
-            users.map((u) => {
-              const memberships: (MembershipView | null)[] =
-                u.memberships.length > 0 ? u.memberships : [null];
+                return memberships.map((m, index) => {
+                  const rowSpan = memberships.length;
+                  const canManageMembership = Boolean(m && assignableRoles.includes(m.role));
 
-              return memberships.map((m, index) => {
-                const rowSpan = memberships.length;
-                const canManageMembership = Boolean(m && assignableRoles.includes(m.role));
+                  return (
+                    <TableRow key={`${u.id}-${m?.id ?? 'none'}`} className="h-10">
+                      {index === 0 && (
+                        <>
+                          <TableCell rowSpan={rowSpan} className="py-2 align-top font-medium">
+                            {u.email}
+                          </TableCell>
+                          <TableCell rowSpan={rowSpan} className="py-2 align-top">
+                            <div className="flex flex-col">
+                              <span>{u.personName ?? u.name}</span>
+                              {u.personPhone && (
+                                <span className="text-[11px] text-muted-foreground">
+                                  {u.personPhone}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell rowSpan={rowSpan} className="py-2 align-top">
+                            {u.personDocumentNumber ?? '—'}
+                          </TableCell>
+                        </>
+                      )}
 
-                return (
-                  <TableRow key={`${u.id}-${m?.id ?? 'none'}`} className="h-10">
-                    {index === 0 && (
-                      <>
-                        <TableCell rowSpan={rowSpan} className="py-2 align-top font-medium">
-                          {u.email}
-                        </TableCell>
-                        <TableCell rowSpan={rowSpan} className="py-2 align-top">
-                          <div className="flex flex-col">
-                            <span>{u.personName ?? u.name}</span>
-                            {u.personPhone && (
-                              <span className="text-[11px] text-muted-foreground">
-                                {u.personPhone}
-                              </span>
+                      <TableCell className="py-2 align-top">{m?.communityName ?? '—'}</TableCell>
+
+                      <TableCell className="py-2 align-top">
+                        {u.isPlatformAdmin ? (
+                          <Badge variant="secondary" className="text-[10px]">
+                            platform admin
+                          </Badge>
+                        ) : m ? (
+                          <div className="flex items-center gap-1.5">
+                            {canManageMembership ? (
+                              <Select
+                                value={m.role}
+                                onValueChange={(value) => handleRoleChange(m.id, value)}
+                              >
+                                <SelectTrigger
+                                  className="h-8 w-36 text-xs"
+                                  aria-label={`Rol de ${u.email} en ${m.communityName ?? 'la comunidad'}`}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {assignableRoles.map((role) => (
+                                    <SelectItem key={role} value={role}>
+                                      {ROLE_LABELS[role] ?? role}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge variant="outline">{ROLE_LABELS[m.role] ?? m.role}</Badge>
+                            )}
+                            {m.status !== 'active' && (
+                              <Badge variant="outline" className="text-[10px]">
+                                Inactiva
+                              </Badge>
+                            )}
+                            {canManageMembership && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                title={
+                                  m.status === 'active'
+                                    ? 'Quitar asignación'
+                                    : 'Reactivar asignación'
+                                }
+                                aria-label={
+                                  m.status === 'active'
+                                    ? `Quitar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`
+                                    : `Reactivar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`
+                                }
+                                onClick={() =>
+                                  handleMembershipStatus(
+                                    m,
+                                    m.status === 'active' ? 'inactive' : 'active',
+                                  )
+                                }
+                              >
+                                {m.status === 'active' ? (
+                                  <RiUserUnfollowLine />
+                                ) : (
+                                  <RiUserFollowLine />
+                                )}
+                              </Button>
+                            )}
+                            {index === 0 && !u.isPlatformAdmin && assignableRoles.length > 0 && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-xs"
+                                title="Agregar asignación"
+                                aria-label={`Agregar asignación a ${u.email}`}
+                                onClick={() => openAssignment(u)}
+                              >
+                                <RiUserAddLine />
+                              </Button>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell rowSpan={rowSpan} className="py-2 align-top">
-                          {u.personDocumentNumber ?? '—'}
-                        </TableCell>
-                      </>
-                    )}
-
-                    <TableCell className="py-2 align-top">{m?.communityName ?? '—'}</TableCell>
-
-                    <TableCell className="py-2 align-top">
-                      {u.isPlatformAdmin ? (
-                        <Badge variant="secondary" className="text-[10px]">
-                          platform admin
-                        </Badge>
-                      ) : m ? (
-                        <div className="flex items-center gap-1.5">
-                          {canManageMembership ? (
-                            <Select
-                              value={m.role}
-                              onValueChange={(value) => handleRoleChange(m.id, value)}
-                            >
-                              <SelectTrigger
-                                className="h-8 w-36 text-xs"
-                                aria-label={`Rol de ${u.email} en ${m.communityName ?? 'la comunidad'}`}
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground">Sin membresías</span>
+                            {!u.isPlatformAdmin && assignableRoles.length > 0 && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-xs"
+                                title="Agregar asignación"
+                                aria-label={`Agregar asignación a ${u.email}`}
+                                onClick={() => openAssignment(u)}
                               >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {assignableRoles.map((role) => (
-                                  <SelectItem key={role} value={role}>
-                                    {ROLE_LABELS[role] ?? role}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge variant="outline">{ROLE_LABELS[m.role] ?? m.role}</Badge>
-                          )}
-                          {m.status !== 'active' && (
-                            <Badge variant="outline" className="text-[10px]">
-                              Inactiva
-                            </Badge>
-                          )}
-                          {canManageMembership && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              title={
-                                m.status === 'active' ? 'Quitar asignación' : 'Reactivar asignación'
-                              }
-                              aria-label={
-                                m.status === 'active'
-                                  ? `Quitar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`
-                                  : `Reactivar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`
-                              }
-                              onClick={() =>
-                                handleMembershipStatus(
-                                  m,
-                                  m.status === 'active' ? 'inactive' : 'active',
-                                )
-                              }
-                            >
-                              {m.status === 'active' ? (
-                                <RiUserUnfollowLine />
-                              ) : (
-                                <RiUserFollowLine />
-                              )}
-                            </Button>
-                          )}
-                          {index === 0 && !u.isPlatformAdmin && assignableRoles.length > 0 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon-xs"
-                              title="Agregar asignación"
-                              aria-label={`Agregar asignación a ${u.email}`}
-                              onClick={() => openAssignment(u)}
-                            >
-                              <RiUserAddLine />
-                            </Button>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-muted-foreground">Sin membresías</span>
-                          {!u.isPlatformAdmin && assignableRoles.length > 0 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon-xs"
-                              title="Agregar asignación"
-                              aria-label={`Agregar asignación a ${u.email}`}
-                              onClick={() => openAssignment(u)}
-                            >
-                              <RiUserAddLine />
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </TableCell>
-
-                    {index === 0 && (
-                      <TableCell rowSpan={rowSpan} className="py-2 align-top">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={u.active}
-                          aria-label={`${u.active ? 'Desactivar' : 'Activar'} usuario ${u.email}`}
-                          onClick={() => handleToggleActive(u)}
-                          className={cn(
-                            'inline-flex h-6 items-center rounded-full px-2.5 text-xs font-medium transition-colors',
-                            u.active
-                              ? 'bg-success text-success-foreground'
-                              : 'bg-destructive text-destructive-foreground',
-                          )}
-                        >
-                          {u.active ? 'Activo' : 'Inactivo'}
-                        </button>
+                                <RiUserAddLine />
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
-                    )}
-                  </TableRow>
-                );
-              });
-            })}
-        </TableBody>
-      </Table>
+
+                      {index === 0 && (
+                        <TableCell rowSpan={rowSpan} className="py-2 align-top">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={u.active}
+                            aria-label={`${u.active ? 'Desactivar' : 'Activar'} usuario ${u.email}`}
+                            onClick={() => handleToggleActive(u)}
+                            className={cn(
+                              'inline-flex h-6 items-center rounded-full px-2.5 text-xs font-medium transition-colors',
+                              u.active
+                                ? 'bg-success text-success-foreground'
+                                : 'bg-destructive text-destructive-foreground',
+                            )}
+                          >
+                            {u.active ? 'Activo' : 'Inactivo'}
+                          </button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                });
+              })}
+          </TableBody>
+        </Table>
+      )}
 
       <Dialog
         open={Boolean(assignmentUser)}

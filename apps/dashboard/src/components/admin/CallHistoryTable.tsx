@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
-import { Skeleton } from '../ui/skeleton';
+import { LoadingState } from '../ui/loading-state';
 
 interface CallData {
   id: string;
@@ -56,6 +56,7 @@ export function CallHistoryTable() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState('');
 
   const fetchCalls = useCallback(async () => {
@@ -81,6 +82,7 @@ export function CallHistoryTable() {
       setError('No se pudieron cargar las llamadas. Reintenta en unos segundos.');
     } finally {
       setLoading(false);
+      setHasLoaded(true);
     }
   }, [page, statusFilter, fromDate, toDate]);
 
@@ -89,6 +91,9 @@ export function CallHistoryTable() {
   }, [fetchCalls]);
 
   const totalPages = Math.ceil(total / 10);
+  // Sólo la primera carga muestra el loader: al paginar o filtrar, la tabla
+  // se queda con los datos anteriores en lugar de borrarse.
+  const initialLoading = loading && !hasLoaded;
 
   return (
     <div className="space-y-4">
@@ -132,66 +137,60 @@ export function CallHistoryTable() {
         />
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Estado</TableHead>
-            <TableHead>Kiosk</TableHead>
-            <TableHead>Operador</TableHead>
-            <TableHead>Acceso</TableHead>
-            <TableHead>Inicio</TableHead>
-            <TableHead>Duración</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading &&
-            [...Array(5)].map((_, index) => (
-              <TableRow key={`loading-${index}`}>
-                <TableCell colSpan={6}>
-                  <Skeleton className="h-8 w-full" />
+      {initialLoading ? (
+        <LoadingState label="Cargando llamadas…" />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Estado</TableHead>
+              <TableHead>Kiosk</TableHead>
+              <TableHead>Operador</TableHead>
+              <TableHead>Acceso</TableHead>
+              <TableHead>Inicio</TableHead>
+              <TableHead>Duración</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {error && (
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center">
+                  <p className="text-sm text-destructive" role="alert">
+                    {error}
+                  </p>
+                  <Button variant="outline" size="sm" className="mt-3" onClick={fetchCalls}>
+                    Reintentar
+                  </Button>
                 </TableCell>
               </TableRow>
-            ))}
+            )}
 
-          {!loading && error && (
-            <TableRow>
-              <TableCell colSpan={6} className="py-8 text-center">
-                <p className="text-sm text-destructive" role="alert">
-                  {error}
-                </p>
-                <Button variant="outline" size="sm" className="mt-3" onClick={fetchCalls}>
-                  Reintentar
-                </Button>
-              </TableCell>
-            </TableRow>
-          )}
-
-          {!loading && !error && calls.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                No hay llamadas registradas
-              </TableCell>
-            </TableRow>
-          )}
-
-          {!loading &&
-            !error &&
-            calls.map((call) => (
-              <TableRow key={call.id}>
-                <TableCell>
-                  <Badge variant={statusBadgeVariant[call.status] || 'outline'}>
-                    {statusLabel[call.status] || call.status}
-                  </Badge>
+            {!error && calls.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  No hay llamadas registradas
                 </TableCell>
-                <TableCell>{call.kioskName || '--'}</TableCell>
-                <TableCell>{call.operatorName || '--'}</TableCell>
-                <TableCell>{call.accessPointName || '--'}</TableCell>
-                <TableCell className="font-mono">{formatTime(call.startedAt)}</TableCell>
-                <TableCell className="font-mono">{formatDuration(call.duration)}</TableCell>
               </TableRow>
-            ))}
-        </TableBody>
-      </Table>
+            )}
+
+            {!error &&
+              calls.map((call) => (
+                <TableRow key={call.id}>
+                  <TableCell>
+                    <Badge variant={statusBadgeVariant[call.status] || 'outline'}>
+                      {statusLabel[call.status] || call.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{call.kioskName || '--'}</TableCell>
+                  <TableCell>{call.operatorName || '--'}</TableCell>
+                  <TableCell>{call.accessPointName || '--'}</TableCell>
+                  <TableCell className="font-mono">{formatTime(call.startedAt)}</TableCell>
+                  <TableCell className="font-mono">{formatDuration(call.duration)}</TableCell>
+                </TableRow>
+              ))}
+          </TableBody>
+        </Table>
+      )}
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 text-sm font-mono">
