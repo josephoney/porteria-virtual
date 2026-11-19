@@ -31,6 +31,7 @@ import {
 } from '../components/ui/dialog';
 import { DetailField, DetailGrid } from '../components/ui/detail-field';
 import { expandableRowProps, useExpandedRow } from '../lib/use-expanded-row';
+import { invitationStatusLabel } from '../lib/invitation-status';
 
 interface Organization {
   id: string;
@@ -557,13 +558,20 @@ export function PlatformPage() {
     }
   }
 
-  async function revokeInvitation(id: string) {
+  async function revokeInvitation(invitation: Invitation) {
+    if (
+      !window.confirm(
+        `¿Cancelar y archivar la invitación de ${invitation.email}? Dejará de ser válida y quedará registrada como cancelada; no se elimina del historial.`,
+      )
+    ) {
+      return;
+    }
     setError('');
     try {
-      await post(`/api/invitations/${id}/revoke`);
+      await post(`/api/invitations/${invitation.id}/revoke`);
       await loadAll();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo revocar la invitación.');
+      setError(err instanceof Error ? err.message : 'No se pudo cancelar la invitación.');
     }
   }
 
@@ -1360,7 +1368,7 @@ export function PlatformPage() {
                       <TableCell>{i.email}</TableCell>
                       <TableCell>{i.role}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{i.status}</Badge>
+                        <Badge variant="outline">{invitationStatusLabel(i.status)}</Badge>
                       </TableCell>
                       <TableCell className="text-xs">
                         {new Date(i.expiresAt).toLocaleDateString()}
@@ -1374,9 +1382,9 @@ export function PlatformPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => revokeInvitation(i.id)}
+                              onClick={() => void revokeInvitation(i)}
                             >
-                              Revocar
+                              Cancelar / archivar
                             </Button>
                           </>
                         )}

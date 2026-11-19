@@ -31,6 +31,7 @@ import { LogoUpload } from '../ui/logo-upload';
 import { expandableRowProps, useExpandedRow } from '../../lib/use-expanded-row';
 import { COUNTRIES, DEFAULT_COUNTRY } from '../../lib/countries';
 import { sectionTypeLabel } from '../../lib/section-types';
+import { invitationStatusLabel } from '../../lib/invitation-status';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 
 interface Community {
@@ -330,6 +331,13 @@ export function AdminPanel() {
   const [adminInviteCopied, setAdminInviteCopied] = useState(false);
   const [adminInviteSaving, setAdminInviteSaving] = useState(false);
   const [adminInviteError, setAdminInviteError] = useState('');
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resendResult, setResendResult] = useState<{
+    email: string;
+    acceptUrl: string;
+    emailSent: boolean;
+  } | null>(null);
+  const [resendCopied, setResendCopied] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -443,17 +451,52 @@ export function AdminPanel() {
     [invitations, search, statusFilter],
   );
 
-  async function revokeInvitation(id: string) {
+  async function revokeInvitation(invitation: Invitation) {
+    if (
+      !window.confirm(
+        `¿Cancelar y archivar la invitación de ${invitation.email}? Dejará de ser válida y quedará registrada como cancelada; no se elimina del historial.`,
+      )
+    ) {
+      return;
+    }
     setError('');
     try {
-      await post(`/api/invitations/${id}/revoke`);
+      await post(`/api/invitations/${invitation.id}/revoke`);
       setInvitations((current) =>
-        current.map((invitation) =>
-          invitation.id === id ? { ...invitation, status: 'revoked' } : invitation,
-        ),
+        current.map((row) => (row.id === invitation.id ? { ...row, status: 'revoked' } : row)),
       );
     } catch {
-      setError('No se pudo revocar la invitación.');
+      setError('No se pudo cancelar la invitación.');
+    }
+  }
+
+  async function resendInvitation(invitation: Invitation) {
+    setError('');
+    setResendingId(invitation.id);
+    setResendCopied(false);
+    try {
+      const response = await post<{ acceptUrl: string; emailSent: boolean }>(
+        `/api/invitations/${invitation.id}/resend`,
+      );
+      setResendResult({
+        email: invitation.email,
+        acceptUrl: response.data.acceptUrl,
+        emailSent: response.data.emailSent,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo reenviar la invitación.');
+    } finally {
+      setResendingId(null);
+    }
+  }
+
+  async function copyResendLink() {
+    if (!resendResult) return;
+    try {
+      await navigator.clipboard.writeText(resendResult.acceptUrl);
+      setResendCopied(true);
+    } catch {
+      setError('No se pudo copiar el enlace. Selecciónalo y cópialo manualmente.');
     }
   }
 
@@ -1220,7 +1263,7 @@ export function AdminPanel() {
                     <SelectItem value="all">Todos los estados</SelectItem>
                     <SelectItem value="pending">Pendiente</SelectItem>
                     <SelectItem value="accepted">Aceptada</SelectItem>
-                    <SelectItem value="revoked">Revocada</SelectItem>
+                    <SelectItem value="revoked">Cancelada</SelectItem>
                     <SelectItem value="expired">Vencida</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1249,20 +1292,32 @@ export function AdminPanel() {
                         <TableCell>{invitation.email}</TableCell>
                         <TableCell>{invitation.role}</TableCell>
                         <TableCell>
-                          <Badge variant="outline">{invitation.status}</Badge>
+                          <Badge variant="outline">
+                            {invitationStatusLabel(invitation.status)}
+                          </Badge>
                         </TableCell>
                         <TableCell className="font-mono text-xs">
                           {new Date(invitation.expiresAt).toLocaleDateString('es-AR')}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="space-x-2">
                           {invitation.status === 'pending' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => revokeInvitation(invitation.id)}
-                            >
-                              Revocar
-                            </Button>
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={resendingId === invitation.id}
+                                onClick={() => void resendInvitation(invitation)}
+                              >
+                                {resendingId === invitation.id ? 'Reenviando…' : 'Reenviar'}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void revokeInvitation(invitation)}
+                              >
+                                Cancelar / archivar
+                              </Button>
+                            </>
                           )}
                         </TableCell>
                       </TableRow>
@@ -1333,6 +1388,44 @@ export function AdminPanel() {
               {adminInviteSaving ? 'Invitando…' : 'Generar invitación'}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(resendResult)}
+        onOpenChange={(open) => {
+          if (!open) setResendResult(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invitación reenviada</DialogTitle>
+            <DialogDescription>
+              Se generó un enlace nuevo para {resendResult?.email}. El enlace anterior ya no es
+              válido.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p role="status" className="text-sm font-medium">
+              {resendResult?.emailSent
+                ? `Invitación enviada a ${resendResult.email}.`
+                : 'No se pudo enviar el correo. Comparte este enlace:'}
+            </p>
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3">
+              <p className="flex-1 break-all font-mono text-xs">{resendResult?.acceptUrl}</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void copyResendLink()}
+              >
+                {resendCopied ? 'Copiado' : 'Copiar'}
+              </Button>
+            </div>
+            <Button type="button" variant="outline" onClick={() => setResendResult(null)}>
+              Cerrar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
