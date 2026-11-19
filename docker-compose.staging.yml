@@ -59,6 +59,9 @@ services:
       COOKIE_SECURE: 'true'
       PUBLIC_APP_URL: https://${STAGING_DOMAIN}
       PASS_WEB_URL: https://${STAGING_DOMAIN}
+      ZEPTOMAIL_API_URL: ${ZEPTOMAIL_API_URL:-}
+      ZEPTOMAIL_TOKEN: ${ZEPTOMAIL_TOKEN:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       # Caddy sirve todo en el mismo origen, pero la API exige la lista en
       # producción: se declara el propio dominio y no hay origen cruzado.
       CORS_ORIGINS: https://${STAGING_DOMAIN}
