@@ -133,7 +133,7 @@ export async function userRoutes(app: FastifyInstance) {
         return reply.status(403).send({
           statusCode: 403,
           error: 'Forbidden',
-          message: 'No podés asignar ese rol',
+          message: 'No puedes asignar ese rol',
         });
       }
 

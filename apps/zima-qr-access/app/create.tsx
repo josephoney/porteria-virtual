@@ -426,7 +426,7 @@ export default function CreatePassScreen() {
     }
 
     if (companions.length > MAX_COMPANIONS) {
-      return `Podés agregar hasta ${MAX_COMPANIONS} acompañantes.`;
+      return `Puedes agregar hasta ${MAX_COMPANIONS} acompañantes.`;
     }
     const companionValues = trimmedCompanions();
     if (
@@ -474,7 +474,7 @@ export default function CreatePassScreen() {
 
     if (hasVehicle && !plate.trim()) return 'Ingresa la placa del vehículo.';
     if (!entryOnly && (!Number.isInteger(usesValue) || usesValue < 1 || usesValue > 20)) {
-      return 'Elegí entre 1 y 20 usos.';
+      return 'Elige entre 1 y 20 usos.';
     }
     if (pin && !/^\d{4}$/.test(pin)) return 'El PIN tiene que tener 4 dígitos.';
 
@@ -538,7 +538,7 @@ export default function CreatePassScreen() {
     <Screen>
       <Text style={ui.title}>Nueva autorización</Text>
       <Text style={ui.muted}>
-        Elegí la vigencia, el horario y cuántas veces puede entrar el visitante.
+        Elige la vigencia, el horario y cuántas veces puede entrar el visitante.
       </Text>
 
       <Card>
@@ -721,8 +721,8 @@ export default function CreatePassScreen() {
             label="Entrada inmediata"
             hint={
               immediate
-                ? 'El pase empieza en el momento en que lo confirmás.'
-                : 'Elegí abajo la hora de inicio.'
+                ? 'El pase empieza en el momento en que lo confirmas.'
+                : 'Elige abajo la hora de inicio.'
             }
             value={immediate}
             onValueChange={(value) => {
@@ -796,7 +796,7 @@ export default function CreatePassScreen() {
           label="PIN de 4 dígitos"
           value={pin}
           onChangeText={setPin}
-          placeholder="Solo si querés proteger el link"
+          placeholder="Solo si quieres proteger el link"
           keyboardType="number-pad"
           secureTextEntry
           maxLength={4}

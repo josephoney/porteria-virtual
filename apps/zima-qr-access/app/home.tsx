@@ -76,7 +76,7 @@ export default function ResidentHomeScreen() {
         <Card>
           <Text style={ui.sectionTitle}>Falta asignar tu unidad</Text>
           <Text style={ui.muted}>
-            Tu membresía no tiene una unidad asociada. Pedile al administrador que la asigne para
+            Tu membresía no tiene una unidad asociada. Pídele al administrador que la asigne para
             poder crear pases.
           </Text>
         </Card>

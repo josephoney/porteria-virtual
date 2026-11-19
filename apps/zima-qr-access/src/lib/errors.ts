@@ -7,7 +7,7 @@ const MESSAGES: Record<string, string> = {
   forbidden: 'No tienes permisos para esta acción.',
   not_found: 'No encontramos ese pase.',
   gone: 'Este pase ya no está disponible.',
-  link_expired: 'El link expiró. Regeneralo desde la app.',
+  link_expired: 'El link expiró. Regéneralo desde la app.',
   pass_used: 'Este pase ya fue utilizado.',
   not_bound: 'Este dispositivo no está vinculado al pase.',
   device_already_bound: 'Este link ya está vinculado a otro dispositivo.',
@@ -26,7 +26,7 @@ const MESSAGES: Record<string, string> = {
   conflict: 'La operación no se pudo completar. Actualiza e intenta de nuevo.',
   scan_expired: 'El escaneo expiró. Vuelve a escanear el QR.',
   scan_already_processed: 'Ese escaneo ya fue confirmado o rechazado.',
-  token_already_used: 'Ese QR ya fue usado. Pedile al visitante que lo actualice.',
+  token_already_used: 'Ese QR ya fue usado. Pídele al visitante que lo actualice.',
   invalid_or_expired_token: 'El QR no es válido o expiró.',
   no_active_shift: 'No tienes un turno abierto. Inicia el turno antes de escanear.',
   not_on_shift_at_access_point:

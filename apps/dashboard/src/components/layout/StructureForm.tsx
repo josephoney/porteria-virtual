@@ -100,7 +100,7 @@ export function StructureForm({
           <option value={3}>3 niveles</option>
         </select>
         <p className="text-xs text-muted-foreground">
-          El último nivel es la unidad. Para Torres → Apartamentos, usá 2 niveles.
+          El último nivel es la unidad. Para Torres → Apartamentos, usa 2 niveles.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">

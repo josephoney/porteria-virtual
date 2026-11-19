@@ -574,7 +574,7 @@ export function ResidentAuthorizationNewPage() {
 
     const scheduleStart = effectiveImmediate ? timeOfDay(new Date()) : scheduleFrom;
     if (duration === 'today' && !effectiveImmediate && !scheduleFrom) {
-      next.schedule = 'Elegí la hora de inicio o volvé a marcar Entrada inmediata.';
+      next.schedule = 'Elige la hora de inicio o vuelve a marcar Entrada inmediata.';
     } else if (
       !effectiveImmediate &&
       ((scheduleFrom && !scheduleTo) || (!scheduleFrom && scheduleTo))
@@ -656,7 +656,7 @@ export function ResidentAuthorizationNewPage() {
         setStep('form');
       } else if (detail === 'max_companions') {
         setFieldErrors({
-          companions: `Podés agregar hasta ${MAX_COMPANIONS} acompañantes por autorización.`,
+          companions: `Puedes agregar hasta ${MAX_COMPANIONS} acompañantes por autorización.`,
         });
         setStep('form');
       } else if (detail === 'duplicate_companion_document') {
@@ -848,7 +848,7 @@ export function ResidentAuthorizationNewPage() {
             )}
             {!loading && destinations.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                Tu comunidad todavía no tiene destinos disponibles. Pedile al administrador que
+                Tu comunidad todavía no tiene destinos disponibles. Pídele al administrador que
                 defina la estructura en Unidades.
               </p>
             )}
@@ -1068,7 +1068,7 @@ export function ResidentAuthorizationNewPage() {
             <div className="space-y-1">
               <h2 className="text-sm font-semibold">Duración</h2>
               <p className="text-xs text-muted-foreground">
-                Horario en el que el pase permite entrar. Si lo dejás vacío, sirve a cualquier hora
+                Horario en el que el pase permite entrar. Si lo dejas vacío, sirve a cualquier hora
                 del día.
               </p>
             </div>
@@ -1122,7 +1122,7 @@ export function ResidentAuthorizationNewPage() {
               <p className="text-xs text-muted-foreground">
                 {immediateApplies
                   ? effectiveImmediate
-                    ? 'El pase vale desde el momento en que lo confirmás.'
+                    ? 'El pase vale desde el momento en que lo confirmas.'
                     : 'El pase no sirve antes de la hora de inicio.'
                   : 'Sólo aplica a la vigencia de hoy; en los otros modos manda la hora de inicio.'}
               </p>
@@ -1139,8 +1139,8 @@ export function ResidentAuthorizationNewPage() {
             <legend className="px-1 text-sm font-semibold">Recurrente</legend>
             <p className="text-xs text-muted-foreground">
               {isRecurrent
-                ? 'Elegí los días y, si querés, desde y hasta cuándo vale. Usa el horario de la tarjeta Duración.'
-                : 'Elegí «Recurrente» en Vigencia para configurar los días.'}
+                ? 'Elige los días y, si quieres, desde y hasta cuándo vale. Usa el horario de la tarjeta Duración.'
+                : 'Elige «Recurrente» en Vigencia para configurar los días.'}
             </p>
 
             <div className="flex flex-wrap gap-2" role="group" aria-label="Días de la semana">
@@ -1184,7 +1184,7 @@ export function ResidentAuthorizationNewPage() {
                   }}
                   aria-invalid={Boolean(fieldErrors.recurrenceUntil)}
                 />
-                <p className="text-xs text-muted-foreground">Si lo dejás vacío, empieza hoy.</p>
+                <p className="text-xs text-muted-foreground">Si lo dejas vacío, empieza hoy.</p>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="resident-recurrence-until">Hasta</Label>
@@ -1198,7 +1198,7 @@ export function ResidentAuthorizationNewPage() {
                   }}
                   aria-invalid={Boolean(fieldErrors.recurrenceUntil)}
                 />
-                <p className="text-xs text-muted-foreground">Si lo dejás vacío, no vence.</p>
+                <p className="text-xs text-muted-foreground">Si lo dejas vacío, no vence.</p>
               </div>
             </div>
             {fieldErrors.recurrenceUntil && (

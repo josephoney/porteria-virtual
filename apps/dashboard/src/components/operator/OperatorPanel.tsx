@@ -126,7 +126,7 @@ export function OperatorPanel() {
               🟢 {activeCall.kioskName}
             </div>
             <p className="font-mono text-xs text-muted-foreground mb-4">
-              La videollamada se muestra en la ventana flotante. Usá los controles de la ventana
+              La videollamada se muestra en la ventana flotante. Usa los controles de la ventana
               para colgar, silenciar o abrir la puerta.
             </p>
             {relayConfigs.length > 0 && (

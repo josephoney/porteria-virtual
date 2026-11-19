@@ -56,7 +56,7 @@ function AppRequiredPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-md space-y-5 text-center">
         <div className="space-y-2">
-          <h1 className="font-heading text-2xl font-bold tracking-tight">Usá Zima QR Access</h1>
+          <h1 className="font-heading text-2xl font-bold tracking-tight">Usa Zima QR Access</h1>
           <p className="text-sm text-muted-foreground">
             La app de residentes y guardias está disponible para Android e iOS. Desde el dashboard
             solo se administra la comunidad.

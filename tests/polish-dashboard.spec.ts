@@ -16,7 +16,7 @@ test.describe('polished dashboard', () => {
 
     await page.getByRole('tab', { name: 'Crear cuenta' }).click();
     await expect(page.locator('#invite-token')).toBeVisible();
-    await expect(page.getByText(/pidesela al administrador de tu comunidad/)).toBeVisible();
+    await expect(page.getByText(/pídesela al administrador de tu comunidad/)).toBeVisible();
   });
 
   test('admin filters users, sees one row per community and toggles status', async ({ page }) => {

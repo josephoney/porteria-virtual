@@ -121,7 +121,7 @@ export function ResidentHomePage() {
           <p className="text-sm font-medium">Las autorizaciones con QR están desactivadas</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu administrador todavía no habilitó este módulo en la comunidad. Cuando lo haga, vas a
-            poder autorizar visitas desde acá.
+            poder autorizar visitas desde aquí.
           </p>
         </div>
       )}
@@ -175,7 +175,7 @@ export function ResidentHomePage() {
             <div className="rounded-4xl border border-dashed border-border p-8 text-center">
               <p className="text-sm font-medium">Todavía no autorizaste a nadie</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Cuando autorices una visita, va a aparecer acá con su QR.
+                Cuando autorices una visita, va a aparecer aquí con su QR.
               </p>
               <Button asChild variant="outline" className="mt-4">
                 <Link to="/resident/authorizations/new">Autorizar la primera visita</Link>

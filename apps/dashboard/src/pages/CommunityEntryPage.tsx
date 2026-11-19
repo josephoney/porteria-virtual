@@ -66,7 +66,7 @@ export function CommunityEntryPage() {
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-extrabold">Comunidad no encontrada</h1>
           <p className="text-sm text-muted-foreground">
-            Verifica el enlace o pedile uno nuevo a la administración.
+            Verifica el enlace o pídele uno nuevo a la administración.
           </p>
         </div>
       </div>

@@ -405,7 +405,7 @@ export function ResidentAuthorizationsPage() {
       await navigator.clipboard.writeText(pass.shareUrl);
       setNotice(`Enlace de ${visitorName(pass)} copiado.`);
     } catch {
-      setNotice('El navegador no dejó copiar el enlace. Abrilo desde el QR y copialo a mano.');
+      setNotice('El navegador no dejó copiar el enlace. Ábrelo desde el QR y cópialo a mano.');
     }
   }
 
@@ -691,7 +691,7 @@ export function ResidentAuthorizationsPage() {
                 dateTo ||
                 batchFilter
                   ? 'Prueba limpiando los filtros.'
-                  : 'Cuando autorices una visita, va a quedar registrada acá.'}
+                  : 'Cuando autorices una visita, va a quedar registrada aquí.'}
               </p>
               <Button asChild variant="outline" className="mt-4">
                 <Link to="/resident/authorizations/new">Autorizar visita</Link>

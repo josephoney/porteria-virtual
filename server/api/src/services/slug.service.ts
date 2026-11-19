@@ -16,7 +16,7 @@ function baseSlug(desired: string | undefined, name: string): string {
   const candidate = (desired ?? slugify(name)).trim();
   if (!isValidSlug(candidate)) {
     throw new InvalidSlugError(
-      'Slug inválido: usá minúsculas, números y guiones (3-60), sin palabras reservadas',
+      'Slug inválido: usa minúsculas, números y guiones (3-60), sin palabras reservadas',
     );
   }
   return candidate;
@@ -26,7 +26,11 @@ async function organizationSlugExists(slug: string, excludeId?: string): Promise
   const conditions = excludeId
     ? and(eq(organizations.slug, slug), ne(organizations.id, excludeId))
     : eq(organizations.slug, slug);
-  const [row] = await db.select({ id: organizations.id }).from(organizations).where(conditions).limit(1);
+  const [row] = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(conditions)
+    .limit(1);
   return Boolean(row);
 }
 
@@ -34,7 +38,11 @@ async function communitySlugExists(slug: string, excludeId?: string): Promise<bo
   const conditions = excludeId
     ? and(eq(communities.slug, slug), ne(communities.id, excludeId))
     : eq(communities.slug, slug);
-  const [row] = await db.select({ id: communities.id }).from(communities).where(conditions).limit(1);
+  const [row] = await db
+    .select({ id: communities.id })
+    .from(communities)
+    .where(conditions)
+    .limit(1);
   return Boolean(row);
 }
 

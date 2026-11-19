@@ -135,7 +135,7 @@ export function StructureTreeDialog({
               <LocationTreeTable structure={structure} nodes={nodes} mode="readonly" />
 
               <p className="text-xs text-muted-foreground">
-                Para agregar, renombrar o archivar {structure.level1Name.toLowerCase()}s, usá la
+                Para agregar, renombrar o archivar {structure.level1Name.toLowerCase()}s, usa la
                 sección Unidades.
               </p>
             </>
@@ -158,7 +158,7 @@ export function StructureTreeDialog({
           </DialogHeader>
           {!structure && (
             <p className="text-sm text-muted-foreground">
-              La estructura de {communityName} todavía no existe. Creala antes de cargar secciones y
+              La estructura de {communityName} todavía no existe. Créala antes de cargar secciones y
               unidades.
             </p>
           )}

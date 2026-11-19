@@ -110,7 +110,7 @@ test.describe('resident workspace', () => {
 
     await expect(page).toHaveURL(/\/resident$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Mis autorizaciones' })).toBeVisible();
-    await expect(page.getByText('Usá Zima QR Access')).toHaveCount(0);
+    await expect(page.getByText('Usa Zima QR Access')).toHaveCount(0);
   });
 
   test('sidebar only offers the resident entries', async ({ page }) => {

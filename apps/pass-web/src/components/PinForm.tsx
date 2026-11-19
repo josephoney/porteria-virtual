@@ -45,7 +45,7 @@ export function PinForm({ preview, busy, error, locked, onSubmit }: PinFormProps
         </form>
 
         <p className="hint">
-          Si no tienes el PIN, pedile al residente que te lo comparta de nuevo.
+          Si no tienes el PIN, pídele al residente que te lo comparta de nuevo.
         </p>
       </section>
     </main>

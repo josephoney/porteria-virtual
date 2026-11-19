@@ -43,7 +43,10 @@ export function registerMembershipGuard(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
 
@@ -82,7 +85,7 @@ export function registerMembershipGuard(app: FastifyInstance) {
         return reply.status(403).send({
           statusCode: 403,
           error: 'Forbidden',
-          message: 'Seleccioná una comunidad para acceder a este recurso',
+          message: 'Selecciona una comunidad para acceder a este recurso',
         });
       }
 

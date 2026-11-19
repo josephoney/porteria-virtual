@@ -248,7 +248,7 @@ export function LoginForm({
                     required
                   />
                   <FieldDescription>
-                    Si no tienes una invitación, pidesela al administrador de tu comunidad.
+                    Si no tienes una invitación, pídesela al administrador de tu comunidad.
                   </FieldDescription>
                 </Field>
                 {error && (

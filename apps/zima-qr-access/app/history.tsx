@@ -97,7 +97,7 @@ export default function HistoryScreen() {
       {!loading && passes.length === 0 ? (
         <EmptyState
           title="Sin pases"
-          message="Cuando crees pases van a aparecer acá con su estado."
+          message="Cuando crees pases van a aparecer aquí con su estado."
           action={
             <Button label="Crear pase" variant="secondary" onPress={() => router.push('/create')} />
           }

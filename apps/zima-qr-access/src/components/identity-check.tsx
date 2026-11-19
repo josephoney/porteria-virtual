@@ -142,7 +142,7 @@ export function IdentityCheck({
       setDocument(extracted);
     } else {
       setDocument('');
-      setError('No se pudo leer el número en el código. Escribilo a mano.');
+      setError('No se pudo leer el número en el código. Escríbelo a mano.');
     }
   }
 

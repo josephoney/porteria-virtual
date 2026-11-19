@@ -1,6 +1,6 @@
 const MESSAGES: Record<string, string> = {
   not_found: 'Este link no existe o es inválido.',
-  link_expired: 'Este link expiró. Pedile al residente que genere uno nuevo.',
+  link_expired: 'Este link expiró. Pídele al residente que genere uno nuevo.',
   pass_used: 'Este pase ya fue utilizado.',
   gone: 'Este pase ya no está disponible.',
   revoked: 'Este pase fue revocado por el residente.',

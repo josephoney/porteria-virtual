@@ -160,7 +160,7 @@ function parseCompanions(raw: string): { companions: PassCompanion[]; error: str
     if (!name || !document || rest.length > 0 || nameParts.length < 2) {
       return {
         companions: [],
-        error: `Acompañante ${index + 1}: usá el formato "Nombre Apellido|Documento".`,
+        error: `Acompañante ${index + 1}: usa el formato "Nombre Apellido|Documento".`,
       };
     }
 
@@ -747,7 +747,7 @@ export function ResidentAuthorizationBulkPage() {
               )}
               {destinations.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Tu comunidad todavía no tiene destinos disponibles. Pedile al administrador que
+                  Tu comunidad todavía no tiene destinos disponibles. Pídele al administrador que
                   defina la estructura en Unidades.
                 </p>
               )}
@@ -860,16 +860,16 @@ export function ResidentAuthorizationBulkPage() {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Columnas: nombre, apellido, documento y placa (opcional). Para acompañantes, agregá
+                Columnas: nombre, apellido, documento y placa (opcional). Para acompañantes, agrega
                 la columna <span className="font-medium">acompañantes</span> con el formato{' '}
                 <span className="font-mono">Nombre Apellido|Documento</span>, separados por punto y
                 coma (máximo {MAX_COMPANIONS}). Si el archivo usa punto y coma como separador de
-                columnas, encerrá la celda entre comillas.
+                columnas, encierra la celda entre comillas.
               </p>
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="bulk-csv">O pega las filas acá</Label>
+              <Label htmlFor="bulk-csv">O pega las filas aquí</Label>
               <textarea
                 id="bulk-csv"
                 value={csvText}

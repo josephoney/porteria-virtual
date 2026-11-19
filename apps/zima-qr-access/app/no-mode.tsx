@@ -28,7 +28,7 @@ export default function NoModeScreen() {
   return (
     <Screen>
       <Card>
-        <Text style={ui.heading}>Usá el dashboard</Text>
+        <Text style={ui.heading}>Usa el dashboard</Text>
         <Text style={ui.body}>
           Entraste como {roleLabel(session.activeMembership.role)}. La app móvil está pensada para
           residentes y guardias; la administración de la comunidad se hace desde el dashboard web.
