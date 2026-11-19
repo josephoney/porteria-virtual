@@ -26,7 +26,7 @@ export function TableSkeletonRows({ columns, rows = 5 }: { columns: number; rows
 /** Tabla completa en carga: mismo encabezado y cantidad de columnas que la tabla real. */
 export function TableSkeleton({ headers, rows = 5 }: { headers: string[]; rows?: number }) {
   return (
-    <div className="loading-fade-in overflow-x-auto">
+    <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
@@ -46,7 +46,7 @@ export function TableSkeleton({ headers, rows = 5 }: { headers: string[]; rows?:
 /** Tarjetas de resumen en carga con la misma grilla y alto que `SectionCards`. */
 export function CardsSkeleton({ count = 5 }: { count?: number }) {
   return (
-    <div className="loading-fade-in grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: count }).map((_, index) => (
         <Card key={index} className="@container/card" aria-hidden>
           <CardHeader>
@@ -69,7 +69,7 @@ export function CardsSkeleton({ count = 5 }: { count?: number }) {
 /** Tarjeta de gráfico en carga con la altura reservada del gráfico real. */
 export function ChartSkeleton() {
   return (
-    <Card className="loading-fade-in @container/card" aria-hidden>
+    <Card className="@container/card" aria-hidden>
       <CardHeader>
         <CardTitle className="font-heading">Actividad</CardTitle>
         <CardDescription>Llamadas y aperturas de puerta por día.</CardDescription>

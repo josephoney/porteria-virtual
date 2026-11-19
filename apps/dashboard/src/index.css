@@ -90,20 +90,30 @@
 }
 
 /*
- * Los esqueletos reservan su espacio desde el primer frame, pero el relleno
- * s�lo se hace visible pasados 200 ms. Si la respuesta llega antes, el usuario
- * nunca ve filas de relleno: s�lo el contenido. Si tarda m�s, el esqueleto
- * aparece con una entrada suave en vez de un destello.
+ * Los esqueletos reservan su espacio desde el primer frame, pero no se pintan
+ * hasta pasados 400 ms. Si los datos llegan antes, el usuario nunca ve relleno;
+ * si la carga es real, el esqueleto entra con una transicion suave.
+ *
+ * Se aplica al primitivo Skeleton (data-slot="skeleton"), asi cubre todos los
+ * esqueletos de la app y no solo las tablas del panel.
  */
-.loading-fade-in {
-  animation: loading-fade-in 180ms ease-out 200ms both;
+[data-slot='skeleton'] {
+  animation:
+    skeleton-reveal 0s linear 400ms both,
+    skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-@keyframes loading-fade-in {
+@keyframes skeleton-reveal {
   from {
-    opacity: 0;
+    visibility: hidden;
   }
   to {
-    opacity: 1;
+    visibility: visible;
+  }
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
   }
 }
