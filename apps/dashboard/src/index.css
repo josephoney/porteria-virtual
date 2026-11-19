@@ -88,3 +88,22 @@
     height: 100%;
   }
 }
+
+/*
+ * Los esqueletos reservan su espacio desde el primer frame, pero el relleno
+ * s�lo se hace visible pasados 200 ms. Si la respuesta llega antes, el usuario
+ * nunca ve filas de relleno: s�lo el contenido. Si tarda m�s, el esqueleto
+ * aparece con una entrada suave en vez de un destello.
+ */
+.loading-fade-in {
+  animation: loading-fade-in 180ms ease-out 200ms both;
+}
+
+@keyframes loading-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
