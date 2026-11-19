@@ -446,7 +446,7 @@ export function AdminPanel() {
   async function revokeInvitation(id: string) {
     setError('');
     try {
-      await patch(`/api/invitations/${id}/revoke`);
+      await post(`/api/invitations/${id}/revoke`);
       setInvitations((current) =>
         current.map((invitation) =>
           invitation.id === id ? { ...invitation, status: 'revoked' } : invitation,

@@ -558,8 +558,13 @@ export function PlatformPage() {
   }
 
   async function revokeInvitation(id: string) {
-    await patch(`/api/invitations/${id}/revoke`).catch(() => {});
-    loadAll();
+    setError('');
+    try {
+      await post(`/api/invitations/${id}/revoke`);
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo revocar la invitación.');
+    }
   }
 
   async function resendInvitation(invitation: Invitation) {

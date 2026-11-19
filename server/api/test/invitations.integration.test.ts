@@ -510,4 +510,59 @@ describe('invitation email delivery integration', () => {
     assert.ok(payload.htmlbody.includes(resentBody.acceptUrl));
     assert.ok(!payload.htmlbody.includes(createdBody.acceptUrl));
   });
+
+  it('revokes an invitation over POST and keeps the record', async () => {
+    const email = `invite-revoke-${randomUUID().slice(0, 8)}@test.local`;
+
+    const created = await request('POST', '/api/invitations', orgAdminToken, {
+      email,
+      role: 'community_admin',
+      communityId,
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const createdBody = parse(created) as { invitation: { id: string } };
+
+    const revoked = await request(
+      'POST',
+      `/api/invitations/${createdBody.invitation.id}/revoke`,
+      orgAdminToken,
+    );
+    assert.equal(revoked.statusCode, 200, revoked.body);
+    assert.equal(parse(revoked).status, 'revoked');
+
+    const [row] = await db
+      .select()
+      .from(invitations)
+      .where(eq(invitations.id, createdBody.invitation.id))
+      .limit(1);
+    assert.equal(row.status, 'revoked');
+
+    const again = await request(
+      'POST',
+      `/api/invitations/${createdBody.invitation.id}/revoke`,
+      orgAdminToken,
+    );
+    assert.equal(again.statusCode, 200, again.body);
+    assert.equal(parse(again).status, 'revoked');
+  });
+
+  it('lets a platform superadmin revoke any invitation', async () => {
+    const email = `invite-revoke-platform-${randomUUID().slice(0, 8)}@test.local`;
+
+    const created = await request('POST', '/api/invitations', orgAdminToken, {
+      email,
+      role: 'community_admin',
+      communityId,
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const createdBody = parse(created) as { invitation: { id: string } };
+
+    const revoked = await request(
+      'POST',
+      `/api/invitations/${createdBody.invitation.id}/revoke`,
+      platformAdminToken,
+    );
+    assert.equal(revoked.statusCode, 200, revoked.body);
+    assert.equal(parse(revoked).status, 'revoked');
+  });
 });
