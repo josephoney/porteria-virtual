@@ -147,17 +147,32 @@ UPDATE refresh_tokens SET revoked = true WHERE revoked = false;
 
 ## 10. Restauración de backup
 
-1. Detener API y web para evitar escrituras.
-2. Restaurar Postgres:
+Los respaldos los genera `deploy/backup.sh` (ver `deploy/README.md`, sección 4):
+`backups/porteria-<fecha>.dump` en el servidor y una copia en el bucket remoto.
+
+1. Elegir el archivo. Si el servidor se perdió, bajarlo primero del bucket con
+   `rclone` y verificarlo contra su `.sha256`.
+2. Revisar qué contiene, sin tocar nada:
 
 ```bash
-docker compose ... exec -T db pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists < backup.dump
+bash deploy/restore.sh backups/porteria-20260101T033000Z.dump --list
 ```
 
-3. Restaurar el volumen `uploads` si se usan assets locales.
-4. Ejecutar migraciones pendientes: `pnpm --filter @porteria/database db:migrate`.
-5. Levantar API/web y verificar `/ready`, login y un pase de prueba.
-6. Registrar el incidente y el RPO/RTO real.
+3. Restaurar. El script detiene `api` y `web`, pide confirmación escrita y corre
+   `pg_restore --clean --if-exists --no-owner`:
+
+```bash
+bash deploy/restore.sh backups/porteria-20260101T033000Z.dump --confirm
+```
+
+4. Restaurar el volumen `uploads` si se usan assets locales.
+5. Ejecutar migraciones pendientes: `pnpm --filter @porteria/database db:migrate`.
+6. Levantar API/web y verificar `/ready`, login y un pase de prueba.
+7. Registrar el incidente y el **RPO real** (cuánto dato se perdió, según la
+   antigüedad del dump) y el **RTO real** (cuánto tardó todo el procedimiento).
+
+Si `pg_restore` termina con errores, no levantar el stack: leer la salida,
+corregir la causa y volver a empezar sobre una base limpia.
 
 ## 11. Comandos útiles
 
@@ -171,8 +186,12 @@ docker compose --env-file .env.production -f docker-compose.prod.yml logs -f web
 docker compose ... run --rm migrate
 docker compose ... --profile bootstrap run --rm bootstrap
 
-# Backup
-docker compose ... exec -T db pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > backup-$(date +%F).dump
+# Backup (dump validado + subida fuera del servidor)
+bash deploy/backup.sh
+
+# Ver el último respaldo
+tail -n 20 backups/backup.log
+ls -lh backups/
 ```
 
 ## 12. Post-incidente

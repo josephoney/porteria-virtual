@@ -73,11 +73,22 @@ arranque, así que no hay pasos manuales sobre la base.
 
 ## Datos
 
-La base vive en el volumen `db-data`. Para respaldarla:
+La base vive en el volumen `db-data`. Ese volumen **no es un respaldo**.
+
+Para respaldar de verdad (dump validado + subida fuera del servidor):
+
+```bash
+bash deploy/backup.sh
+```
+
+El script detecta `docker-compose.staging.yml` y `.env.staging` solo. Requiere
+`BACKUP_S3_*` configurado; ver `deploy/README.md`, sección 4.
+
+Para un dump manual rápido (sólo local, para pruebas):
 
 ```bash
 docker compose -f docker-compose.staging.yml exec -T db \
-  pg_dump -U porteria porteria | gzip > respaldo-$(date +%F).sql.gz
+  pg_dump -U porteria -d porteria -Fc > respaldo-$(date +%F).dump
 ```
 
 Los datos de demo se cargan con:
