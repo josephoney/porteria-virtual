@@ -87,6 +87,15 @@ docker compose -f docker-compose.staging.yml exec -e SEED_DEMO_DATA=true api \
   pnpm --filter @porteria/database db:seed
 ```
 
+## Archivos subidos
+
+Los logos de organización y comunidad viven en el volumen `assets-data`, montado
+en `/data/uploads`. Sobreviven a los rebuilds de `deploy/update.sh`.
+
+Ese volumen **no está respaldado**: si se pierde, las filas de `assets` quedan
+apuntando a archivos que ya no existen y el logo da 404. Respaldo pendiente (ver
+`docs/backlog.md`).
+
 ## La app móvil apuntando a staging
 
 `EXPO_PUBLIC_API_URL` se compila dentro del bundle, así que hay que reconstruirla:

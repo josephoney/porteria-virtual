@@ -21,20 +21,15 @@ perdió la única forma de volver al selector de contexto.
 
 ## Despliegue
 
-### Volumen para los archivos subidos
-
-Los logos de organización y comunidad se guardan en el disco del contenedor del
-API. En staging **se pierden en cada rebuild**.
-
-- Opciones: volumen de Docker montado en la carpeta de uploads, o mover a S3/R2.
-- Sin resolver, un logo que desaparece después de un deploy parece un bug.
-
-### Respaldo de Postgres fuera del servidor
+### Respaldo de Postgres y de los assets fuera del servidor
 
 Hoy la base vive en un volumen de Docker y **no hay ningún respaldo automático**.
 El volumen sobrevive a un rebuild, pero se va con el disco, con un `DELETE` sin
 `WHERE` o con la cancelación de la VPS. Los procedimientos manuales existen
 (`deploy/README.md` §4, `docs/runbook-produccion.md` §10), pero nadie los corre.
+
+Lo mismo vale para el volumen `assets-data` con los logos: son bytes en el mismo
+disco que la base.
 
 - Pendiente: un script que haga `pg_dump -Fc` desde el contenedor `db`, valide el
   archivo, suba el dump y su checksum a un bucket S3 compatible con retención
