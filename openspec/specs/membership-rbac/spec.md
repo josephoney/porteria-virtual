@@ -5,26 +5,23 @@ TBD - created by archiving change establish-domain-foundation. Update Purpose af
 ## Requirements
 ### Requirement: Memberships table
 
-The system SHALL have a `memberships` table linking a user to an organization, and
-optionally to a community and a unit, with a role, status, and validity window.
+The system SHALL have a `memberships` table linking a person to an organization, and
+optionally to a community and a location unit, with a role, status, and validity window.
 
 #### Scenario: Create membership
-
-- **WHEN** a membership is created with `user_id`, `organization_id`, `role`, and
-  optional `community_id`/`unit_id`
+- **WHEN** a membership is created with `person_id`, `organization_id`, `role`, and
+  optional `community_id`/`location_unit_id`
 - **THEN** the row is persisted with an auto-generated UUID, `status = 'active'`, and
   timestamps
 
 #### Scenario: Unique membership
-
-- **WHEN** a membership is inserted with the same `(user_id, organization_id,
-  community_id, unit_id, role)` as an existing one
+- **WHEN** a membership is inserted with the same `(person_id, organization_id,
+  community_id, location_unit_id, role)` as an existing one
 - **THEN** the database rejects the insertion with a unique constraint violation
-- **THEN** the comparison treats `NULL` community/unit as equal (`NULLS NOT DISTINCT`)
+- **THEN** the comparison treats `NULL` community/location as equal (`NULLS NOT DISTINCT`)
 
-#### Scenario: Cascade delete user
-
-- **WHEN** a user is deleted
+#### Scenario: Cascade delete person
+- **WHEN** a person is deleted
 - **THEN** all their memberships are automatically deleted
 
 ### Requirement: Scoped roles
@@ -54,21 +51,20 @@ represented by `users.is_platform_admin`, not by a membership role.
 A membership MUST satisfy the scope required by its role.
 
 #### Scenario: Operational role requires community
-
 - **WHEN** a membership is created with role `community_admin`, `operator`, or
   `guard`
 - **THEN** `community_id` is required
 - **THEN** the insertion fails if `community_id` is null
 
-#### Scenario: Occupant role requires unit
-
+#### Scenario: Occupant role requires location unit
 - **WHEN** a membership is created with role `owner`, `tenant`, or `resident`
-- **THEN** `community_id` and `unit_id` are required
+- **THEN** `community_id` and `location_unit_id` are required
+- **THEN** the location node must be a leaf
 
 #### Scenario: Organization admin scope
-
 - **WHEN** a membership is created with role `org_admin`
-- **THEN** `organization_id` is required and `community_id` is optional
+- **THEN** `organization_id` is required and `community_id`/`location_unit_id` are
+  optional
 - **THEN** the role grants access to every community of the organization
 
 ### Requirement: Active membership context
@@ -164,4 +160,81 @@ The system SHALL centralize who can assign each membership role.
 #### Scenario: Scope mismatch
 - **WHEN** a role is assigned outside the requester's organization or community
 - **THEN** the assignment is rejected with 403/404
+
+### Requirement: Organization admin implicit community scope
+
+An organization administrator SHALL manage every community in their organization
+without an additional community membership.
+
+#### Scenario: Manage any organization community
+- **WHEN** an `org_admin` accesses a community belonging to their organization
+- **THEN** the request is authorized
+- **THEN** no `community_admin` membership is required
+
+#### Scenario: Cross-organization community
+- **WHEN** an `org_admin` accesses a community from another organization
+- **THEN** the response has status 404
+
+### Requirement: Multi-community delegated administration
+
+The system SHALL allow a person to hold multiple `community_admin` memberships.
+
+#### Scenario: Two community memberships
+- **WHEN** a person is assigned as `community_admin` to two communities
+- **THEN** two active memberships exist
+- **THEN** each membership grants access only to its community
+
+#### Scenario: Context switch
+- **WHEN** the person switches active context to one community
+- **THEN** administrative actions are limited to that community
+
+#### Scenario: No community creation
+- **WHEN** a `community_admin` tries to create a community
+- **THEN** the response has status 403
+
+### Requirement: Superadmin tenant read-only
+
+Platform administrators SHALL NOT mutate tenant hierarchy data.
+
+#### Scenario: Read organization profile
+- **WHEN** a platform admin reads an organization profile
+- **THEN** the response is allowed
+
+#### Scenario: Write organization profile
+- **WHEN** a platform admin updates organization profile fields
+- **THEN** the response has status 403
+
+#### Scenario: Write community or location
+- **WHEN** a platform admin creates or updates a community, section or unit
+- **THEN** the response has status 403
+
+### Requirement: Scoped administrative powers
+
+Membership roles SHALL grant administrative powers only within their scope.
+
+#### Scenario: Superadmin scope
+- **WHEN** the active role is platform admin
+- **THEN** administrative endpoints are allowed across organizations and communities
+
+#### Scenario: Org admin scope
+- **WHEN** the active role is `org_admin`
+- **THEN** administrative endpoints are limited to their organization
+
+#### Scenario: Community admin scope
+- **WHEN** the active role is `community_admin`
+- **THEN** administrative endpoints are limited to their community
+
+#### Scenario: Operational role scope
+- **WHEN** the active role is `operator` or `guard`
+- **THEN** administrative endpoints are denied with 403
+
+### Requirement: Permission matrix tests
+
+The RBAC SHALL be verified by a role/scope matrix.
+
+#### Scenario: Matrix coverage
+- **WHEN** the test suite runs
+- **THEN** every role is tested against organization, community, location, user, staff
+  and report endpoints
+- **THEN** expected 200/403/404 results are asserted
 

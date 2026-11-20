@@ -30,17 +30,23 @@ The API SHALL provide a `GET /api/users` endpoint accessible to `org_admin` and
 - **THEN** the response contains `{ data: [...], total, page, pageSize }`
 
 ### Requirement: Create user
+
 The API SHALL provide a `POST /api/users` endpoint for admins to create a global user
 and an initial membership, subject to the role assignment policy.
 
 #### Scenario: Admin creates user with membership
 - **WHEN** an `org_admin` makes a POST request with `{ email, password, name, role,
-  communityId?, unitId? }`
+  communityId?, locationUnitId? }`
 - **THEN** a global user is created with a hashed password
 - **THEN** a membership is created in the admin's organization with the given role and
   scope
 - **THEN** the response has status 201 with the user and membership (without
   password_hash)
+
+#### Scenario: Occupant requires location unit
+- **WHEN** an admin creates an `owner`, `tenant` or `resident`
+- **THEN** `locationUnitId` is required
+- **THEN** the location must be a leaf in the selected community
 
 #### Scenario: Platform admin creates org_admin
 - **WHEN** a platform admin creates a user with `role = 'org_admin'`
@@ -62,7 +68,7 @@ and an initial membership, subject to the role assignment policy.
 
 #### Scenario: Duplicate email
 - **WHEN** an admin tries to create a user with an email that already exists
-- **THEN** the response has status 409 with message "Email already in use"
+- **THEN** the response has status 409
 
 #### Scenario: Invalid role
 - **WHEN** a request includes an invalid role value
@@ -165,4 +171,24 @@ subject to the role assignment policy.
 - **WHEN** a membership is patched to `status = 'inactive'`
 - **THEN** the user can no longer obtain a token for that context
 - **THEN** the user record remains active
+
+### Requirement: Person and account APIs
+
+The API SHALL expose people and accounts separately.
+
+#### Scenario: Create person
+- **WHEN** an authorized user creates a person
+- **THEN** the person is created or reused by document/email
+
+#### Scenario: Create account
+- **WHEN** an authorized user creates an account for a person
+- **THEN** the account is created with a hashed password and unique email
+
+#### Scenario: Update person
+- **WHEN** an authorized user updates names, document, phone or contact email
+- **THEN** the person is updated and audited
+
+#### Scenario: Deactivate
+- **WHEN** a person/account is deactivated
+- **THEN** login is blocked but history remains
 

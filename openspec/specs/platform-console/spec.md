@@ -62,63 +62,46 @@ Platform administrators SHALL manage organizations, including their name, geogra
 
 ### Requirement: Community management
 
-Platform administrators SHALL manage communities.
-
-#### Scenario: Create community
-- **WHEN** a platform admin creates a community with `organizationId`, `name`,
-  `address`, `timezone`, and optional `slug`
-- **THEN** the community is created and its slug is unique
+Platform administrators SHALL read communities; community writes SHALL be performed by
+organization administrators.
 
 #### Scenario: List communities
 - **WHEN** a platform admin lists communities with optional `organizationId`
 - **THEN** the response is paginated and includes organization name and slug
 
-#### Scenario: Update community
-- **WHEN** a platform admin updates name, address, timezone, status, or slug
-- **THEN** the change is persisted and audited
+#### Scenario: Read community
+- **WHEN** a platform admin opens a community
+- **THEN** the profile and hierarchy are visible
 
-#### Scenario: Deactivate community
-- **WHEN** a community is set to `inactive`
-- **THEN** its public slug resolution returns 404
-- **THEN** existing data is preserved
+#### Scenario: No community write
+- **WHEN** a platform admin tries to create, update or delete a community
+- **THEN** the response has status 403
 
 ### Requirement: Building management
 
-Platform administrators SHALL manage buildings within a community.
-
-#### Scenario: Create building
-- **WHEN** a building is created with `communityId`, `name`, optional `code`, and
-  optional `floors`
-- **THEN** it is persisted and linked to the community
+Platform administrators SHALL read buildings/sections; location writes SHALL be
+performed by organization or community administrators.
 
 #### Scenario: List buildings
 - **WHEN** buildings are listed by community
-- **THEN** the response includes id, name, code, floors, and unit count
+- **THEN** the response includes id, name, code, floors and unit count
 
-#### Scenario: Cross-community update
-- **WHEN** a building is updated with a community that does not own it
-- **THEN** the response has status 404
+#### Scenario: No building write
+- **WHEN** a platform admin tries to create or update a building/section
+- **THEN** the response has status 403
 
 ### Requirement: Unit management
 
-Platform administrators SHALL manage units within a community.
-
-#### Scenario: Create unit
-- **WHEN** a unit is created with `communityId`, optional `buildingId`, `code`,
-  optional `floor`, and `type`
-- **THEN** it is persisted with a unique code per community
+Platform administrators SHALL read units; unit writes SHALL be performed by organization
+or community administrators.
 
 #### Scenario: List units
 - **WHEN** units are listed with optional `communityId` and `buildingId`
-- **THEN** the response is paginated with code, type, floor, building, and status
+- **THEN** the response is paginated with code, type, floor, building and status
 
-#### Scenario: Duplicate unit code
-- **WHEN** a unit code already exists in the community
-- **THEN** the response has status 409
-
-#### Scenario: Invalid building
-- **WHEN** `buildingId` belongs to another community
-- **THEN** the response has status 400
+#### Scenario: No unit write
+- **WHEN** a platform admin tries to create or update a unit
+- **THEN** the response has status 403
 
 ### Requirement: First organization administrator
 
@@ -212,4 +195,43 @@ A platform administrator SHALL be able to change the `org_admin` of an organizat
 
 - **WHEN** the administrator changes
 - **THEN** an `organization.administrator_changed` event is recorded with the previous and new email and whether the transfer is pending
+
+### Requirement: Staff management in platform console
+
+The platform console SHALL let superadmins manage operational staff.
+
+#### Scenario: Create operator
+- **WHEN** a superadmin creates an operator
+- **THEN** they select an organization and one or more communities
+- **THEN** the operator memberships are created
+
+#### Scenario: Create guard
+- **WHEN** a superadmin creates a guard
+- **THEN** they select an organization and one or more communities
+- **THEN** the guard memberships are created
+
+#### Scenario: Edit staff assignments
+- **WHEN** a superadmin edits a staff member
+- **THEN** they can add/remove communities
+- **THEN** the change is audited
+
+#### Scenario: List staff
+- **WHEN** a superadmin lists staff
+- **THEN** the response includes role, organization, communities and status
+
+### Requirement: Global reports in platform console
+
+The platform console SHALL expose global reports.
+
+#### Scenario: Report by organization
+- **WHEN** a superadmin selects an organization
+- **THEN** the report shows its communities and aggregated metrics
+
+#### Scenario: Report by community
+- **WHEN** a superadmin selects a community
+- **THEN** the report shows its users, staff, access and pass metrics
+
+#### Scenario: Export
+- **WHEN** a superadmin exports a report
+- **THEN** the export is scoped to the selected filters
 

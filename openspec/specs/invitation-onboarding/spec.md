@@ -10,7 +10,7 @@ The system SHALL store onboarding invitations with a single-use token hash.
 #### Scenario: Invitation columns
 - **WHEN** the schema is inspected
 - **THEN** `invitations` includes `id`, `token_hash`, `email`, `organization_id`,
-  `community_id?`, `unit_id?`, `role`, `status`, `expires_at`, `accepted_at`,
+  `community_id?`, `location_unit_id?`, `role`, `status`, `expires_at`, `accepted_at`,
   `invited_by`, `created_at`, `updated_at`
 
 #### Scenario: Token never stored in plain text
@@ -28,23 +28,23 @@ Authorized users SHALL create invitations within their membership scope.
 
 #### Scenario: Platform admin invites org admin
 - **WHEN** a platform admin invites an email as `org_admin` for an organization
-- **THEN** the invitation is created without community or unit
+- **THEN** the invitation is created without community or location unit
 
 #### Scenario: Org admin invites community staff
 - **WHEN** an `org_admin` invites an email as `community_admin` in their organization
 - **THEN** the invitation is created with the selected community
 
 #### Scenario: Community admin invites resident
-- **WHEN** a `community_admin` invites an email as `resident` for a unit in their
-  community
-- **THEN** the invitation is created with community and unit
+- **WHEN** an `org_admin` or `community_admin` invites an email as `resident` for a leaf
+  in their community
+- **THEN** the invitation is created with community and `location_unit_id`
 
 #### Scenario: Scope violation
-- **WHEN** a `community_admin` tries to invite a role or unit outside their community
+- **WHEN** a `community_admin` tries to invite a role or location outside their community
 - **THEN** the response has status 403
 
 #### Scenario: Role scope validation
-- **WHEN** an occupant role is invited without a unit
+- **WHEN** an occupant role is invited without a location unit
 - **THEN** the response has status 400
 
 #### Scenario: Existing member
