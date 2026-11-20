@@ -27,7 +27,7 @@ import {
   users,
 } from '@porteria/database/schema';
 import { randomToken } from '../src/lib/pass-tokens.js';
-import { PERMANENT_PASS_UNTIL } from '@porteria/shared';
+import { passTicketState, PERMANENT_PASS_UNTIL } from '@porteria/shared';
 
 const db = createDb();
 
@@ -157,6 +157,27 @@ async function confirm(scanId: string, token = guardToken) {
 
 async function reject(scanId: string, reason = 'Documento ilegible', token = guardToken) {
   return request('POST', `/api/access/scans/${scanId}/reject`, { reason }, token);
+}
+
+/** One complete entry + exit pair, asserting that both scans are authorized. */
+async function completeCycle(token: string, cookie: string) {
+  const entryQr = parse(await publicQr(token, cookie)).token as string;
+  const entryScan = await scan(entryQr);
+  assert.equal(entryScan.statusCode, 200, entryScan.body);
+  const entry = parse(entryScan);
+  assert.equal(entry.authorized, true, entryScan.body);
+  const entryConfirm = await confirm(entry.scanId as string);
+  assert.equal(entryConfirm.statusCode, 200, entryConfirm.body);
+
+  const exitQr = parse(await publicQr(token, cookie)).token as string;
+  const exitScan = await scan(exitQr);
+  assert.equal(exitScan.statusCode, 200, exitScan.body);
+  const exit = parse(exitScan);
+  assert.equal(exit.authorized, true, exitScan.body);
+  const exitConfirm = await confirm(exit.scanId as string);
+  assert.equal(exitConfirm.statusCode, 200, exitConfirm.body);
+
+  return { entry: parse(entryConfirm), exit: parse(exitConfirm) };
 }
 
 describe('dynamic pass integration', () => {
@@ -1573,6 +1594,176 @@ describe('dynamic pass integration', () => {
     const retry = parse(await scan(retryQr));
     assert.equal(retry.authorized, true);
     assert.equal((await confirm(retry.scanId as string)).statusCode, 200);
+  });
+
+  it('exhausts a recurring pass and reports it through the shared ticket state', async () => {
+    const created = await createPass({ type: 'entry_exit', recurrence: 'range', maxUses: 2 });
+    const token = linkToken(created);
+    const { cookie } = await bind(token);
+
+    for (let cycle = 1; cycle <= 2; cycle += 1) {
+      await completeCycle(token, cookie);
+    }
+
+    const detail = await request('GET', `/api/passes/${created.pass.id}`, undefined, residentToken);
+    assert.equal(detail.statusCode, 200, detail.body);
+    const detailBody = parse(detail);
+    assert.equal(detailBody.rule.remainingUses, 0);
+    assert.equal(detailBody.exitCount, 2);
+
+    const blockedQr = parse(await publicQr(token, cookie)).token as string;
+    const blocked = parse(await scan(blockedQr));
+    assert.equal(blocked.authorized, false);
+    assert.equal(blocked.reason, 'daily_uses_exhausted');
+    assert.equal(blocked.scanId, null);
+
+    const ticket = passTicketState(detailBody);
+    assert.equal(ticket.kind, 'exhausted');
+    assert.equal(ticket.tone, 'warning');
+    assert.equal(ticket.label, 'Sin usos hoy');
+  });
+
+  it('maps every pass modality to the shared ticket state from the real payloads', async () => {
+    // The helper reads these fields; if the API stops sending one the mapping
+    // would silently degrade, so the contract is checked before each mapping.
+    const requireTicketFields = (body: Json, context: string) => {
+      for (const field of [
+        'type',
+        'status',
+        'presenceState',
+        'recurrence',
+        'maxUses',
+        'exitCount',
+        'validUntil',
+      ]) {
+        assert.ok(field in body, `${context}: the API payload must carry ${field}`);
+      }
+      assert.ok(body.rule, `${context}: the API payload must carry the readable rule`);
+      assert.equal(
+        typeof body.rule.remainingUses,
+        'number',
+        `${context}: rule.remainingUses must be a number`,
+      );
+    };
+
+    const passDetail = async (passId: string) => {
+      const response = await request('GET', `/api/passes/${passId}`, undefined, residentToken);
+      assert.equal(response.statusCode, 200, response.body);
+      return parse(response);
+    };
+
+    const fresh = await createPass({ type: 'entry_only' });
+    const freshBody = await passDetail(fresh.pass.id);
+    requireTicketFields(freshBody, 'entry_only fresh');
+    const freshTicket = passTicketState(freshBody);
+    assert.equal(freshTicket.kind, 'pending');
+    assert.equal(freshTicket.tone, 'success');
+    assert.equal(freshTicket.label, 'Pendiente de ingreso');
+
+    const singleEntry = await createPass({ type: 'entry_only' });
+    const singleToken = linkToken(singleEntry);
+    const singleBind = await bind(singleToken);
+    const singleQr = parse(await publicQr(singleToken, singleBind.cookie)).token as string;
+    const singleScan = parse(await scan(singleQr));
+    const singleConfirm = await confirm(singleScan.scanId as string);
+    assert.equal(singleConfirm.statusCode, 200, singleConfirm.body);
+
+    const usedBody = await passDetail(singleEntry.pass.id);
+    requireTicketFields(usedBody, 'entry_only used');
+    assert.equal(usedBody.status, 'used');
+    const usedTicket = passTicketState(usedBody);
+    assert.equal(usedTicket.kind, 'used');
+    assert.equal(usedTicket.label, 'Usado');
+
+    const visiting = await createPass({ type: 'entry_exit' });
+    const visitingToken = linkToken(visiting);
+    const visitingBind = await bind(visitingToken);
+    const visitingQr = parse(await publicQr(visitingToken, visitingBind.cookie)).token as string;
+    const visitingScan = parse(await scan(visitingQr));
+    const visitingConfirm = await confirm(visitingScan.scanId as string);
+    assert.equal(visitingConfirm.statusCode, 200, visitingConfirm.body);
+
+    const insideBody = await passDetail(visiting.pass.id);
+    requireTicketFields(insideBody, 'entry_exit inside');
+    const insideTicket = passTicketState(insideBody);
+    assert.equal(insideTicket.kind, 'inside');
+    assert.equal(insideTicket.tone, 'warning');
+    assert.equal(insideTicket.label, 'Ingresó · esperando salida');
+
+    const recurring = await createPass({ type: 'entry_exit', recurrence: 'range', maxUses: 2 });
+    const recurringToken = linkToken(recurring);
+    const recurringBind = await bind(recurringToken);
+    await completeCycle(recurringToken, recurringBind.cookie);
+
+    const reentryBody = await passDetail(recurring.pass.id);
+    requireTicketFields(reentryBody, 'entry_exit after exit');
+    assert.equal(reentryBody.rule.remainingUses, 1);
+    const reentryTicket = passTicketState(reentryBody);
+    assert.equal(reentryTicket.kind, 'reentry');
+    assert.equal(reentryTicket.tone, 'success');
+    assert.equal(reentryTicket.label, 'Puede volver a entrar');
+  });
+
+  it('pins presenceState and exitCount for entry_only and entry_exit', async () => {
+    const entryOnly = await createPass({ type: 'entry_only' });
+    const entryOnlyToken = linkToken(entryOnly);
+    const entryOnlyBind = await bind(entryOnlyToken);
+    const entryOnlyQr = parse(await publicQr(entryOnlyToken, entryOnlyBind.cookie)).token as string;
+    const entryOnlyScan = parse(await scan(entryOnlyQr));
+    assert.equal(entryOnlyScan.presenceState, 'outside', 'the scan reads the pre-entry state');
+    const entryOnlyConfirm = parse(await confirm(entryOnlyScan.scanId as string));
+
+    // The confirmation carries the presence but not the counter: exitCount only
+    // travels in the pass detail and the public status payload today.
+    assert.equal(entryOnlyConfirm.status, 'confirmed');
+    assert.equal(entryOnlyConfirm.action, 'entry');
+    assert.equal(entryOnlyConfirm.presenceState, 'inside');
+    assert.equal(entryOnlyConfirm.passStatus, 'used');
+
+    const entryOnlyDetail = parse(
+      await request('GET', `/api/passes/${entryOnly.pass.id}`, undefined, residentToken),
+    );
+    assert.equal(entryOnlyDetail.presenceState, 'inside');
+    assert.equal(
+      entryOnlyDetail.exitCount,
+      0,
+      'an entry_only entry consumes on entry, not on exit',
+    );
+    assert.equal(entryOnlyDetail.entryCount, 1);
+
+    const entryExit = await createPass({ type: 'entry_exit', recurrence: 'range', maxUses: 2 });
+    const entryExitToken = linkToken(entryExit);
+    const entryExitBind = await bind(entryExitToken);
+
+    const entryQr = parse(await publicQr(entryExitToken, entryExitBind.cookie)).token as string;
+    const entryScan = parse(await scan(entryQr));
+    const entryConfirm = parse(await confirm(entryScan.scanId as string));
+    assert.equal(entryConfirm.action, 'entry');
+    assert.equal(entryConfirm.presenceState, 'inside');
+    assert.equal(entryConfirm.passStatus, 'active');
+
+    const afterEntry = parse(
+      await request('GET', `/api/passes/${entryExit.pass.id}`, undefined, residentToken),
+    );
+    assert.equal(afterEntry.presenceState, 'inside');
+    assert.equal(afterEntry.exitCount, 0);
+    assert.equal(afterEntry.entryCount, 1);
+
+    const exitQr = parse(await publicQr(entryExitToken, entryExitBind.cookie)).token as string;
+    const exitScan = parse(await scan(exitQr));
+    assert.equal(exitScan.action, 'exit');
+    const exitConfirm = parse(await confirm(exitScan.scanId as string));
+    assert.equal(exitConfirm.action, 'exit');
+    assert.equal(exitConfirm.presenceState, 'outside');
+    assert.equal(exitConfirm.passStatus, 'active');
+
+    const afterExit = parse(
+      await request('GET', `/api/passes/${entryExit.pass.id}`, undefined, residentToken),
+    );
+    assert.equal(afterExit.presenceState, 'outside');
+    assert.equal(afterExit.exitCount, 1);
+    assert.equal(afterExit.entryCount, 1);
+    assert.equal(afterExit.rule.remainingUses, 1);
   });
 
   it('rejects a use consumed between the scan and the confirmation', async () => {
