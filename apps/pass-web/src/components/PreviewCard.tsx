@@ -49,6 +49,12 @@ export function PreviewCard({ preview, busy, error, onBind }: PreviewCardProps) 
               <dd>{preview.vehiclePlate}</dd>
             </div>
           )}
+          {preview.companionCount > 0 && (
+            <div>
+              <dt>Acompañantes</dt>
+              <dd>{preview.companionCount}</dd>
+            </div>
+          )}
         </dl>
 
         {error && <p className="error">{error}</p>}
