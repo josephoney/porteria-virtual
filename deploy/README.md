@@ -77,100 +77,16 @@ docker compose --env-file .env.production -f docker-compose.prod.yml \
 
 ## 4. Backups
 
-El volumen de Postgres **no es un respaldo**: sobrevive a un rebuild, pero se va
-con el disco, con un `DELETE` sin `WHERE` o con la cancelación de la VPS. El
-respaldo real es una copia **fuera del servidor**.
-
-### El script
-
-`deploy/backup.sh` hace el ciclo completo:
-
-1. `pg_dump --format=custom` desde el contenedor `db`.
-2. Verifica el archivo (tamaño, firma `PGDMP` y `pg_restore -l`) antes de darlo por bueno.
-3. Sube el dump y su `.sha256` a un bucket S3 compatible con `rclone`.
-4. Borra los respaldos locales y remotos más viejos que `BACKUP_RETENTION_DAYS`.
+- Backup diario de Postgres:
 
 ```bash
-# Producción (detecta deploy/docker-compose.prod.yml y deploy/.env.production)
-bash deploy/backup.sh
-
-# Staging
-COMPOSE_FILE=docker-compose.staging.yml ENV_FILE=.env.staging bash deploy/backup.sh
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T db \
+  pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > "backup-$(date +%F).dump"
 ```
 
-Los archivos quedan en `backups/` (ignorado por git) como
-`porteria-YYYYMMDDTHHMMSSZ.dump`. El script toma un lock: si ya hay uno
-corriendo, sale sin hacer nada.
-
-### Configuración
-
-En `.env.staging` o `deploy/.env.production`:
-
-| Variable                                                  | Para qué                                                 |
-| --------------------------------------------------------- | -------------------------------------------------------- |
-| `BACKUP_S3_ENDPOINT`                                      | Endpoint S3 compatible del proveedor                     |
-| `BACKUP_S3_BUCKET`                                        | Bucket de destino                                        |
-| `BACKUP_S3_REGION`                                        | Región (default `us-east-1`)                             |
-| `BACKUP_S3_PREFIX`                                        | Carpeta dentro del bucket (default `porteria`)           |
-| `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` | Credenciales con permiso de escritura y borrado          |
-| `BACKUP_S3_FORCE_PATH_STYLE`                              | `true` para la mayoría de los proveedores S3 compatibles |
-| `BACKUP_RETENTION_DAYS`                                   | Días de retención local y remota (default 14)            |
-| `SKIP_OFFSITE`                                            | `1` para un respaldo sólo local (pruebas)                |
-
-Sin `BACKUP_S3_*` el script **avisa y deja el dump sólo en el servidor**. Sirve
-para probar, pero no cumple el objetivo: si se pierde la máquina, se pierde el
-respaldo.
-
-### Programarlo
-
-Con systemd (recomendado, sobrevive a reinicios y queda en `journalctl`):
-
-```bash
-cp deploy/systemd/porteria-backup.service deploy/systemd/porteria-backup.timer /etc/systemd/system/
-# ajustar WorkingDirectory y la ruta del repo en el .service
-systemctl daemon-reload
-systemctl enable --now porteria-backup.timer
-systemctl list-timers porteria-backup.timer
-```
-
-Con cron:
-
-```cron
-30 3 * * * cd /root/porteria && mkdir -p backups && /usr/bin/env bash deploy/backup.sh >> backups/cron.log 2>&1
-```
-
-### Verificar
-
-```bash
-tail -n 20 backups/backup.log
-```
-
-La línea `Dump OK` es el archivo validado; `Subida OK` confirma que está en el
-bucket y que el tamaño remoto coincide. Si aparece `AVISO: falta configurar
-BACKUP_S3_*`, el respaldo no salió del servidor.
-
-### Restaurar
-
-```bash
-# Ver qué contiene el archivo, sin tocar nada
-bash deploy/restore.sh backups/porteria-20260101T033000Z.dump --list
-
-# Restaurar (detiene api y web, pide confirmación escrita)
-bash deploy/restore.sh backups/porteria-20260101T033000Z.dump --confirm
-```
-
-El detalle del procedimiento y cómo verificar después está en
-`docs/runbook-produccion.md`, sección 10.
-
-**Probá una restauración al menos una vez por trimestre.** Un backup que nunca
-restauraste no es un backup: es una esperanza. Cronometralo: ese número es el
-RTO real.
-
-### Los archivos subidos
-
-El volumen `uploads` con los assets locales **no lo toca este script**. Se
-respalda aparte y, si algún día pasás a `ASSET_STORAGE=s3`, lo maneja el
-proveedor.
+- Guardá los backups fuera del servidor (S3, Backblaze, etc.).
+- Probá una restauración al menos una vez por trimestre.
+- El volumen `uploads` contiene los assets locales; también debe respaldarse. Si usás S3 (`ASSET_STORAGE=s3`), el backup de assets lo maneja el proveedor.
 
 ## 5. Actualizaciones
 
