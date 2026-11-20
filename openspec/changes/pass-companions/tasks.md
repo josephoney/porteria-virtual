@@ -36,4 +36,4 @@
 
 ## 6. Follow-ups
 
-- [ ] 6.1 Show the companion count on the public pre-bind card (`apps/pass-web/src/components/PreviewCard.tsx`), not only in `QrView`. Does not block the current deploy.
+- [x] 6.1 Show the companion count on the public pre-bind card (`apps/pass-web/src/components/PreviewCard.tsx`), not only in `QrView`. Does not block the current deploy.
