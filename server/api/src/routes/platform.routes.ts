@@ -37,6 +37,7 @@ function getRequester(request: FastifyRequest): invitationService.InvitationRequ
   const u = request.user;
   return {
     sub: u.sub,
+    personId: u.personId ?? null,
     role: 'platform_admin',
     orgId: '',
     communityId: null,

@@ -10,7 +10,7 @@ export interface Invitation {
   status: InvitationStatus;
   expiresAt: Date;
   acceptedAt: Date | null;
-  invitedBy: string | null;
+  invitedByPersonId: string | null;
   createdAt: Date;
 }
 

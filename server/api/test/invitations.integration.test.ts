@@ -46,6 +46,7 @@ let app: FastifyInstance;
 let organizationId: string;
 let communityId: string;
 let orgAdminToken: string;
+let orgAdminPersonId: string;
 let platformAdminToken: string;
 let mailConfig: MailConfig;
 let originalMailConfig: MailConfig;
@@ -192,6 +193,7 @@ describe('invitation email delivery integration', () => {
     originalMailConfig = { ...mailConfig };
 
     const fixture = await createOrgAdminFixture(`invitation-admin-${suffix}@test.local`);
+    orgAdminPersonId = fixture.person.id;
     orgAdminToken = app.jwt.sign({
       sub: fixture.user.id,
       email: fixture.user.email,
@@ -494,6 +496,22 @@ describe('invitation email delivery integration', () => {
     const body = parse(response) as { invitation: { id: string }; emailSent: boolean };
     assert.equal(body.emailSent, false);
     assert.equal(fetchCalls.length, 1);
+  });
+
+  it('records the creator as a person on the invitation', async () => {
+    const email = `invite-creator-${randomUUID().slice(0, 8)}@test.local`;
+
+    const response = await request('POST', '/api/invitations', orgAdminToken, {
+      email,
+      role: 'community_admin',
+      communityId,
+    });
+
+    assert.equal(response.statusCode, 201, response.body);
+    const body = parse(response) as {
+      invitation: { invitedByPersonId: string | null };
+    };
+    assert.equal(body.invitation.invitedByPersonId, orgAdminPersonId);
   });
 
   it('resends a fresh link and emails it', async () => {

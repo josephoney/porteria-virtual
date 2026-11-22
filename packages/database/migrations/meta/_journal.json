@@ -197,6 +197,13 @@
       "when": 1795356744780,
       "tag": "0027_calls_person_only",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1795361439202,
+      "tag": "0028_invitations_person_only",
+      "breakpoints": true
     }
   ]
 }

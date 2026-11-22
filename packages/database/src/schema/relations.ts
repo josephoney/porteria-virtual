@@ -37,6 +37,7 @@ export const peopleRelations = relations(people, ({ one, many }) => ({
   }),
   memberships: many(memberships),
   calls: many(calls, { relationName: 'operatorCalls' }),
+  sentInvitations: many(invitations, { relationName: 'sentInvitations' }),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -212,7 +213,6 @@ export const usersRelations = relations(users, ({ many }) => ({
   createdVisitors: many(visitors, { relationName: 'createdVisitors' }),
   guardRounds: many(guardRounds),
   createdAccessCodes: many(accessCodes, { relationName: 'createdCodes' }),
-  sentInvitations: many(invitations, { relationName: 'sentInvitations' }),
 }));
 
 export const visitorsRelations = relations(visitors, ({ one, many }) => ({
@@ -336,9 +336,9 @@ export const invitationsRelations = relations(invitations, ({ one }) => ({
     fields: [invitations.locationUnitId],
     references: [locationUnits.id],
   }),
-  invitedBy: one(users, {
-    fields: [invitations.invitedBy],
-    references: [users.id],
+  invitedByPerson: one(people, {
+    fields: [invitations.invitedByPersonId],
+    references: [people.id],
     relationName: 'sentInvitations',
   }),
 }));

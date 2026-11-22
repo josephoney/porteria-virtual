@@ -32,6 +32,7 @@ function otherOrgAdminsCondition(organizationId: string, keepMembershipId: strin
 
 export interface InvitationRequester {
   sub: string;
+  personId: string | null;
   role: string;
   orgId: string;
   communityId: string | null;
@@ -266,7 +267,7 @@ export async function createInvitation(
       role: data.role,
       status: 'pending',
       expiresAt: expiryDate(data.expiresInDays),
-      invitedBy: requester.sub,
+      invitedByPersonId: requester.personId,
     })
     .returning();
 

@@ -1,17 +1,10 @@
-import {
-  pgTable,
-  uuid,
-  varchar,
-  timestamp,
-  pgEnum,
-  index,
-} from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, pgEnum, index } from 'drizzle-orm/pg-core';
 import type { MembershipRole } from '@porteria/shared';
 import { organizations } from './organizations';
 import { communities } from './communities';
 import { units } from './units';
 import { locationUnits } from './location-units';
-import { users } from './users';
+import { people } from './people';
 
 export const invitationStatusEnum = pgEnum('invitation_status', [
   'pending',
@@ -40,15 +33,14 @@ export const invitations = pgTable(
     status: invitationStatusEnum('status').notNull().default('pending'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
-    invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+    invitedByPersonId: uuid('invited_by_person_id').references(() => people.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     emailIdx: index('invitations_email_status_idx').on(table.email, table.status),
-    communityIdx: index('invitations_community_status_idx').on(
-      table.communityId,
-      table.status,
-    ),
+    communityIdx: index('invitations_community_status_idx').on(table.communityId, table.status),
   }),
 );

@@ -9,6 +9,7 @@ function getRequester(request: FastifyRequest): invitationService.InvitationRequ
   const u = request.user;
   return {
     sub: u.sub,
+    personId: u.personId ?? null,
     role: u.role,
     orgId: u.orgId,
     communityId: u.communityId ?? null,
@@ -33,7 +34,13 @@ function errorStatus(code: string): number {
 
 function audit(
   eventType: string,
-  invitation: { id: string; organizationId: string; communityId: string | null; role: string; email: string },
+  invitation: {
+    id: string;
+    organizationId: string;
+    communityId: string | null;
+    role: string;
+    email: string;
+  },
   requester: invitationService.InvitationRequester,
 ) {
   eventsService
@@ -60,7 +67,10 @@ export async function invitationRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   });
@@ -71,7 +81,10 @@ export async function invitationRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const requester = getRequester(request);
       const body = createInvitationSchema.parse(request.body);
-      const result = await invitationService.createInvitation({ ...body, role: body.role as MembershipRole }, requester);
+      const result = await invitationService.createInvitation(
+        { ...body, role: body.role as MembershipRole },
+        requester,
+      );
 
       if (!result.ok) {
         return reply.status(errorStatus(result.code)).send({
