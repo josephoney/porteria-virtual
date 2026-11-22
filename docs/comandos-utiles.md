@@ -412,6 +412,23 @@ pnpm exec prettier --check .
 npx openspec validate --all --strict
 ```
 
+### Antes de commitear: revisar qué ve git
+
+```bash
+git status --short
+```
+
+Un `??` significa **archivo sin trackear y sin ignorar**: git está dispuesto a llevárselo en el
+próximo `git add -A`. En el servidor eso importa el doble, porque ahí viven `.env.staging`,
+`.env.production` y los respaldos con datos reales.
+
+- Los archivos de entorno de despliegue (`.env.staging`, `.env.production`) van en `.gitignore`.
+  El patrón `.env` solo no los cubre.
+- Si aparece un `??` que no se esperaba, no commitear: primero decidir si va al repositorio o al
+  `.gitignore`.
+- Para confirmar que un secreto nunca entró al historial:
+  `git log --oneline --all -- .env.staging` (sin salida = nunca estuvo).
+
 ---
 
 ## 11. Problemas frecuentes
