@@ -7,6 +7,7 @@ import { validateLocationUnit } from '../services/location-unit.service.js';
 import { can } from '../services/admin-permissions.service.js';
 import type { MembershipRole } from '@porteria/shared';
 import { createUserSchema, updateUserSchema, changePasswordSchema } from '../schemas/index.js';
+import { PasswordPolicyError } from '../services/credentials.service.js';
 
 function getUser(request: FastifyRequest): usersService.Requester {
   const u = request.user;
@@ -54,7 +55,19 @@ export async function userRoutes(app: FastifyInstance) {
   app.patch('/me/password', async (request: FastifyRequest, reply: FastifyReply) => {
     const u = getUser(request);
     const body = changePasswordSchema.parse(request.body);
-    const ok = await usersService.changePassword(u.sub, body.currentPassword, body.newPassword);
+    let ok: boolean;
+    try {
+      ok = await usersService.changePassword(u.sub, body.currentPassword, body.newPassword);
+    } catch (err) {
+      if (err instanceof PasswordPolicyError) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: err.message,
+        });
+      }
+      throw err;
+    }
     if (!ok) {
       return reply.status(401).send({
         statusCode: 401,

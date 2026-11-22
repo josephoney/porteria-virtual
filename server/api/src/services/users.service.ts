@@ -9,7 +9,7 @@ import {
   locationUnits,
   organizations,
 } from '@porteria/database/schema';
-import { hashPassword, verifyPassword } from './credentials.service.js';
+import { hashPassword, setPassword, verifyPassword } from './credentials.service.js';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
 
@@ -459,20 +459,26 @@ export async function changePassword(
   currentPassword: string,
   newPassword: string,
 ): Promise<boolean> {
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const [user] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
   if (!user) return false;
 
-  const valid = await verifyPassword(currentPassword, user.passwordHash);
+  const [account] = await db
+    .select({ id: accounts.id, passwordHash: accounts.passwordHash })
+    .from(accounts)
+    .where(eq(accounts.email, user.email))
+    .limit(1);
+  if (!account) return false;
+
+  const valid = await verifyPassword(currentPassword, account.passwordHash);
   if (!valid) return false;
 
-  const passwordHash = await hashPassword(newPassword);
-  await db.transaction(async (tx) => {
-    await tx.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
-    await tx
-      .update(accounts)
-      .set({ passwordHash, updatedAt: new Date() })
-      .where(eq(accounts.email, user.email));
-  });
+  // La contraseña vive sólo en `accounts` y el cambio revoca las sesiones
+  // abiertas de la cuenta en la misma transacción.
+  await setPassword(account.id, newPassword);
 
   return true;
 }

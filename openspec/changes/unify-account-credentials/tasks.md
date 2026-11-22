@@ -34,12 +34,25 @@
 
 - [ ] 3.1 Cambiar login, refresh, context y logout para operar sólo con
       `account_id` y `person_id`.
-- [ ] 3.2 Unificar la verificación de contraseña en las dos ramas actuales de
+      Pendiente parcial: las credenciales, la sesión y la identidad ya salen de
+      `accounts` (login verifica `accounts.passwordHash`, refresh resuelve por
+      `account_id`, logout opera por hash del token). Lo que aún lee `users` es
+      el resumen de sesión (`id`, `name`, `active`) y la resolución de
+      membresías, porque `memberships.user_id` es `NOT NULL` y
+      `memberships.person_id` es nullable. Quitar esa dependencia exige migrar
+      la tabla de membresías a `person_id`, que corresponde a 5.1.
+- [x] 3.2 Unificar la verificación de contraseña en las dos ramas actuales de
       `auth.service.ts`.
-- [ ] 3.3 Ajustar `changePassword` para usar `setPassword` y dejar de escribir
+      Ya no hay dos ramas: `authenticate()` lee sólo `accounts`.
+- [x] 3.3 Ajustar `changePassword` para usar `setPassword` y dejar de escribir
       en `users`.
-- [ ] 3.4 Tests de integración: login, refresh, logout, cambio de contraseña y
+      `changePassword` resuelve la cuenta por email, verifica contra
+      `accounts.passwordHash` y llama a `setPassword`, que además revoca las
+      sesiones abiertas. La ruta mapea `PasswordPolicyError` a 400.
+- [x] 3.4 Tests de integración: login, refresh, logout, cambio de contraseña y
       sesión invalidada tras el cambio.
+      `server/api/test/auth.integration.test.ts`, 7 casos, agregado al script
+      `test:integration`.
 
 ## 4. Compatibilidad de `users`
 
