@@ -19,7 +19,6 @@ import {
   memberships,
   organizations,
   people,
-  users,
 } from '@porteria/database/schema';
 
 const db = createDb();
@@ -30,32 +29,25 @@ let communityId: string;
 let accessPointAId: string;
 let accessPointBId: string;
 let guardPersonId: string;
-let guardUserId: string;
 let guardAccountId: string;
 let guardMembershipId: string;
 let guardToken: string;
 let secondGuardPersonId: string;
-let secondGuardUserId: string;
 let secondGuardAccountId: string;
 let secondGuardToken: string;
 let idleGuardPersonId: string;
-let idleGuardUserId: string;
 let idleGuardAccountId: string;
 let idleGuardToken: string;
 let communityAdminPersonId: string;
-let communityAdminUserId: string;
 let communityAdminAccountId: string;
 let communityAdminToken: string;
 let orgAdminPersonId: string;
-let orgAdminUserId: string;
 let orgAdminAccountId: string;
 let orgAdminToken: string;
 let operatorPersonId: string;
-let operatorUserId: string;
 let operatorAccountId: string;
 let operatorToken: string;
 let residentPersonId: string;
-let residentUserId: string;
 let residentAccountId: string;
 let residentToken: string;
 
@@ -173,72 +165,6 @@ describe('guard shifts and access bitacora integration', () => {
       .returning();
     residentPersonId = residentPerson.id;
 
-    const [guardUser] = await db
-      .insert(users)
-      .values({ email: `shift-guard-${suffix}@test.local`, passwordHash: 'x', name: 'Guard' })
-      .returning();
-    guardUserId = guardUser.id;
-
-    const [secondGuardUser] = await db
-      .insert(users)
-      .values({
-        email: `shift-second-guard-${suffix}@test.local`,
-        passwordHash: 'x',
-        name: 'Second Guard',
-      })
-      .returning();
-    secondGuardUserId = secondGuardUser.id;
-
-    const [idleGuardUser] = await db
-      .insert(users)
-      .values({
-        email: `shift-idle-guard-${suffix}@test.local`,
-        passwordHash: 'x',
-        name: 'Idle Guard',
-      })
-      .returning();
-    idleGuardUserId = idleGuardUser.id;
-
-    const [communityAdminUser] = await db
-      .insert(users)
-      .values({
-        email: `shift-community-admin-${suffix}@test.local`,
-        passwordHash: 'x',
-        name: 'Community Admin',
-      })
-      .returning();
-    communityAdminUserId = communityAdminUser.id;
-
-    const [orgAdminUser] = await db
-      .insert(users)
-      .values({
-        email: `shift-org-admin-${suffix}@test.local`,
-        passwordHash: 'x',
-        name: 'Org Admin',
-      })
-      .returning();
-    orgAdminUserId = orgAdminUser.id;
-
-    const [operatorUser] = await db
-      .insert(users)
-      .values({
-        email: `shift-operator-${suffix}@test.local`,
-        passwordHash: 'x',
-        name: 'Operator',
-      })
-      .returning();
-    operatorUserId = operatorUser.id;
-
-    const [residentUser] = await db
-      .insert(users)
-      .values({
-        email: `shift-resident-${suffix}@test.local`,
-        passwordHash: 'x',
-        name: 'Resident',
-      })
-      .returning();
-    residentUserId = residentUser.id;
-
     const [guardAccount] = await db
       .insert(accounts)
       .values({
@@ -312,7 +238,6 @@ describe('guard shifts and access bitacora integration', () => {
     const [guardMembership] = await db
       .insert(memberships)
       .values({
-        userId: guardUserId,
         personId: guardPersonId,
         organizationId,
         communityId,
@@ -327,7 +252,6 @@ describe('guard shifts and access bitacora integration', () => {
     const [secondGuardMembership] = await db
       .insert(memberships)
       .values({
-        userId: secondGuardUserId,
         personId: secondGuardPersonId,
         organizationId,
         communityId,
@@ -341,7 +265,6 @@ describe('guard shifts and access bitacora integration', () => {
     const [idleGuardMembership] = await db
       .insert(memberships)
       .values({
-        userId: idleGuardUserId,
         personId: idleGuardPersonId,
         organizationId,
         communityId,
@@ -354,7 +277,6 @@ describe('guard shifts and access bitacora integration', () => {
     const [communityAdminMembership] = await db
       .insert(memberships)
       .values({
-        userId: communityAdminUserId,
         personId: communityAdminPersonId,
         organizationId,
         communityId,
@@ -367,7 +289,6 @@ describe('guard shifts and access bitacora integration', () => {
     const [orgAdminMembership] = await db
       .insert(memberships)
       .values({
-        userId: orgAdminUserId,
         personId: orgAdminPersonId,
         organizationId,
         communityId: null,
@@ -380,7 +301,6 @@ describe('guard shifts and access bitacora integration', () => {
     const [operatorMembership] = await db
       .insert(memberships)
       .values({
-        userId: operatorUserId,
         personId: operatorPersonId,
         organizationId,
         communityId,
@@ -393,7 +313,6 @@ describe('guard shifts and access bitacora integration', () => {
     const [residentMembership] = await db
       .insert(memberships)
       .values({
-        userId: residentUserId,
         personId: residentPersonId,
         organizationId,
         communityId,
@@ -483,19 +402,6 @@ describe('guard shifts and access bitacora integration', () => {
     await db.delete(guardShifts).where(eq(guardShifts.communityId, communityId));
     await db.delete(accessPoints).where(eq(accessPoints.communityId, communityId));
     await db.delete(memberships).where(eq(memberships.organizationId, organizationId));
-    await db
-      .delete(users)
-      .where(
-        inArray(users.id, [
-          guardUserId,
-          secondGuardUserId,
-          idleGuardUserId,
-          communityAdminUserId,
-          orgAdminUserId,
-          operatorUserId,
-          residentUserId,
-        ]),
-      );
     await db
       .delete(people)
       .where(

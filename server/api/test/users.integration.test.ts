@@ -15,7 +15,6 @@ import {
   memberships,
   organizations,
   people,
-  users,
 } from '@porteria/database/schema';
 
 const db = createDb();
@@ -36,7 +35,6 @@ let communityAdminMembershipId: string;
 let communityAdminToken: string;
 let multiAccountId: string;
 let anaAccountId: string;
-const userIds: string[] = [];
 const personIds: string[] = [];
 
 type Json = Record<string, any>;
@@ -70,17 +68,6 @@ async function createUserFixture(input: {
   role: string;
   communityId: string | null;
 }) {
-  const [user] = await db
-    .insert(users)
-    .values({
-      email: input.email,
-      passwordHash: 'x',
-      name: input.userName,
-      active: input.active ?? true,
-    })
-    .returning();
-  userIds.push(user.id);
-
   const [person] = await db
     .insert(people)
     .values({
@@ -106,7 +93,6 @@ async function createUserFixture(input: {
   const [membership] = await db
     .insert(memberships)
     .values({
-      userId: user.id,
       personId: person.id,
       organizationId,
       communityId: input.communityId,
@@ -115,7 +101,7 @@ async function createUserFixture(input: {
     })
     .returning();
 
-  return { user, person, account, membership };
+  return { person, account, membership };
 }
 
 describe('users list filters integration', () => {
@@ -233,7 +219,6 @@ describe('users list filters integration', () => {
     });
     multiAccountId = multi.account.id;
     await db.insert(memberships).values({
-      userId: multi.user.id,
       personId: multi.person.id,
       organizationId,
       communityId: communityBId,
@@ -274,9 +259,6 @@ describe('users list filters integration', () => {
 
   after(async () => {
     await db.delete(memberships).where(eq(memberships.organizationId, organizationId));
-    if (userIds.length) {
-      await db.delete(users).where(inArray(users.id, userIds));
-    }
     if (personIds.length) {
       await db.delete(people).where(inArray(people.id, personIds));
     }

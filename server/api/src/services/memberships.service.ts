@@ -1,11 +1,10 @@
 import { and, eq } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { memberships, accessPoints, users, accounts } from '@porteria/database/schema';
+import { memberships, accessPoints, accounts } from '@porteria/database/schema';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
 import { canAssignRole } from './role-policy.service.js';
 import { validateLocationUnit } from './location-unit.service.js';
-import { personIdForEmail } from './auth.service.js';
 
 const db = createDb();
 
@@ -107,32 +106,15 @@ export async function createMembership(
   }
 
   // El id recibido es el de la cuenta (lo que expone el recurso de usuarios).
-  // Se resuelve la persona a partir de ella y se conserva la fila legacy de
-  // `users` sólo para la escritura dual de `memberships.user_id`.
+  // La membresía cuelga de la persona; `memberships.user_id` ya no se escribe.
   const [account] = await db
-    .select({ id: accounts.id, personId: accounts.personId, email: accounts.email })
+    .select({ id: accounts.id, personId: accounts.personId })
     .from(accounts)
     .where(eq(accounts.id, data.userId))
     .limit(1);
 
-  let personId: string | null;
-  let legacyUserId: string | null;
-  if (account) {
-    personId = account.personId;
-    const [legacyUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, account.email))
-      .limit(1);
-    legacyUserId = legacyUser?.id ?? null;
-  } else {
-    // Compatibilidad con llamadas que todavía enviaban `users.id`.
-    const [user] = await db.select().from(users).where(eq(users.id, data.userId)).limit(1);
-    if (!user) return { error: 'User not found' };
-    personId = await personIdForEmail(user.email);
-    legacyUserId = user.id;
-  }
-  if (!personId) return { error: 'Person not found' };
+  if (!account) return { error: 'User not found' };
+  const personId = account.personId;
 
   const communityId =
     requester.role === 'community_admin' ? requester.communityId : (data.communityId ?? null);
@@ -176,7 +158,6 @@ export async function createMembership(
     const [membership] = await tx
       .insert(memberships)
       .values({
-        userId: legacyUserId,
         personId,
         organizationId: requester.orgId,
         communityId,

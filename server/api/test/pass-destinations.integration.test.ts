@@ -20,7 +20,6 @@ import {
   memberships,
   organizations,
   people,
-  users,
 } from '@porteria/database/schema';
 
 const db = createDb();
@@ -40,10 +39,8 @@ let residentToken: string;
 let otherResidentToken: string;
 let orgAdminToken: string;
 let structureId: string;
-let residentUserId: string;
 let residentAccountId: string;
 let residentPersonId: string;
-let otherResidentUserId: string;
 let otherResidentAccountId: string;
 let otherResidentPersonId: string;
 
@@ -275,16 +272,6 @@ describe('pass destinations integration', () => {
     residentPersonId = residentPerson.id;
     otherResidentPersonId = otherResidentPerson.id;
 
-    const [residentUser, otherResidentUser] = await db
-      .insert(users)
-      .values([
-        { email: `dest-resident-${suffix}@test.local`, passwordHash: 'x', name: 'Resident' },
-        { email: `dest-other-${suffix}@test.local`, passwordHash: 'x', name: 'Neighbour' },
-      ])
-      .returning();
-    residentUserId = residentUser.id;
-    otherResidentUserId = otherResidentUser.id;
-
     const [residentAccount, otherResidentAccount] = await db
       .insert(accounts)
       .values([
@@ -307,7 +294,6 @@ describe('pass destinations integration', () => {
       .insert(memberships)
       .values([
         {
-          userId: residentUserId,
           personId: residentPersonId,
           organizationId,
           communityId,
@@ -316,7 +302,6 @@ describe('pass destinations integration', () => {
           status: 'active',
         },
         {
-          userId: otherResidentUserId,
           personId: otherResidentPersonId,
           organizationId,
           communityId,
@@ -386,7 +371,6 @@ describe('pass destinations integration', () => {
     await db
       .delete(accounts)
       .where(inArray(accounts.id, [residentAccountId, otherResidentAccountId]));
-    await db.delete(users).where(inArray(users.id, [residentUserId, otherResidentUserId]));
     await db.delete(people).where(inArray(people.id, [residentPersonId, otherResidentPersonId]));
     await db.delete(organizations).where(inArray(organizations.id, [organizationId]));
   });

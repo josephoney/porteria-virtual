@@ -8,7 +8,6 @@ import { organizations } from './schema/organizations.js';
 import { communities } from './schema/communities.js';
 import { buildings } from './schema/buildings.js';
 import { units } from './schema/units.js';
-import { users } from './schema/users.js';
 import { people } from './schema/people.js';
 import { accounts } from './schema/accounts.js';
 import { memberships } from './schema/memberships.js';
@@ -102,55 +101,56 @@ async function getOrCreateUnit(
   return created;
 }
 
-async function ensurePersonAccount(user: typeof users.$inferSelect, passwordHash: string) {
-  let [person] = await db.select().from(people).where(eq(people.contactEmail, user.email)).limit(1);
-
-  if (!person) {
-    const [firstName, ...lastNameParts] = user.name.split(/\s+/);
-    [person] = await db
-      .insert(people)
-      .values({
-        firstName: firstName || user.email,
-        lastName: lastNameParts.join(' '),
-        contactEmail: user.email,
-        status: 'active',
-      })
-      .returning();
-  }
-
-  const [account] = await db.select().from(accounts).where(eq(accounts.email, user.email)).limit(1);
-  if (!account) {
-    await db.insert(accounts).values({
-      personId: person.id,
-      email: user.email,
-      passwordHash,
-      active: user.active,
-      isPlatformAdmin: user.isPlatformAdmin,
-    });
-  }
-
-  return person;
-}
-
 async function getOrCreateUser(
   data: { email: string; name: string; isPlatformAdmin?: boolean },
   passwordHash: string,
 ) {
-  const [existing] = await db.select().from(users).where(eq(users.email, data.email)).limit(1);
-  if (existing) {
-    await ensurePersonAccount(existing, passwordHash);
-    return existing;
+  const [existingAccount] = await db
+    .select({ personId: accounts.personId })
+    .from(accounts)
+    .where(eq(accounts.email, data.email))
+    .limit(1);
+
+  if (existingAccount) {
+    return { id: existingAccount.personId, email: data.email, name: data.name };
   }
-  const [created] = await db
-    .insert(users)
-    .values({ ...data, passwordHash, isPlatformAdmin: data.isPlatformAdmin ?? false })
-    .returning();
-  await ensurePersonAccount(created, passwordHash);
-  return created;
+
+  const [existingPerson] = await db
+    .select({ id: people.id })
+    .from(people)
+    .where(eq(people.contactEmail, data.email))
+    .limit(1);
+
+  let personId: string;
+  if (existingPerson) {
+    personId = existingPerson.id;
+  } else {
+    const [firstName, ...lastNameParts] = data.name.split(/\s+/);
+    const [created] = await db
+      .insert(people)
+      .values({
+        firstName: firstName || data.email,
+        lastName: lastNameParts.join(' '),
+        contactEmail: data.email,
+        status: 'active',
+      })
+      .returning({ id: people.id });
+    personId = created.id;
+  }
+
+  await db.insert(accounts).values({
+    personId,
+    email: data.email,
+    passwordHash,
+    active: true,
+    isPlatformAdmin: data.isPlatformAdmin ?? false,
+  });
+
+  return { id: personId, email: data.email, name: data.name };
 }
 
 async function addMembership(data: {
-  userId: string;
+  personId: string;
   organizationId: string;
   communityId?: string | null;
   unitId?: string | null;
@@ -164,30 +164,10 @@ async function addMembership(data: {
     | 'resident'
     | 'staff';
 }) {
-  const [user] = await db
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.id, data.userId))
-    .limit(1);
-  const [account] = user
-    ? await db
-        .select({ personId: accounts.personId })
-        .from(accounts)
-        .where(eq(accounts.email, user.email))
-        .limit(1)
-    : [];
-
-  if (!account?.personId) {
-    throw new Error(
-      `La membresía necesita una persona: ${user?.email ?? data.userId} no tiene cuenta con person_id`,
-    );
-  }
-
   await db
     .insert(memberships)
     .values({
-      userId: data.userId,
-      personId: account.personId,
+      personId: data.personId,
       organizationId: data.organizationId,
       communityId: data.communityId ?? null,
       unitId: data.unitId ?? null,
@@ -494,60 +474,60 @@ async function seed() {
     await db.delete(memberships).where(inArray(memberships.personId, demoPersonIds));
   }
 
-  await addMembership({ userId: orgAdmin.id, organizationId: adminOrg.id, role: 'org_admin' });
+  await addMembership({ personId: orgAdmin.id, organizationId: adminOrg.id, role: 'org_admin' });
   await addMembership({
-    userId: orgAdmin2.id,
+    personId: orgAdmin2.id,
     organizationId: independentOrg.id,
     role: 'org_admin',
   });
   await addMembership({
-    userId: communityAdmin.id,
+    personId: communityAdmin.id,
     organizationId: adminOrg.id,
     communityId: torreNorte.id,
     role: 'community_admin',
   });
   await addMembership({
-    userId: operator.id,
+    personId: operator.id,
     organizationId: adminOrg.id,
     communityId: torreNorte.id,
     role: 'operator',
   });
   await addMembership({
-    userId: guard.id,
+    personId: guard.id,
     organizationId: adminOrg.id,
     communityId: torreNorte.id,
     role: 'guard',
   });
   await addMembership({
-    userId: resident.id,
+    personId: resident.id,
     organizationId: adminOrg.id,
     communityId: torreNorte.id,
     unitId: unitA101.id,
     role: 'owner',
   });
   await addMembership({
-    userId: resident2.id,
+    personId: resident2.id,
     organizationId: adminOrg.id,
     communityId: torreNorte.id,
     unitId: unitA101.id,
     role: 'resident',
   });
   await addMembership({
-    userId: resident3.id,
+    personId: resident3.id,
     organizationId: independentOrg.id,
     communityId: losAlamos.id,
     unitId: unitA201.id,
     role: 'tenant',
   });
   await addMembership({
-    userId: multi.id,
+    personId: multi.id,
     organizationId: adminOrg.id,
     communityId: torreNorte.id,
     unitId: unitA102.id,
     role: 'owner',
   });
   await addMembership({
-    userId: multi.id,
+    personId: multi.id,
     organizationId: independentOrg.id,
     communityId: losAlamos.id,
     unitId: unitA201.id,
@@ -661,7 +641,7 @@ async function seed() {
       document: '12345678',
       type: 'permanent',
       organizationId: adminOrg.id,
-      createdBy: resident.id,
+      createdByPersonId: resident.id,
     });
   }
 

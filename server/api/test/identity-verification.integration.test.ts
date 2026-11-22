@@ -24,7 +24,6 @@ import {
   guardShifts,
   organizations,
   people,
-  users,
 } from '@porteria/database/schema';
 
 const db = createDb();
@@ -152,15 +151,6 @@ describe('identity verification by document', () => {
       .insert(people)
       .values({ firstName: 'Resi', lastName: 'Dente' })
       .returning();
-    const [residentUser] = await db
-      .insert(users)
-      .values({
-        personId: residentPerson.id,
-        name: 'Resi Dente',
-        email: `residente-identidad-${suffix}@test.local`,
-        passwordHash: 'x',
-      })
-      .returning();
     const [residentAccount] = await db
       .insert(accounts)
       .values({
@@ -173,7 +163,6 @@ describe('identity verification by document', () => {
     const [residentMembership] = await db
       .insert(memberships)
       .values({
-        userId: residentUser.id,
         personId: residentPerson.id,
         name: 'Resi Dente',
         organizationId,
@@ -188,15 +177,6 @@ describe('identity verification by document', () => {
       .insert(people)
       .values({ firstName: 'Guar', lastName: 'Dia' })
       .returning();
-    const [guardUser] = await db
-      .insert(users)
-      .values({
-        personId: guardPerson.id,
-        name: 'Guar Dia',
-        email: `guardia-identidad-${suffix}@test.local`,
-        passwordHash: 'x',
-      })
-      .returning();
     const [guardAccount] = await db
       .insert(accounts)
       .values({
@@ -209,7 +189,6 @@ describe('identity verification by document', () => {
     const [guardMembership] = await db
       .insert(memberships)
       .values({
-        userId: guardUser.id,
         personId: guardPerson.id,
         organizationId,
         communityId,

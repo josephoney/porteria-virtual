@@ -4,7 +4,6 @@ import { hashPassword } from './credentials.service.js';
 import { createDb } from '@porteria/database';
 import {
   invitations,
-  users,
   accounts,
   people,
   memberships,
@@ -445,26 +444,24 @@ export async function acceptInvitation(
   }
 
   const email = invitation.email;
-  const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const [existingAccount] = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(eq(accounts.email, email))
+    .limit(1);
 
-  if (existingUser) {
+  if (existingAccount) {
     if (!authenticatedAccountId) return { ok: false, code: 'login_required' };
-    const [existingAccount] = await db
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(eq(accounts.email, existingUser.email))
-      .limit(1);
-    if (!existingAccount || existingAccount.id !== authenticatedAccountId) {
+    if (existingAccount.id !== authenticatedAccountId) {
       return { ok: false, code: 'email_mismatch' };
     }
 
-    const personId = await authService.personIdForEmail(existingUser.email);
+    const personId = await authService.personIdForEmail(email);
     if (!personId) return { ok: false, code: 'not_found' };
 
     await db
       .insert(memberships)
       .values({
-        userId: existingUser.id,
         personId,
         organizationId: invitation.organizationId,
         communityId: invitation.communityId,
@@ -511,17 +508,6 @@ export async function acceptInvitation(
 
   try {
     const tokens = await db.transaction(async (tx) => {
-      const [user] = await tx
-        .insert(users)
-        .values({
-          email,
-          name: body.name!,
-          passwordHash,
-          active: true,
-          isPlatformAdmin: false,
-        })
-        .returning();
-
       const [firstName, ...lastNameParts] = body.name!.trim().split(/\s+/);
       const [person] = await tx
         .insert(people)
@@ -547,7 +533,6 @@ export async function acceptInvitation(
       const [membership] = await tx
         .insert(memberships)
         .values({
-          userId: user.id,
           personId: person.id,
           organizationId: invitation.organizationId,
           communityId: invitation.communityId,

@@ -1,7 +1,6 @@
 import { eq, and, countDistinct, inArray, or, ilike, sql, type SQL } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import {
-  users,
   accounts,
   people,
   memberships,
@@ -379,18 +378,6 @@ export async function createUser(
     data.email;
 
   const result = await db.transaction(async (tx) => {
-    // Escritura dual: `users` sigue recibiendo la fila legacy hasta el próximo
-    // cambio; la identidad que expone la API es la cuenta.
-    const [user] = await tx
-      .insert(users)
-      .values({
-        email: data.email,
-        passwordHash,
-        name: displayName,
-        active: true,
-      })
-      .returning();
-
     const [derivedFirstName, ...derivedLastNameParts] = displayName.split(/\s+/);
     const [person] = await tx
       .insert(people)
@@ -420,7 +407,6 @@ export async function createUser(
       const [membership] = await tx
         .insert(memberships)
         .values({
-          userId: user.id,
           personId: person.id,
           organizationId: requester.orgId,
           communityId,
@@ -440,7 +426,7 @@ export async function createUser(
           actorId: requester.sub,
           actorRole: requester.role,
           payload: {
-            createdUserId: user.id,
+            createdUserId: account.id,
             createdUserRole: data.role,
             membershipId: membership.id,
           },
@@ -463,14 +449,8 @@ export async function updateUser(
   if (!existing) return null;
 
   const now = new Date();
-  const updates: Record<string, unknown> = { updatedAt: now };
-  if (data.name !== undefined) updates.name = data.name;
-  if (data.active !== undefined) updates.active = data.active;
 
   await db.transaction(async (tx) => {
-    // Escritura dual: se conserva la fila legacy hasta que `users` se retire.
-    await tx.update(users).set(updates).where(eq(users.email, existing.email));
-
     const accountUpdates: Record<string, unknown> = { updatedAt: now };
     if (data.active !== undefined) accountUpdates.active = data.active;
     await tx.update(accounts).set(accountUpdates).where(eq(accounts.id, id));

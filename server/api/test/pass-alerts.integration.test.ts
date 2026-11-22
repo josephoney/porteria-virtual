@@ -21,7 +21,6 @@ import {
   organizations,
   passAlerts,
   people,
-  users,
 } from '@porteria/database/schema';
 let sweep: () => Promise<unknown>;
 
@@ -112,15 +111,6 @@ describe('missing exit alerts', () => {
       .insert(people)
       .values({ firstName: 'Resi', lastName: 'Alerta' })
       .returning();
-    const [user] = await db
-      .insert(users)
-      .values({
-        personId: person.id,
-        name: 'Resi Alerta',
-        email: `residente-alertas-${suffix}@test.local`,
-        passwordHash: 'x',
-      })
-      .returning();
     const [account] = await db
       .insert(accounts)
       .values({
@@ -132,7 +122,6 @@ describe('missing exit alerts', () => {
     const [membership] = await db
       .insert(memberships)
       .values({
-        userId: user.id,
         personId: person.id,
         organizationId,
         communityId,

@@ -16,7 +16,6 @@ import {
   memberships,
   organizations,
   people,
-  users,
 } from '@porteria/database/schema';
 
 const db = createDb();
@@ -28,7 +27,6 @@ let communityId: string;
 let kioskId: string;
 let orgAdminToken: string;
 let operatorPersonId: string;
-let operatorUserId: string;
 let operatorAccountId: string;
 let otherPersonId: string;
 let unassignedCallId: string;
@@ -86,14 +84,7 @@ describe('calls operator integration', () => {
       .returning();
     operatorPersonId = operatorPerson.id;
 
-    operatorUserId = randomUUID();
     const operatorEmail = `operator-fixture-${suffix}@test.local`;
-    await db.insert(users).values({
-      id: operatorUserId,
-      email: operatorEmail,
-      passwordHash: 'not-used',
-      name: 'Ana Operadora',
-    });
     const [operatorAccount] = await db
       .insert(accounts)
       .values({
@@ -114,14 +105,7 @@ describe('calls operator integration', () => {
       .insert(people)
       .values({ firstName: 'Admin', lastName: 'Calls', status: 'active' })
       .returning();
-    const adminUserId = randomUUID();
     const adminEmail = `calls-admin-${suffix}@test.local`;
-    await db.insert(users).values({
-      id: adminUserId,
-      email: adminEmail,
-      passwordHash: 'not-used',
-      name: 'Admin Calls',
-    });
     const [adminAccount] = await db
       .insert(accounts)
       .values({
@@ -133,7 +117,6 @@ describe('calls operator integration', () => {
     const [adminMembership] = await db
       .insert(memberships)
       .values({
-        userId: adminUserId,
         personId: adminPerson.id,
         organizationId,
         communityId: null,

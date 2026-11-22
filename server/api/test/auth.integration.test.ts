@@ -27,7 +27,6 @@ const NEW_PASSWORD = 'contrasena-nueva-456';
 let app: FastifyInstance;
 let organizationId: string;
 let communityId: string;
-let userId: string;
 let personId: string;
 let accountId: string;
 let membershipId: string;
@@ -110,12 +109,6 @@ describe('auth sessions sobre accounts', () => {
     const passwordHash = await hashPassword(CURRENT_PASSWORD);
     seedHash = passwordHash;
 
-    const [user] = await db
-      .insert(users)
-      .values({ email, passwordHash, name: 'Ada Autenticada', active: true })
-      .returning();
-    userId = user.id;
-
     const [account] = await db
       .insert(accounts)
       .values({ personId, email, passwordHash, active: true })
@@ -125,7 +118,6 @@ describe('auth sessions sobre accounts', () => {
     const [membership] = await db
       .insert(memberships)
       .values({
-        userId,
         personId,
         organizationId,
         communityId,
@@ -143,7 +135,6 @@ describe('auth sessions sobre accounts', () => {
     await app?.close();
     await db.delete(memberships).where(eq(memberships.id, membershipId));
     await db.delete(accounts).where(eq(accounts.id, accountId));
-    await db.delete(users).where(eq(users.id, userId));
     await db.delete(people).where(eq(people.id, personId));
     await db.delete(communities).where(eq(communities.id, communityId));
     await db.delete(organizations).where(eq(organizations.id, organizationId));
@@ -157,8 +148,12 @@ describe('auth sessions sobre accounts', () => {
     assert.ok(body.accessToken);
     assert.ok(body.refreshToken);
     assert.equal(body.user.email, email);
+    assert.equal(body.user.name, 'Ada Autenticada');
+    assert.equal(body.user.id, accountId);
     assert.equal(body.activeMembership.id, membershipId);
-    assert.ok(body.user.id);
+
+    const legacyRows = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    assert.equal(legacyRows.length, 0);
   });
 
   it('firma el access token con el id de la cuenta en sub', async () => {
@@ -188,7 +183,7 @@ describe('auth sessions sobre accounts', () => {
 
   it('rechaza un token previo cuyo sub es un users.id', async () => {
     const legacyToken = app.jwt.sign({
-      sub: userId,
+      sub: randomUUID(),
       accountId,
       personId,
       email,
@@ -266,13 +261,7 @@ describe('auth sessions sobre accounts', () => {
       .select({ passwordHash: accounts.passwordHash })
       .from(accounts)
       .where(eq(accounts.id, accountId));
-    const [user] = await db
-      .select({ passwordHash: users.passwordHash })
-      .from(users)
-      .where(eq(users.id, userId));
 
-    // El cambio escribe en accounts y deja la fila legacy de users intacta.
     assert.notEqual(account.passwordHash, seedHash);
-    assert.equal(user.passwordHash, seedHash);
   });
 });

@@ -6,7 +6,6 @@ import { slugify } from '@porteria/shared';
 import { createDb } from './connection.js';
 import { organizations } from './schema/organizations.js';
 import { communities } from './schema/communities.js';
-import { users } from './schema/users.js';
 import { people } from './schema/people.js';
 import { accounts } from './schema/accounts.js';
 import { memberships } from './schema/memberships.js';
@@ -95,20 +94,9 @@ async function main() {
     .where(eq(accounts.email, adminEmail))
     .limit(1);
 
-  let userId: string;
   let personId: string;
 
   if (existingAccount) {
-    const [existingUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, adminEmail))
-      .limit(1);
-    if (!existingUser) {
-      throw new Error(
-        `Account ${adminEmail} exists but has no matching row in users. Resolve it manually before bootstrapping.`,
-      );
-    }
     const [existingPerson] = await db
       .select()
       .from(people)
@@ -119,20 +107,17 @@ async function main() {
         `Account ${adminEmail} exists but its person record is missing. Resolve it manually before bootstrapping.`,
       );
     }
-    userId = existingUser.id;
     personId = existingPerson.id;
 
     if (forcePassword || isPlatformAdmin) {
       await db.transaction(async (tx) => {
         if (forcePassword) {
-          await tx.update(users).set({ passwordHash }).where(eq(users.id, userId));
           await tx
             .update(accounts)
             .set({ passwordHash })
             .where(eq(accounts.id, existingAccount.id));
         }
         if (isPlatformAdmin) {
-          await tx.update(users).set({ isPlatformAdmin: true }).where(eq(users.id, userId));
           await tx
             .update(accounts)
             .set({ isPlatformAdmin: true })
@@ -151,15 +136,6 @@ async function main() {
   } else {
     const [firstName, ...lastNameParts] = adminName.split(/\s+/);
     const created = await db.transaction(async (tx) => {
-      const [user] = await tx
-        .insert(users)
-        .values({
-          email: adminEmail,
-          name: adminName,
-          passwordHash,
-          isPlatformAdmin,
-        })
-        .returning();
       const [person] = await tx
         .insert(people)
         .values({
@@ -169,24 +145,25 @@ async function main() {
           status: 'active',
         })
         .returning();
-      await tx.insert(accounts).values({
-        personId: person.id,
-        email: adminEmail,
-        passwordHash,
-        active: true,
-        isPlatformAdmin,
-      });
-      return { userId: user.id, personId: person.id };
+      const [account] = await tx
+        .insert(accounts)
+        .values({
+          personId: person.id,
+          email: adminEmail,
+          passwordHash,
+          active: true,
+          isPlatformAdmin,
+        })
+        .returning({ id: accounts.id });
+      return { personId: person.id, accountId: account.id };
     });
-    userId = created.userId;
     personId = created.personId;
-    console.log(`Admin created: ${adminEmail} (user ${userId})`);
+    console.log(`Admin created: ${adminEmail} (account ${created.accountId})`);
   }
 
   await db
     .insert(memberships)
     .values({
-      userId,
       personId,
       organizationId: organization.id,
       communityId: community.id,

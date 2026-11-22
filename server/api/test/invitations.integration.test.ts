@@ -16,7 +16,6 @@ import {
   memberships,
   organizations,
   people,
-  users,
 } from '@porteria/database/schema';
 
 const db = createDb();
@@ -52,7 +51,6 @@ let mailConfig: MailConfig;
 let originalMailConfig: MailConfig;
 let originalFetch: typeof globalThis.fetch;
 let fetchCalls: FetchCall[] = [];
-const userIds: string[] = [];
 const personIds: string[] = [];
 const accountIds: string[] = [];
 
@@ -94,12 +92,6 @@ function parsePayload(call: FetchCall): ZeptoPayload {
 }
 
 async function createOrgAdminFixture(email: string) {
-  const [user] = await db
-    .insert(users)
-    .values({ email, passwordHash: 'x', name: 'Invitation Admin' })
-    .returning();
-  userIds.push(user.id);
-
   const [person] = await db
     .insert(people)
     .values({
@@ -122,7 +114,6 @@ async function createOrgAdminFixture(email: string) {
   const [membership] = await db
     .insert(memberships)
     .values({
-      userId: user.id,
       personId: person.id,
       organizationId,
       communityId: null,
@@ -131,16 +122,10 @@ async function createOrgAdminFixture(email: string) {
     })
     .returning();
 
-  return { user, person, account, membership };
+  return { person, account, membership };
 }
 
 async function createPlatformAdminFixture(email: string) {
-  const [user] = await db
-    .insert(users)
-    .values({ email, passwordHash: 'x', name: 'Platform Admin', isPlatformAdmin: true })
-    .returning();
-  userIds.push(user.id);
-
   const [person] = await db
     .insert(people)
     .values({
@@ -156,11 +141,11 @@ async function createPlatformAdminFixture(email: string) {
 
   const [account] = await db
     .insert(accounts)
-    .values({ personId: person.id, email, passwordHash: 'x' })
+    .values({ personId: person.id, email, passwordHash: 'x', isPlatformAdmin: true })
     .returning();
   accountIds.push(account.id);
 
-  return { user, person, account };
+  return { person, account };
 }
 
 describe('invitation email delivery integration', () => {
@@ -196,7 +181,7 @@ describe('invitation email delivery integration', () => {
     orgAdminPersonId = fixture.person.id;
     orgAdminToken = app.jwt.sign({
       sub: fixture.account.id,
-      email: fixture.user.email,
+      email: fixture.account.email,
       accountId: fixture.account.id,
       personId: fixture.person.id,
       orgId: organizationId,
@@ -210,7 +195,7 @@ describe('invitation email delivery integration', () => {
     const platform = await createPlatformAdminFixture(`invitation-platform-${suffix}@test.local`);
     platformAdminToken = app.jwt.sign({
       sub: platform.account.id,
-      email: platform.user.email,
+      email: platform.account.email,
       accountId: platform.account.id,
       personId: platform.person.id,
       orgId: organizationId,
@@ -244,7 +229,6 @@ describe('invitation email delivery integration', () => {
       await db.delete(communities).where(eq(communities.organizationId, organizationId));
     }
     if (accountIds.length) await db.delete(accounts).where(inArray(accounts.id, accountIds));
-    if (userIds.length) await db.delete(users).where(inArray(users.id, userIds));
     if (personIds.length) await db.delete(people).where(inArray(people.id, personIds));
     if (organizationId) await db.delete(organizations).where(eq(organizations.id, organizationId));
     await app.close();

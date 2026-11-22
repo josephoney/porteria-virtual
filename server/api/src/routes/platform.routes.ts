@@ -9,7 +9,6 @@ import {
   memberships,
   people,
   accounts,
-  users,
   invitations,
   locationStructures,
   locationUnits,
@@ -141,13 +140,6 @@ async function transferOrganizationAdministrator(
 
   if (targetAccount) {
     const personId = targetAccount.personId;
-    // Escritura dual: la membresía sigue guardando el id legacy de `users`
-    // mientras la columna exista, pero la identidad es la persona.
-    const [legacyUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
 
     await db.transaction(async (tx) => {
       const [existingMembership] = await tx
@@ -176,7 +168,6 @@ async function transferOrganizationAdministrator(
         const [created] = await tx
           .insert(memberships)
           .values({
-            userId: legacyUser?.id ?? null,
             personId,
             organizationId: organization.id,
             role: 'org_admin',

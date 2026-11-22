@@ -38,28 +38,22 @@ let floorAId: string;
 let floorBId: string;
 let unitAId: string;
 let unitChildId: string;
-let residentUserId: string;
 let residentPersonId: string;
 let residentAccountId: string;
 let residentEmail: string;
 let residentId: string;
-let orgAdminUserId: string;
 let orgAdminToken: string;
 let orgAdminPersonId: string;
 let orgAdminAccountId: string;
-let communityAdminUserId: string;
 let communityAdminPersonId: string;
 let communityAdminAccountId: string;
 let communityAdminToken: string;
-let guardUserId: string;
 let guardPersonId: string;
 let guardAccountId: string;
 let guardToken: string;
-let platformUserId: string;
 let platformPersonId: string;
 let platformAccountId: string;
 let loginAccountEmail: string;
-let loginAccountUserId: string;
 let loginAccountPersonId: string;
 let legalRepresentativePersonId: string;
 let legalRepresentativeDocument: string;
@@ -317,22 +311,13 @@ describe('location node integration', () => {
       .returning();
     cycleUnitId = cycleUnit.id;
 
-    const [residentUser] = await db
-      .insert(users)
-      .values({
-        email: `resident-${suffix}@test.local`,
-        passwordHash: 'not-used',
-        name: 'Resident Test',
-      })
-      .returning();
-    residentUserId = residentUser.id;
-    residentEmail = residentUser.email;
+    residentEmail = `resident-${suffix}@test.local`;
     const [residentPerson] = await db
       .insert(people)
       .values({
         firstName: 'Resident',
         lastName: 'Test',
-        contactEmail: residentUser.email,
+        contactEmail: residentEmail,
         status: 'active',
       })
       .returning();
@@ -341,7 +326,7 @@ describe('location node integration', () => {
       .insert(accounts)
       .values({
         personId: residentPersonId,
-        email: residentUser.email,
+        email: residentEmail,
         passwordHash: 'not-used',
       })
       .returning();
@@ -359,15 +344,7 @@ describe('location node integration', () => {
       .returning();
     residentId = resident.id;
 
-    const [orgAdminUser] = await db
-      .insert(users)
-      .values({
-        email: `org-admin-${suffix}@test.local`,
-        passwordHash: 'not-used',
-        name: 'Org Admin Test',
-      })
-      .returning();
-    orgAdminUserId = orgAdminUser.id;
+    const orgAdminEmail = `org-admin-${suffix}@test.local`;
 
     const [legalRepresentative] = await db
       .insert(people)
@@ -387,7 +364,7 @@ describe('location node integration', () => {
       .values({
         firstName: 'Org',
         lastName: 'Admin',
-        contactEmail: orgAdminUser.email,
+        contactEmail: orgAdminEmail,
         status: 'active',
       })
       .returning();
@@ -396,7 +373,6 @@ describe('location node integration', () => {
     const [orgAdminMembership] = await db
       .insert(memberships)
       .values({
-        userId: orgAdminUserId,
         personId: orgAdminPersonId,
         organizationId,
         communityId: null,
@@ -406,21 +382,13 @@ describe('location node integration', () => {
       })
       .returning();
 
-    const [communityAdminUser] = await db
-      .insert(users)
-      .values({
-        email: `community-admin-fixture-${suffix}@test.local`,
-        passwordHash: 'not-used',
-        name: 'Community Admin Fixture',
-      })
-      .returning();
-    communityAdminUserId = communityAdminUser.id;
+    const communityAdminEmail = `community-admin-fixture-${suffix}@test.local`;
     const [communityAdminPerson] = await db
       .insert(people)
       .values({
         firstName: 'Community',
         lastName: 'Admin',
-        contactEmail: communityAdminUser.email,
+        contactEmail: communityAdminEmail,
         status: 'active',
       })
       .returning();
@@ -428,7 +396,6 @@ describe('location node integration', () => {
     const [communityAdminMembership] = await db
       .insert(memberships)
       .values({
-        userId: communityAdminUserId,
         personId: communityAdminPersonId,
         organizationId,
         communityId,
@@ -438,28 +405,19 @@ describe('location node integration', () => {
       })
       .returning();
 
-    const [guardUser] = await db
-      .insert(users)
-      .values({
-        email: `guard-fixture-${suffix}@test.local`,
-        passwordHash: 'not-used',
-        name: 'Guard Fixture',
-      })
-      .returning();
-    guardUserId = guardUser.id;
+    const guardEmail = `guard-fixture-${suffix}@test.local`;
     const [guardPerson] = await db
       .insert(people)
       .values({
         firstName: 'Guard',
         lastName: 'Fixture',
-        contactEmail: guardUser.email,
+        contactEmail: guardEmail,
         status: 'active',
       })
       .returning();
     const [guardMembership] = await db
       .insert(memberships)
       .values({
-        userId: guardUserId,
         personId: guardPerson.id,
         organizationId,
         communityId,
@@ -475,7 +433,7 @@ describe('location node integration', () => {
       .insert(accounts)
       .values({
         personId: orgAdminPersonId,
-        email: orgAdminUser.email,
+        email: orgAdminEmail,
         passwordHash: 'not-used',
       })
       .returning();
@@ -485,7 +443,7 @@ describe('location node integration', () => {
       .insert(accounts)
       .values({
         personId: communityAdminPersonId,
-        email: communityAdminUser.email,
+        email: communityAdminEmail,
         passwordHash: 'not-used',
       })
       .returning();
@@ -495,7 +453,7 @@ describe('location node integration', () => {
       .insert(accounts)
       .values({
         personId: guardPerson.id,
-        email: guardUser.email,
+        email: guardEmail,
         passwordHash: 'not-used',
       })
       .returning();
@@ -503,15 +461,6 @@ describe('location node integration', () => {
     guardPersonId = guardPerson.id;
 
     const platformEmail = `platform-fixture-${suffix}@test.local`;
-    const [platformUser] = await db
-      .insert(users)
-      .values({
-        email: platformEmail,
-        passwordHash: 'not-used',
-        name: 'Platform Fixture',
-      })
-      .returning();
-    platformUserId = platformUser.id;
     const [platformPerson] = await db
       .insert(people)
       .values({
@@ -534,15 +483,6 @@ describe('location node integration', () => {
 
     // Login fixture: the suite must not depend on the demo seed, which CI never runs.
     loginAccountEmail = `login-fixture-${suffix}@test.local`;
-    const [loginAccountUser] = await db
-      .insert(users)
-      .values({
-        email: loginAccountEmail,
-        passwordHash: await bcrypt.hash('porteria123', 10),
-        name: 'Login Fixture',
-      })
-      .returning();
-    loginAccountUserId = loginAccountUser.id;
     const [loginAccountPerson] = await db
       .insert(people)
       .values({
@@ -560,7 +500,6 @@ describe('location node integration', () => {
     });
     // Login refuses users without an active membership; give the fixture one.
     await db.insert(memberships).values({
-      userId: loginAccountUserId,
       personId: loginAccountPersonId,
       organizationId,
       communityId: null,
@@ -586,7 +525,7 @@ describe('location node integration', () => {
     });
     orgAdminToken = app.jwt.sign({
       sub: orgAdminAccountId,
-      email: orgAdminUser.email,
+      email: orgAdminEmail,
       accountId: orgAdminAccountId,
       personId: orgAdminPersonId,
       orgId: organizationId,
@@ -598,7 +537,7 @@ describe('location node integration', () => {
     });
     communityAdminToken = app.jwt.sign({
       sub: communityAdminAccountId,
-      email: communityAdminUser.email,
+      email: communityAdminEmail,
       accountId: communityAdminAccountId,
       personId: communityAdminPersonId,
       orgId: organizationId,
@@ -610,7 +549,7 @@ describe('location node integration', () => {
     });
     guardToken = app.jwt.sign({
       sub: guardAccountId,
-      email: guardUser.email,
+      email: guardEmail,
       accountId: guardAccountId,
       personId: guardPerson.id,
       orgId: organizationId,
@@ -623,12 +562,6 @@ describe('location node integration', () => {
   });
 
   after(async () => {
-    await db.delete(users).where(eq(users.id, loginAccountUserId));
-    await db.delete(users).where(eq(users.id, residentUserId));
-    await db.delete(users).where(eq(users.id, orgAdminUserId));
-    await db.delete(users).where(eq(users.id, communityAdminUserId));
-    await db.delete(users).where(eq(users.id, guardUserId));
-    await db.delete(users).where(eq(users.id, platformUserId));
     await db.delete(organizations).where(eq(organizations.id, organizationId));
     await db
       .delete(people)
@@ -1065,7 +998,7 @@ describe('location node integration', () => {
 
   it('rejects access tokens that predate people and accounts', async () => {
     const legacyToken = app!.jwt.sign({
-      sub: orgAdminUserId,
+      sub: orgAdminAccountId,
       email: 'legacy@test.local',
       orgId: organizationId,
       membershipId: 'platform',
@@ -1181,7 +1114,6 @@ describe('location node integration', () => {
     };
     assert.equal(body.memberships[0]?.locationUnitId, unitChildId);
 
-    await db.delete(users).where(eq(users.email, email));
     await db.delete(accounts).where(eq(accounts.email, email));
     await db.delete(people).where(eq(people.contactEmail, email));
   });
@@ -1478,7 +1410,21 @@ describe('location node integration', () => {
     assert.equal(accepted.activeMembership.role, 'community_admin');
     assert.equal(accepted.activeMembership.communityId, communityId);
 
-    await db.delete(users).where(eq(users.id, accepted.user.id));
+    const accountRows = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.email, email));
+    assert.equal(accountRows.length, 1);
+
+    const personRows = await db
+      .select({ id: people.id })
+      .from(people)
+      .where(eq(people.contactEmail, email));
+    assert.equal(personRows.length, 1);
+
+    const legacyRows = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    assert.equal(legacyRows.length, 0);
+
     await db.delete(accounts).where(eq(accounts.email, email));
     await db.delete(people).where(eq(people.contactEmail, email));
   });
@@ -1637,6 +1583,15 @@ describe('location node integration', () => {
       .where(eq(people.contactEmail, email));
     assert.equal(personRows.length, 1);
 
+    const accountRows = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.email, email));
+    assert.equal(accountRows.length, 1);
+
+    const legacyRows = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    assert.equal(legacyRows.length, 0);
+
     const list = await request(
       'GET',
       `/api/users?search=${encodeURIComponent(email)}`,
@@ -1661,7 +1616,6 @@ describe('location node integration', () => {
       ['Staff Community A', 'Staff Community B'],
     );
 
-    await db.delete(users).where(eq(users.email, email));
     await db.delete(accounts).where(eq(accounts.email, email));
     await db.delete(people).where(eq(people.contactEmail, email));
   });
@@ -2029,7 +1983,6 @@ describe('location node integration', () => {
     const [assignment] = await db
       .insert(memberships)
       .values({
-        userId: communityAdminUserId,
         personId: communityAdminPersonId,
         organizationId,
         communityId: secondCommunity.id,
@@ -2070,12 +2023,10 @@ describe('location node integration', () => {
     assert.equal(account.email, email);
     assert.equal(account.active, true);
 
-    const [accountUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email));
+    const legacyRows = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    assert.equal(legacyRows.length, 0);
+
     await db.insert(memberships).values({
-      userId: accountUser.id,
       personId: legalRepresentativePersonId,
       organizationId,
       communityId,
@@ -2100,6 +2051,5 @@ describe('location node integration', () => {
 
     await db.delete(memberships).where(eq(memberships.personId, legalRepresentativePersonId));
     await db.delete(accounts).where(eq(accounts.email, email));
-    await db.delete(users).where(eq(users.email, email));
   });
 });

@@ -8,7 +8,6 @@ import {
   memberships,
   people,
   refreshTokens,
-  users,
 } from '@porteria/database/schema';
 import { hashPassword } from '../services/credentials.service.js';
 import { requireRole } from '../middlewares/rbac.js';
@@ -372,21 +371,6 @@ export async function peopleRoutes(app: FastifyInstance) {
 
       const passwordHash = await hashPassword(password);
       try {
-        const [linkedUser] = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.email, email))
-          .limit(1);
-        if (!linkedUser) {
-          await db.insert(users).values({
-            email,
-            passwordHash,
-            name: `${person.firstName} ${person.lastName}`.trim() || email,
-            active: true,
-            isPlatformAdmin: Boolean(body.isPlatformAdmin),
-          });
-        }
-
         const [created] = await db
           .insert(accounts)
           .values({

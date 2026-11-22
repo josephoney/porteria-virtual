@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -15,7 +15,6 @@ import {
   memberships,
   organizations,
   people,
-  users,
 } from '@porteria/database/schema';
 
 const db = createDb();
@@ -32,7 +31,6 @@ let orgAdminPersonId: string;
 let orgAdminMembershipId: string;
 let firstAdministratorEmail: string;
 const createdEmails: string[] = [];
-const userIds: string[] = [];
 const personIds: string[] = [];
 
 type Json = Record<string, any>;
@@ -71,16 +69,6 @@ async function createUserFixture(input: {
   communityId: string | null;
   isPlatformAdmin?: boolean;
 }) {
-  const [user] = await db
-    .insert(users)
-    .values({
-      email: input.email,
-      passwordHash: 'x',
-      name: input.name,
-      isPlatformAdmin: input.isPlatformAdmin ?? false,
-    })
-    .returning();
-  userIds.push(user.id);
   createdEmails.push(input.email);
 
   const [person] = await db
@@ -98,14 +86,18 @@ async function createUserFixture(input: {
 
   const [account] = await db
     .insert(accounts)
-    .values({ personId: person.id, email: input.email, passwordHash: 'x' })
+    .values({
+      personId: person.id,
+      email: input.email,
+      passwordHash: 'x',
+      isPlatformAdmin: input.isPlatformAdmin ?? false,
+    })
     .returning();
 
   const [membership] = input.organizationId
     ? await db
         .insert(memberships)
         .values({
-          userId: user.id,
           personId: person.id,
           organizationId: input.organizationId,
           communityId: input.communityId,
@@ -115,7 +107,7 @@ async function createUserFixture(input: {
         .returning()
     : [];
 
-  return { user, person, account, membership };
+  return { person, account, membership };
 }
 
 async function activeOrgAdmins(organization: string) {
@@ -151,7 +143,7 @@ describe('organization profile geography and administrator transfer', () => {
     });
     platformToken = app.jwt.sign({
       sub: platformAdmin.account.id,
-      email: platformAdmin.user.email,
+      email: platformAdmin.account.email,
       accountId: platformAdmin.account.id,
       personId: platformAdmin.person.id,
       orgId: randomUUID(),
@@ -169,7 +161,7 @@ describe('organization profile geography and administrator transfer', () => {
       platformToken,
       {
         name: `Profile Test Org ${suffix}`,
-        municipality: 'MedellÃ­n',
+        municipality: 'Medellín',
         department: 'Antioquia',
         country: 'Colombia',
       },
@@ -177,7 +169,7 @@ describe('organization profile geography and administrator transfer', () => {
     assert.equal(createdOrganization.statusCode, 201);
     const organizationBody = parse(createdOrganization);
     organizationId = organizationBody.id;
-    assert.equal(organizationBody.municipality, 'MedellÃ­n');
+    assert.equal(organizationBody.municipality, 'Medellín');
     assert.equal(organizationBody.department, 'Antioquia');
     assert.equal(organizationBody.country, 'Colombia');
 
@@ -198,7 +190,7 @@ describe('organization profile geography and administrator transfer', () => {
     orgAdminMembershipId = orgAdmin.membership.id;
     orgAdminToken = app.jwt.sign({
       sub: orgAdmin.account.id,
-      email: orgAdmin.user.email,
+      email: orgAdmin.account.email,
       accountId: orgAdmin.account.id,
       personId: orgAdmin.person.id,
       orgId: organizationId,
@@ -243,7 +235,7 @@ describe('organization profile geography and administrator transfer', () => {
     });
     communityAdminToken = app.jwt.sign({
       sub: communityAdmin.account.id,
-      email: communityAdmin.user.email,
+      email: communityAdmin.account.email,
       accountId: communityAdmin.account.id,
       personId: communityAdmin.person.id,
       orgId: organizationId,
@@ -261,10 +253,8 @@ describe('organization profile geography and administrator transfer', () => {
       await db.delete(invitations).where(eq(invitations.organizationId, organizationId));
     }
     if (createdEmails.length > 0) {
-      await db.delete(users).where(inArray(users.email, createdEmails));
       await db.delete(people).where(inArray(people.contactEmail, createdEmails));
     }
-    if (userIds.length > 0) await db.delete(users).where(inArray(users.id, userIds));
     if (personIds.length > 0) await db.delete(people).where(inArray(people.id, personIds));
     if (organizationId) await db.delete(organizations).where(eq(organizations.id, organizationId));
     await app.close();
@@ -274,7 +264,7 @@ describe('organization profile geography and administrator transfer', () => {
     const organizationResponse = await request('GET', '/api/organizations/me', orgAdminToken);
     assert.equal(organizationResponse.statusCode, 200);
     const organization = parse(organizationResponse);
-    assert.equal(organization.municipality, 'MedellÃ­n');
+    assert.equal(organization.municipality, 'Medellín');
     assert.equal(organization.department, 'Antioquia');
     assert.equal(organization.country, 'Colombia');
 
@@ -309,7 +299,7 @@ describe('organization profile geography and administrator transfer', () => {
     assert.equal(invalidOrganization.statusCode, 400);
 
     const restore = await request('PATCH', '/api/organizations/me', orgAdminToken, {
-      municipality: 'MedellÃ­n',
+      municipality: 'Medellín',
       department: 'Antioquia',
       country: 'Colombia',
     });

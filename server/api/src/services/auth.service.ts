@@ -1,11 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import {
-  users,
   accounts,
   memberships,
   refreshTokens,
   communities,
+  people,
 } from '@porteria/database/schema';
 import type {
   AuthUserSummary,
@@ -62,12 +62,24 @@ function signAccessToken(payload: JwtContextPayload): string {
   });
 }
 
-function toAuthUser(
-  user: typeof users.$inferSelect,
-  isPlatformAdmin = user.isPlatformAdmin,
-): AuthUserSummary {
+/**
+ * Identidad autenticada resuelta desde `accounts` + `people`. El id expuesto es
+ * el de la cuenta: `users` ya no participa en la sesión.
+ */
+interface AuthAccount {
+  /** Id público de la identidad (la cuenta). */
+  id: string;
+  accountId: string;
+  personId: string;
+  email: string;
+  name: string;
+  isPlatformAdmin: boolean;
+  active: boolean;
+}
+
+function toAuthUser(user: AuthAccount, isPlatformAdmin = user.isPlatformAdmin): AuthUserSummary {
   return {
-    id: user.id,
+    id: user.accountId,
     email: user.email,
     name: user.name,
     isPlatformAdmin,
@@ -111,13 +123,8 @@ interface AccountIdentity {
   personId?: string;
 }
 
-async function identityForUser(user: typeof users.$inferSelect): Promise<AccountIdentity> {
-  const [account] = await db
-    .select({ id: accounts.id, personId: accounts.personId })
-    .from(accounts)
-    .where(eq(accounts.email, user.email))
-    .limit(1);
-  return account ? { accountId: account.id, personId: account.personId } : {};
+function identityForUser(user: AuthAccount): AccountIdentity {
+  return { accountId: user.accountId, personId: user.personId };
 }
 
 /**
@@ -133,64 +140,87 @@ export async function personIdForEmail(email: string): Promise<string | null> {
   return account?.personId ?? null;
 }
 
-export async function userForAccount(accountId: string): Promise<typeof users.$inferSelect | null> {
-  const [account] = await db
-    .select({ email: accounts.email })
+const accountPersonColumns = {
+  id: accounts.id,
+  personId: accounts.personId,
+  email: accounts.email,
+  active: accounts.active,
+  isPlatformAdmin: accounts.isPlatformAdmin,
+  firstName: people.firstName,
+  lastName: people.lastName,
+};
+
+type AccountPersonRow = {
+  id: string;
+  personId: string;
+  email: string;
+  active: boolean;
+  isPlatformAdmin: boolean;
+  firstName: string;
+  lastName: string;
+};
+
+function toAuthAccount(row: AccountPersonRow): AuthAccount {
+  const name = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
+  return {
+    id: row.id,
+    accountId: row.id,
+    personId: row.personId,
+    email: row.email,
+    name: name || row.email,
+    isPlatformAdmin: row.isPlatformAdmin,
+    active: row.active,
+  };
+}
+
+export async function userForAccount(accountId: string): Promise<AuthAccount | null> {
+  const [row] = await db
+    .select(accountPersonColumns)
     .from(accounts)
+    .innerJoin(people, eq(accounts.personId, people.id))
     .where(eq(accounts.id, accountId))
     .limit(1);
-  if (!account) return null;
-
-  const [user] = await db.select().from(users).where(eq(users.email, account.email)).limit(1);
-  return user ?? null;
+  return row ? toAuthAccount(row) : null;
 }
 
 interface AuthenticatedSubject {
-  user: typeof users.$inferSelect;
+  user: AuthAccount;
   identity: AccountIdentity;
   isPlatformAdmin: boolean;
 }
 
 async function authenticate(email: string, password: string): Promise<AuthenticatedSubject | null> {
-  const [account] = await db
-    .select({
-      id: accounts.id,
-      personId: accounts.personId,
-      passwordHash: accounts.passwordHash,
-      active: accounts.active,
-      isPlatformAdmin: accounts.isPlatformAdmin,
-    })
+  const [row] = await db
+    .select({ ...accountPersonColumns, passwordHash: accounts.passwordHash })
     .from(accounts)
+    .innerJoin(people, eq(accounts.personId, people.id))
     .where(eq(accounts.email, email))
     .limit(1);
 
-  if (!account || !account.active) return null;
+  if (!row || !row.active) return null;
 
-  const valid = await verifyPassword(password, account.passwordHash);
+  const valid = await verifyPassword(password, row.passwordHash);
   if (!valid) return null;
 
-  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (!user || !user.active) return null;
-
   return {
-    user,
-    identity: { accountId: account.id, personId: account.personId },
-    isPlatformAdmin: user.isPlatformAdmin || account.isPlatformAdmin,
+    user: toAuthAccount(row),
+    identity: { accountId: row.id, personId: row.personId },
+    isPlatformAdmin: row.isPlatformAdmin,
   };
 }
 
-async function isPlatformAdminForUser(user: typeof users.$inferSelect): Promise<boolean> {
+async function isPlatformAdminForUser(user: AuthAccount): Promise<boolean> {
   const [account] = await db
     .select({ active: accounts.active, isPlatformAdmin: accounts.isPlatformAdmin })
     .from(accounts)
-    .where(eq(accounts.email, user.email))
+    .where(eq(accounts.id, user.accountId))
     .limit(1);
   if (account && !account.active) return false;
-  return user.isPlatformAdmin || Boolean(account?.isPlatformAdmin);
+  return Boolean(account?.isPlatformAdmin) || user.isPlatformAdmin;
 }
 
 async function createTokens(
-  user: typeof users.$inferSelect,
+  user: AuthAccount,
   membership: MembershipSummary,
   identity: AccountIdentity = {},
   isPlatformAdmin = user.isPlatformAdmin,

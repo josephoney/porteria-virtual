@@ -24,7 +24,6 @@ import {
   outboxEvents,
   passScans,
   people,
-  users,
 } from '@porteria/database/schema';
 import { randomToken } from '../src/lib/pass-tokens.js';
 import { passTicketState, PERMANENT_PASS_UNTIL } from '@porteria/shared';
@@ -48,12 +47,6 @@ let badResidentPersonId: string;
 let guardPersonId: string;
 let otherGuardPersonId: string;
 let orgAdminPersonId: string;
-let residentUserId: string;
-let otherResidentUserId: string;
-let badResidentUserId: string;
-let guardUserId: string;
-let otherGuardUserId: string;
-let orgAdminUserId: string;
 let residentAccountId: string;
 let otherResidentAccountId: string;
 let badResidentAccountId: string;
@@ -342,58 +335,6 @@ describe('dynamic pass integration', () => {
       .returning();
     orgAdminPersonId = orgAdminPerson.id;
 
-    const [residentUser] = await db
-      .insert(users)
-      .values({ email: `pass-resident-${suffix}@test.local`, passwordHash: 'x', name: 'Resident' })
-      .returning();
-    residentUserId = residentUser.id;
-
-    const [otherResidentUser] = await db
-      .insert(users)
-      .values({
-        email: `pass-other-resident-${suffix}@test.local`,
-        passwordHash: 'x',
-        name: 'Other Resident',
-      })
-      .returning();
-    otherResidentUserId = otherResidentUser.id;
-
-    const [badResidentUser] = await db
-      .insert(users)
-      .values({
-        email: `pass-bad-resident-${suffix}@test.local`,
-        passwordHash: 'x',
-        name: 'Bad Resident',
-      })
-      .returning();
-    badResidentUserId = badResidentUser.id;
-
-    const [guardUser] = await db
-      .insert(users)
-      .values({ email: `pass-guard-${suffix}@test.local`, passwordHash: 'x', name: 'Guard' })
-      .returning();
-    guardUserId = guardUser.id;
-
-    const [otherGuardUser] = await db
-      .insert(users)
-      .values({
-        email: `pass-other-guard-${suffix}@test.local`,
-        passwordHash: 'x',
-        name: 'Other Guard',
-      })
-      .returning();
-    otherGuardUserId = otherGuardUser.id;
-
-    const [orgAdminUser] = await db
-      .insert(users)
-      .values({
-        email: `pass-org-admin-${suffix}@test.local`,
-        passwordHash: 'x',
-        name: 'Org Admin',
-      })
-      .returning();
-    orgAdminUserId = orgAdminUser.id;
-
     const [residentAccount] = await db
       .insert(accounts)
       .values({
@@ -457,7 +398,6 @@ describe('dynamic pass integration', () => {
     const [residentMembership] = await db
       .insert(memberships)
       .values({
-        userId: residentUserId,
         personId: residentPersonId,
         organizationId,
         communityId,
@@ -470,7 +410,6 @@ describe('dynamic pass integration', () => {
     const [otherResidentMembership] = await db
       .insert(memberships)
       .values({
-        userId: otherResidentUserId,
         personId: otherResidentPersonId,
         organizationId,
         communityId,
@@ -483,7 +422,6 @@ describe('dynamic pass integration', () => {
     const [badResidentMembership] = await db
       .insert(memberships)
       .values({
-        userId: badResidentUserId,
         personId: badResidentPersonId,
         organizationId,
         communityId,
@@ -496,7 +434,6 @@ describe('dynamic pass integration', () => {
     const [guardMembership] = await db
       .insert(memberships)
       .values({
-        userId: guardUserId,
         personId: guardPersonId,
         organizationId,
         communityId,
@@ -510,7 +447,6 @@ describe('dynamic pass integration', () => {
     const [otherGuardMembership] = await db
       .insert(memberships)
       .values({
-        userId: otherGuardUserId,
         personId: otherGuardPersonId,
         organizationId,
         communityId: otherCommunityId,
@@ -523,7 +459,6 @@ describe('dynamic pass integration', () => {
     const [orgAdminMembership] = await db
       .insert(memberships)
       .values({
-        userId: orgAdminUserId,
         personId: orgAdminPersonId,
         organizationId,
         communityId: null,
@@ -628,18 +563,6 @@ describe('dynamic pass integration', () => {
       .where(inArray(accessPoints.communityId, [communityId, otherCommunityId]));
     await db.delete(outboxEvents).where(eq(outboxEvents.organizationId, organizationId));
     await db.delete(memberships).where(eq(memberships.organizationId, organizationId));
-    await db
-      .delete(users)
-      .where(
-        inArray(users.id, [
-          residentUserId,
-          otherResidentUserId,
-          badResidentUserId,
-          guardUserId,
-          otherGuardUserId,
-          orgAdminUserId,
-        ]),
-      );
     await db
       .delete(people)
       .where(
