@@ -219,7 +219,7 @@ describe('identity verification by document', () => {
       .returning();
 
     residentToken = app.jwt.sign({
-      sub: residentUser.id,
+      sub: residentAccount.id,
       accountId: residentAccount.id,
       personId: residentPerson.id,
       name: 'Resi Dente',
@@ -231,7 +231,7 @@ describe('identity verification by document', () => {
     });
 
     guardToken = app.jwt.sign({
-      sub: guardUser.id,
+      sub: guardAccount.id,
       accountId: guardAccount.id,
       personId: guardPerson.id,
       name: 'Guar Dia',

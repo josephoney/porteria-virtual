@@ -13,6 +13,7 @@ function getUser(request: FastifyRequest): usersService.Requester {
   const u = request.user;
   return {
     sub: u.sub,
+    accountId: u.accountId,
     role: u.role,
     orgId: u.orgId,
     communityId: u.communityId ?? null,
@@ -36,9 +37,16 @@ export async function userRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/me', async (request: FastifyRequest) => {
+  app.get('/me', async (request: FastifyRequest, reply: FastifyReply) => {
     const u = getUser(request);
-    const profile = await usersService.getMe(u.sub);
+    if (!u.accountId) {
+      return reply.status(401).send({
+        statusCode: 401,
+        error: 'Unauthorized',
+        message: 'Legacy token rejected; sign in again',
+      });
+    }
+    const profile = await usersService.getMe(u.accountId);
     if (!profile) return null;
     return {
       ...profile,
@@ -54,10 +62,17 @@ export async function userRoutes(app: FastifyInstance) {
 
   app.patch('/me/password', async (request: FastifyRequest, reply: FastifyReply) => {
     const u = getUser(request);
+    if (!u.accountId) {
+      return reply.status(401).send({
+        statusCode: 401,
+        error: 'Unauthorized',
+        message: 'Legacy token rejected; sign in again',
+      });
+    }
     const body = changePasswordSchema.parse(request.body);
     let ok: boolean;
     try {
-      ok = await usersService.changePassword(u.sub, body.currentPassword, body.newPassword);
+      ok = await usersService.changePassword(u.accountId, body.currentPassword, body.newPassword);
     } catch (err) {
       if (err instanceof PasswordPolicyError) {
         return reply.status(400).send({

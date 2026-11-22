@@ -143,7 +143,7 @@ describe('missing exit alerts', () => {
       .returning();
 
     residentToken = app.jwt.sign({
-      sub: user.id,
+      sub: account.id,
       accountId: account.id,
       personId: person.id,
       role: 'owner',

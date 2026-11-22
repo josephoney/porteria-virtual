@@ -10,11 +10,13 @@ import {
   organizations,
 } from '@porteria/database/schema';
 import { hashPassword, setPassword, verifyPassword } from './credentials.service.js';
+import { userForAccount } from './auth.service.js';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
 
 export interface Requester {
   sub: string;
+  accountId?: string;
   role: string;
   orgId: string;
   communityId: string | null;
@@ -190,11 +192,27 @@ function scopeConditions(requester: Requester, targetUserId: string) {
   return conditions;
 }
 
+/** Resuelve la cuenta asociada a una fila de `users` por el email compartido. */
+export async function accountIdForUserId(userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ accountId: accounts.id })
+    .from(users)
+    .innerJoin(accounts, eq(accounts.email, users.email))
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.accountId ?? null;
+}
+
 export async function getUserById(id: string, requester: Requester): Promise<UserResult | null> {
   const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
   if (!user) return null;
 
-  const isSelf = user.id === requester.sub;
+  // La sesión identifica la cuenta, mientras que `id` sigue siendo el id de
+  // `users` en esta fase. Ser uno mismo significa que ambos apuntan a la misma
+  // fila: se resuelve la cuenta del objetivo y se compara con la de la sesión.
+  const isSelf = requester.accountId
+    ? (await accountIdForUserId(id)) === requester.accountId
+    : false;
   if (!isSelf && !canManage(requester)) return null;
 
   const membershipRows = isSelf
@@ -455,21 +473,14 @@ export async function updateUser(
 }
 
 export async function changePassword(
-  userId: string,
+  accountId: string,
   currentPassword: string,
   newPassword: string,
 ): Promise<boolean> {
-  const [user] = await db
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  if (!user) return false;
-
   const [account] = await db
     .select({ id: accounts.id, passwordHash: accounts.passwordHash })
     .from(accounts)
-    .where(eq(accounts.email, user.email))
+    .where(eq(accounts.id, accountId))
     .limit(1);
   if (!account) return false;
 
@@ -483,10 +494,10 @@ export async function changePassword(
   return true;
 }
 
-export async function getMe(userId: string): Promise<UserResult | null> {
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+export async function getMe(accountId: string): Promise<UserResult | null> {
+  const user = await userForAccount(accountId);
   if (!user) return null;
-  const membershipRows = await db.select().from(memberships).where(eq(memberships.userId, userId));
+  const membershipRows = await db.select().from(memberships).where(eq(memberships.userId, user.id));
   return toUserResult(user, membershipRows);
 }
 

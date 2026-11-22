@@ -195,7 +195,7 @@ describe('invitation email delivery integration', () => {
     const fixture = await createOrgAdminFixture(`invitation-admin-${suffix}@test.local`);
     orgAdminPersonId = fixture.person.id;
     orgAdminToken = app.jwt.sign({
-      sub: fixture.user.id,
+      sub: fixture.account.id,
       email: fixture.user.email,
       accountId: fixture.account.id,
       personId: fixture.person.id,
@@ -209,7 +209,7 @@ describe('invitation email delivery integration', () => {
 
     const platform = await createPlatformAdminFixture(`invitation-platform-${suffix}@test.local`);
     platformAdminToken = app.jwt.sign({
-      sub: platform.user.id,
+      sub: platform.account.id,
       email: platform.user.email,
       accountId: platform.account.id,
       personId: platform.person.id,

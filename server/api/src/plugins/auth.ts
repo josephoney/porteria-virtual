@@ -52,7 +52,10 @@ export function registerMembershipGuard(app: FastifyInstance) {
 
     const payload = request.user;
 
-    if (!payload.accountId || !payload.personId) {
+    // `sub` es el id de la cuenta: un token anterior al cambio lleva un
+    // `users.id` distinto del claim `accountId`, así que se rechaza sin
+    // consultar la base ni filtrar datos.
+    if (!payload.accountId || !payload.personId || payload.sub !== payload.accountId) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',

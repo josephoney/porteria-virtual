@@ -133,7 +133,7 @@ export async function personIdForEmail(email: string): Promise<string | null> {
   return account?.personId ?? null;
 }
 
-async function userForAccount(accountId: string): Promise<typeof users.$inferSelect | null> {
+export async function userForAccount(accountId: string): Promise<typeof users.$inferSelect | null> {
   const [account] = await db
     .select({ email: accounts.email })
     .from(accounts)
@@ -195,8 +195,16 @@ async function createTokens(
   identity: AccountIdentity = {},
   isPlatformAdmin = user.isPlatformAdmin,
 ): Promise<AuthResult> {
+  if (!identity.accountId) {
+    // No debería ocurrir: todo usuario tiene cuenta desde el split people/accounts.
+    // La migración 0025 aborta si quedan usuarios sin cuenta.
+    throw new Error('account_required');
+  }
+
   const payload: JwtContextPayload = {
-    sub: user.id,
+    // `sub` identifica la cuenta: `users` desaparece y la sesión ya no puede
+    // depender de su id.
+    sub: identity.accountId,
     ...identity,
     email: user.email,
     orgId: membership.organizationId,
@@ -209,12 +217,6 @@ async function createTokens(
 
   const accessToken = signAccessToken(payload);
   const refreshToken = generateRefreshToken(membership.id);
-
-  if (!identity.accountId) {
-    // No debería ocurrir: todo usuario tiene cuenta desde el split people/accounts.
-    // La migración 0025 aborta si quedan usuarios sin cuenta.
-    throw new Error('account_required');
-  }
 
   await db.insert(refreshTokens).values({
     accountId: identity.accountId,
@@ -234,6 +236,8 @@ export async function login(email: string, password: string): Promise<LoginRespo
   const subject = await authenticate(email, password);
   if (!subject) return null;
   const { user, identity } = subject;
+  const accountId = identity.accountId;
+  if (!accountId) return null;
 
   if (subject.isPlatformAdmin) {
     return createTokens(user, platformMembership(), identity, subject.isPlatformAdmin);
@@ -248,7 +252,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
 
   const selectionToken = jwt.sign(
     {
-      sub: user.id,
+      sub: accountId,
       ...identity,
       email: user.email,
       purpose: 'context_selection',
@@ -312,11 +316,11 @@ export async function refreshToken(token: string): Promise<RefreshResponse | nul
 }
 
 export async function switchContext(
-  userId: string,
+  accountId: string,
   membershipId: string,
   currentRefreshToken?: string,
 ): Promise<AuthResult | null> {
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const user = await userForAccount(accountId);
   if (!user || !user.active) return null;
 
   const identity = await identityForUser(user);
@@ -413,6 +417,8 @@ export async function loginScoped(
   const subject = await authenticate(email, password);
   if (!subject) return { ok: false, reason: 'invalid_credentials' };
   const { user, identity } = subject;
+  const accountId = identity.accountId;
+  if (!accountId) return { ok: false, reason: 'invalid_credentials' };
 
   if (subject.isPlatformAdmin) {
     return {
@@ -435,7 +441,7 @@ export async function loginScoped(
 
   const selectionToken = jwt.sign(
     {
-      sub: user.id,
+      sub: accountId,
       ...identity,
       email: user.email,
       purpose: 'context_selection',

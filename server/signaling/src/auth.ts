@@ -10,6 +10,8 @@ const db = createDb();
 
 interface JwtContextPayload {
   sub: string;
+  accountId?: string;
+  personId?: string;
   email: string;
   orgId: string;
   membershipId: string;
@@ -46,13 +48,18 @@ export async function authenticateSocket(
         return next(new Error('Forbidden role'));
       }
 
+      // Las membresías cuelgan de la persona, no de la cuenta.
+      if (!payload.personId) {
+        return next(new Error('Invalid token'));
+      }
+
       const [membership] = await db
         .select()
         .from(memberships)
         .where(
           and(
             eq(memberships.id, payload.membershipId),
-            eq(memberships.userId, payload.sub),
+            eq(memberships.personId, payload.personId),
             eq(memberships.status, 'active'),
           ),
         )
@@ -64,7 +71,7 @@ export async function authenticateSocket(
 
       socket.data.authType = 'operator';
       socket.data.role = 'operator';
-      socket.data.operatorId = payload.sub;
+      socket.data.personId = payload.personId;
       socket.data.email = payload.email;
       socket.data.orgId = membership.organizationId;
       socket.data.communityId = membership.communityId;

@@ -149,7 +149,7 @@ describe('organization profile geography and administrator transfer', () => {
       isPlatformAdmin: true,
     });
     platformToken = app.jwt.sign({
-      sub: platformAdmin.user.id,
+      sub: platformAdmin.account.id,
       email: platformAdmin.user.email,
       accountId: platformAdmin.account.id,
       personId: platformAdmin.person.id,
@@ -195,7 +195,7 @@ describe('organization profile geography and administrator transfer', () => {
     orgAdminUserId = orgAdmin.user.id;
     orgAdminMembershipId = orgAdmin.membership.id;
     orgAdminToken = app.jwt.sign({
-      sub: orgAdmin.user.id,
+      sub: orgAdmin.account.id,
       email: orgAdmin.user.email,
       accountId: orgAdmin.account.id,
       personId: orgAdmin.person.id,
@@ -240,7 +240,7 @@ describe('organization profile geography and administrator transfer', () => {
       communityId,
     });
     communityAdminToken = app.jwt.sign({
-      sub: communityAdmin.user.id,
+      sub: communityAdmin.account.id,
       email: communityAdmin.user.email,
       accountId: communityAdmin.account.id,
       personId: communityAdmin.person.id,

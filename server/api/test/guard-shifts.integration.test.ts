@@ -415,7 +415,7 @@ describe('guard shifts and access bitacora integration', () => {
 
     guardToken = app.jwt.sign({
       ...base,
-      sub: guardUserId,
+      sub: guardAccountId,
       accountId: guardAccountId,
       personId: guardPersonId,
       membershipId: guardMembership.id,
@@ -424,7 +424,7 @@ describe('guard shifts and access bitacora integration', () => {
     });
     secondGuardToken = app.jwt.sign({
       ...base,
-      sub: secondGuardUserId,
+      sub: secondGuardAccountId,
       accountId: secondGuardAccountId,
       personId: secondGuardPersonId,
       membershipId: secondGuardMembership.id,
@@ -433,7 +433,7 @@ describe('guard shifts and access bitacora integration', () => {
     });
     idleGuardToken = app.jwt.sign({
       ...base,
-      sub: idleGuardUserId,
+      sub: idleGuardAccountId,
       accountId: idleGuardAccountId,
       personId: idleGuardPersonId,
       membershipId: idleGuardMembership.id,
@@ -442,7 +442,7 @@ describe('guard shifts and access bitacora integration', () => {
     });
     communityAdminToken = app.jwt.sign({
       ...base,
-      sub: communityAdminUserId,
+      sub: communityAdminAccountId,
       accountId: communityAdminAccountId,
       personId: communityAdminPersonId,
       membershipId: communityAdminMembership.id,
@@ -451,7 +451,7 @@ describe('guard shifts and access bitacora integration', () => {
     });
     orgAdminToken = app.jwt.sign({
       ...base,
-      sub: orgAdminUserId,
+      sub: orgAdminAccountId,
       accountId: orgAdminAccountId,
       personId: orgAdminPersonId,
       membershipId: orgAdminMembership.id,
@@ -460,7 +460,7 @@ describe('guard shifts and access bitacora integration', () => {
     });
     operatorToken = app.jwt.sign({
       ...base,
-      sub: operatorUserId,
+      sub: operatorAccountId,
       accountId: operatorAccountId,
       personId: operatorPersonId,
       membershipId: operatorMembership.id,
@@ -469,7 +469,7 @@ describe('guard shifts and access bitacora integration', () => {
     });
     residentToken = app.jwt.sign({
       ...base,
-      sub: residentUserId,
+      sub: residentAccountId,
       accountId: residentAccountId,
       personId: residentPersonId,
       membershipId: residentMembership.id,

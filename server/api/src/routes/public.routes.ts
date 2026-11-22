@@ -86,44 +86,40 @@ export async function publicRoutes(app: FastifyInstance) {
     return result.data;
   });
 
-  app.post(
-    '/invitations/:token/accept',
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      if (isRateLimited(rateLimitKey('public-invitation-accept', request), 20, 60_000)) {
-        return reply.status(429).send({ error: 'Too many requests' });
-      }
+  app.post('/invitations/:token/accept', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (isRateLimited(rateLimitKey('public-invitation-accept', request), 20, 60_000)) {
+      return reply.status(429).send({ error: 'Too many requests' });
+    }
 
-      let authenticatedUserId: string | undefined;
-      if (request.headers.authorization) {
-        try {
-          await request.jwtVerify();
-          authenticatedUserId = request.user.sub;
-        } catch {
+    let authenticatedAccountId: string | undefined;
+    if (request.headers.authorization) {
+      try {
+        await request.jwtVerify();
+        authenticatedAccountId = request.user.accountId;
+        if (!authenticatedAccountId) {
           return reply.status(401).send({ error: 'Invalid session' });
         }
+      } catch {
+        return reply.status(401).send({ error: 'Invalid session' });
       }
+    }
 
-      const { token } = request.params as { token: string };
-      const body = acceptInvitationSchema.parse(request.body);
-      const result = await invitationService.acceptInvitation(
-        token,
-        body,
-        authenticatedUserId,
-      );
+    const { token } = request.params as { token: string };
+    const body = acceptInvitationSchema.parse(request.body);
+    const result = await invitationService.acceptInvitation(token, body, authenticatedAccountId);
 
-      if (!result.ok) {
-        const status = invitationErrorStatus(result.code);
-        return reply.status(status).send({
-          error:
-            result.code === 'login_required'
-              ? 'Account already exists, log in first'
-              : result.code === 'email_mismatch'
-                ? 'Invitation email does not match the session'
-                : 'Invitation could not be accepted',
-        });
-      }
+    if (!result.ok) {
+      const status = invitationErrorStatus(result.code);
+      return reply.status(status).send({
+        error:
+          result.code === 'login_required'
+            ? 'Account already exists, log in first'
+            : result.code === 'email_mismatch'
+              ? 'Invitation email does not match the session'
+              : 'Invitation could not be accepted',
+      });
+    }
 
-      return reply.status(200).send(result.data);
-    },
-  );
+    return reply.status(200).send(result.data);
+  });
 }

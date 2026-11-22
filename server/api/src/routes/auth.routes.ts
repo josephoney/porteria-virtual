@@ -116,6 +116,18 @@ export async function authRoutes(app: FastifyInstance) {
         message: 'Invalid context token',
       });
     }
+
+    // `sub` identifica la cuenta; un token de contexto anterior al cambio
+    // llevaba un id de `users` y ya no puede canjearse.
+    const user = await authService.userForAccount(payload.sub);
+    if (!user) {
+      return reply.status(401).send({
+        statusCode: 401,
+        error: 'Unauthorized',
+        message: 'Invalid context token',
+      });
+    }
+
     const result = await authService.switchContext(
       payload.sub,
       body.membershipId,

@@ -1,7 +1,9 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { accountIdForUserId } from '../services/users.service.js';
 
 interface RequestUser {
   sub?: string;
+  accountId?: string;
   role?: string;
   orgId?: string;
   communityId?: string | null;
@@ -49,7 +51,12 @@ export function requireSelfOrRole(...roles: string[]) {
   return async function (request: FastifyRequest, reply: FastifyReply) {
     const user = request.user as RequestUser | undefined;
     const targetId = (request.params as { id?: string })?.id;
-    if (user?.sub === targetId) return;
+    // El objetivo es un `users.id`; la sesión es una cuenta. Se considera
+    // propio el recurso cuando ambos resuelven a la misma cuenta.
+    if (targetId && user?.accountId) {
+      const targetAccountId = await accountIdForUserId(targetId);
+      if (targetAccountId && targetAccountId === user.accountId) return;
+    }
     if (user?.isPlatformAdmin) return;
     if (!roles.includes(user?.role ?? '')) {
       reply.status(403).send({

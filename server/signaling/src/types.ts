@@ -19,7 +19,7 @@ export interface KioskData {
 }
 
 export interface OperatorData {
-  operatorId: string;
+  personId: string;
   name: string;
   communityId: string | null;
   orgId: string;
@@ -52,7 +52,8 @@ export interface TypedSocket extends Socket {
     communityId?: string;
     organizationId?: string;
     orgId?: string;
-    operatorId?: string;
+    personId?: string;
+    accountId?: string;
     email?: string;
     membershipId?: string;
     membershipRole?: string;

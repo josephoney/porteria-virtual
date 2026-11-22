@@ -545,7 +545,7 @@ describe('dynamic pass integration', () => {
 
     residentToken = app.jwt.sign({
       ...base,
-      sub: residentUserId,
+      sub: residentAccountId,
       accountId: residentAccountId,
       personId: residentPersonId,
       membershipId: residentMembership.id,
@@ -554,7 +554,7 @@ describe('dynamic pass integration', () => {
     });
     otherResidentToken = app.jwt.sign({
       ...base,
-      sub: otherResidentUserId,
+      sub: otherResidentAccountId,
       accountId: otherResidentAccountId,
       personId: otherResidentPersonId,
       membershipId: otherResidentMembership.id,
@@ -563,7 +563,7 @@ describe('dynamic pass integration', () => {
     });
     badResidentToken = app.jwt.sign({
       ...base,
-      sub: badResidentUserId,
+      sub: badResidentAccountId,
       accountId: badResidentAccountId,
       personId: badResidentPersonId,
       membershipId: badResidentMembership.id,
@@ -572,7 +572,7 @@ describe('dynamic pass integration', () => {
     });
     guardToken = app.jwt.sign({
       ...base,
-      sub: guardUserId,
+      sub: guardAccountId,
       accountId: guardAccountId,
       personId: guardPersonId,
       membershipId: guardMembership.id,
@@ -581,7 +581,7 @@ describe('dynamic pass integration', () => {
     });
     otherGuardToken = app.jwt.sign({
       ...base,
-      sub: otherGuardUserId,
+      sub: otherGuardAccountId,
       accountId: otherGuardAccountId,
       personId: otherGuardPersonId,
       membershipId: otherGuardMembership.id,
@@ -590,7 +590,7 @@ describe('dynamic pass integration', () => {
     });
     orgAdminToken = app.jwt.sign({
       ...base,
-      sub: orgAdminUserId,
+      sub: orgAdminAccountId,
       accountId: orgAdminAccountId,
       personId: orgAdminPersonId,
       membershipId: orgAdminMembership.id,

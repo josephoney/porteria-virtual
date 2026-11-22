@@ -29,6 +29,7 @@ let kioskId: string;
 let orgAdminToken: string;
 let operatorPersonId: string;
 let operatorUserId: string;
+let operatorAccountId: string;
 let otherPersonId: string;
 let unassignedCallId: string;
 
@@ -93,11 +94,15 @@ describe('calls operator integration', () => {
       passwordHash: 'not-used',
       name: 'Ana Operadora',
     });
-    await db.insert(accounts).values({
-      personId: operatorPersonId,
-      email: operatorEmail,
-      passwordHash: 'not-used',
-    });
+    const [operatorAccount] = await db
+      .insert(accounts)
+      .values({
+        personId: operatorPersonId,
+        email: operatorEmail,
+        passwordHash: 'not-used',
+      })
+      .returning({ id: accounts.id });
+    operatorAccountId = operatorAccount.id;
 
     const [otherPerson] = await db
       .insert(people)
@@ -117,11 +122,14 @@ describe('calls operator integration', () => {
       passwordHash: 'not-used',
       name: 'Admin Calls',
     });
-    await db.insert(accounts).values({
-      personId: adminPerson.id,
-      email: adminEmail,
-      passwordHash: 'not-used',
-    });
+    const [adminAccount] = await db
+      .insert(accounts)
+      .values({
+        personId: adminPerson.id,
+        email: adminEmail,
+        passwordHash: 'not-used',
+      })
+      .returning({ id: accounts.id });
     const [adminMembership] = await db
       .insert(memberships)
       .values({
@@ -166,9 +174,9 @@ describe('calls operator integration', () => {
     app = (await buildApp()).app;
 
     orgAdminToken = app.jwt.sign({
-      sub: adminUserId,
+      sub: adminAccount.id,
       email: adminEmail,
-      accountId: randomUUID(),
+      accountId: adminAccount.id,
       personId: adminPerson.id,
       orgId: organizationId,
       membershipId: adminMembership.id,
@@ -210,7 +218,7 @@ describe('calls operator integration', () => {
     assert.ok(data.every((row) => row.operatorName === 'Ana Operadora'));
   });
 
-  it('sigue aceptando el users.id heredado y lo resuelve a persona', async () => {
+  it('resuelve el id de cuenta heredado a la persona del operador', async () => {
     const callId = randomUUID();
     await db.insert(calls).values({
       id: callId,
@@ -224,7 +232,7 @@ describe('calls operator integration', () => {
       method: 'PATCH',
       url: `/api/internal/calls/${callId}`,
       headers: { 'x-internal-key': INTERNAL_KEY },
-      payload: { status: 'active', operatorId: operatorUserId },
+      payload: { status: 'active', operatorId: operatorAccountId },
     });
     assert.equal(res.statusCode, 200);
 

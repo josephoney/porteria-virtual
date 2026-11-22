@@ -31,27 +31,24 @@ export async function persistCallRequest(
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      log?.warn(
-        { callId, kioskId, status: res.status, body },
-        'Failed to persist call request',
-      );
+      log?.warn({ callId, kioskId, status: res.status, body }, 'Failed to persist call request');
     }
   } catch (err) {
     log?.warn({ callId, err: (err as Error).message }, 'Failed to persist call request (network)');
   }
 }
 
-export async function persistCallAccept(callId: string, operatorId: string) {
+export async function persistCallAccept(callId: string, operatorPersonId: string) {
   try {
     const res = await fetch(`${config.API_BASE_URL}/api/internal/calls/${callId}`, {
       method: 'PATCH',
       headers: apiHeaders(),
-      body: JSON.stringify({ status: 'active', operatorId }),
+      body: JSON.stringify({ status: 'active', operatorPersonId }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       log?.warn(
-        { callId, operatorId, status: res.status, body },
+        { callId, operatorPersonId, status: res.status, body },
         'Failed to persist call accept',
       );
     }
@@ -81,10 +78,7 @@ export async function persistCallEnd(
     });
     if (!res.ok) {
       const errBody = await res.json().catch(() => ({}));
-      log?.warn(
-        { callId, status: res.status, body: errBody },
-        'Failed to persist call end',
-      );
+      log?.warn({ callId, status: res.status, body: errBody }, 'Failed to persist call end');
     }
   } catch (err) {
     log?.warn({ callId, err: (err as Error).message }, 'Failed to persist call end (network)');
@@ -100,13 +94,13 @@ export async function persistRelayTrigger(kioskId: string, relayIndex: number) {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      log?.warn(
-        { kioskId, relayIndex, status: res.status, body },
-        'Failed to trigger relay',
-      );
+      log?.warn({ kioskId, relayIndex, status: res.status, body }, 'Failed to trigger relay');
     }
   } catch (err) {
-    log?.warn({ kioskId, relayIndex, err: (err as Error).message }, 'Failed to trigger relay (network)');
+    log?.warn(
+      { kioskId, relayIndex, err: (err as Error).message },
+      'Failed to trigger relay (network)',
+    );
   }
 }
 
@@ -160,9 +154,6 @@ export async function persistEvent(
       })
       .onConflictDoNothing({ target: outboxEvents.eventId });
   } catch (err) {
-    log?.warn(
-      { eventType, err: (err as Error).message },
-      'Failed to persist event in outbox',
-    );
+    log?.warn({ eventType, err: (err as Error).message }, 'Failed to persist event in outbox');
   }
 }

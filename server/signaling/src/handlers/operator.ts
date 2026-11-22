@@ -1,11 +1,7 @@
 import type { Server as SocketIOServer } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents, TypedSocket } from '../types.js';
 import type { SignalingState } from '../state.js';
-import {
-  broadcastOperatorState,
-  canAccessKiosk,
-  getKiosksForOperator,
-} from '../utils.js';
+import { broadcastOperatorState, canAccessKiosk, getKiosksForOperator } from '../utils.js';
 import {
   persistCallAccept,
   persistDoorRelay,
@@ -27,7 +23,7 @@ function denyActuation(
     persistEvent('security.unauthorized_actuation', {
       organizationId: kiosk.organizationId,
       communityId: kiosk.communityId,
-      actorId: operator?.operatorId,
+      actorId: operator?.personId,
       actorRole: operator?.role,
       metadata: { action, kioskId },
     });
@@ -40,19 +36,19 @@ export function registerOperatorHandlers(
   state: SignalingState,
 ): void {
   socket.on('operator:register', ({ name }) => {
-    const operatorId = socket.data.operatorId;
+    const personId = socket.data.personId;
     const orgId = socket.data.orgId;
     const role = socket.data.membershipRole;
     const communityId = socket.data.communityId ?? null;
 
-    if (!operatorId || !orgId || !role) {
+    if (!personId || !orgId || !role) {
       socket.emit('error', 'Sesión de operador inválida');
       return;
     }
 
     const operatorData = {
-      operatorId,
-      name: name || socket.data.email || operatorId,
+      personId,
+      name: name || socket.data.email || personId,
       communityId,
       orgId,
       role,
@@ -125,7 +121,7 @@ export function registerOperatorHandlers(
     });
 
     broadcastOperatorState(io, state);
-    persistCallAccept(callId, operatorData.operatorId);
+    persistCallAccept(callId, operatorData.personId);
   });
 
   socket.on('door:open', ({ kioskId }) => {
@@ -146,7 +142,7 @@ export function registerOperatorHandlers(
     persistEvent('door.open', {
       organizationId: kiosk.organizationId,
       communityId: kiosk.communityId,
-      actorId: operatorData.operatorId,
+      actorId: operatorData.personId,
       actorRole: 'operator',
     });
   });

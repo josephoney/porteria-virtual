@@ -334,7 +334,7 @@ describe('pass destinations integration', () => {
 
     orgAdminToken = app.jwt.sign({
       ...base,
-      sub: residentUserId,
+      sub: residentAccountId,
       accountId: residentAccountId,
       personId: residentPersonId,
       membershipId: residentMembership.id,
@@ -350,7 +350,7 @@ describe('pass destinations integration', () => {
     structureId = structureRow!.id;
     residentToken = app.jwt.sign({
       ...base,
-      sub: residentUserId,
+      sub: residentAccountId,
       accountId: residentAccountId,
       personId: residentPersonId,
       membershipId: residentMembership.id,
@@ -360,7 +360,7 @@ describe('pass destinations integration', () => {
     otherResidentToken = app.jwt.sign({
       ...base,
       unitId: otherHomeLeafId,
-      sub: otherResidentUserId,
+      sub: otherResidentAccountId,
       accountId: otherResidentAccountId,
       personId: otherResidentPersonId,
       membershipId: otherResidentMembership.id,

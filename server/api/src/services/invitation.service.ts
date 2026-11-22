@@ -422,7 +422,7 @@ export async function previewInvitation(
 export async function acceptInvitation(
   token: string,
   body: { name?: string; password?: string },
-  authenticatedUserId?: string,
+  authenticatedAccountId?: string,
 ): Promise<InvitationResult<authService.AuthResult>> {
   const [invitation] = await db
     .select()
@@ -444,8 +444,15 @@ export async function acceptInvitation(
   const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
 
   if (existingUser) {
-    if (!authenticatedUserId) return { ok: false, code: 'login_required' };
-    if (existingUser.id !== authenticatedUserId) return { ok: false, code: 'email_mismatch' };
+    if (!authenticatedAccountId) return { ok: false, code: 'login_required' };
+    const [existingAccount] = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.email, existingUser.email))
+      .limit(1);
+    if (!existingAccount || existingAccount.id !== authenticatedAccountId) {
+      return { ok: false, code: 'email_mismatch' };
+    }
 
     const personId = await authService.personIdForEmail(existingUser.email);
     if (!personId) return { ok: false, code: 'not_found' };
@@ -487,7 +494,7 @@ export async function acceptInvitation(
         .where(eq(invitations.id, invitation.id));
     });
 
-    const tokens = await authService.switchContext(existingUser.id, membership.id);
+    const tokens = await authService.switchContext(existingAccount.id, membership.id);
     if (!tokens) return { ok: false, code: 'conflict' };
     return { ok: true, data: tokens };
   }
@@ -522,13 +529,16 @@ export async function acceptInvitation(
         })
         .returning();
 
-      await tx.insert(accounts).values({
-        personId: person.id,
-        email,
-        passwordHash,
-        active: true,
-        isPlatformAdmin: false,
-      });
+      const [account] = await tx
+        .insert(accounts)
+        .values({
+          personId: person.id,
+          email,
+          passwordHash,
+          active: true,
+          isPlatformAdmin: false,
+        })
+        .returning({ id: accounts.id });
 
       const [membership] = await tx
         .insert(memberships)
@@ -556,10 +566,10 @@ export async function acceptInvitation(
           .where(otherOrgAdminsCondition(invitation.organizationId, membership.id));
       }
 
-      return { userId: user.id, membershipId: membership.id };
+      return { accountId: account.id, membershipId: membership.id };
     });
 
-    const auth = await authService.switchContext(tokens.userId, tokens.membershipId);
+    const auth = await authService.switchContext(tokens.accountId, tokens.membershipId);
     if (!auth) return { ok: false, code: 'conflict' };
     return { ok: true, data: auth };
   } catch (err) {

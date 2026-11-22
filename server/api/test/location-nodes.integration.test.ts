@@ -43,11 +43,18 @@ let residentId: string;
 let orgAdminUserId: string;
 let orgAdminToken: string;
 let orgAdminPersonId: string;
+let orgAdminAccountId: string;
 let communityAdminUserId: string;
 let communityAdminPersonId: string;
+let communityAdminAccountId: string;
 let communityAdminToken: string;
 let guardUserId: string;
+let guardPersonId: string;
+let guardAccountId: string;
 let guardToken: string;
+let platformUserId: string;
+let platformPersonId: string;
+let platformAccountId: string;
 let loginAccountEmail: string;
 let loginAccountUserId: string;
 let loginAccountPersonId: string;
@@ -439,6 +446,69 @@ describe('location node integration', () => {
       })
       .returning();
 
+    // Las sesiones se identifican por cuenta: cada persona de la suite necesita
+    // su cuenta para que el token resuelva.
+    const [orgAdminAccount] = await db
+      .insert(accounts)
+      .values({
+        personId: orgAdminPersonId,
+        email: orgAdminUser.email,
+        passwordHash: 'not-used',
+      })
+      .returning();
+    orgAdminAccountId = orgAdminAccount.id;
+
+    const [communityAdminAccount] = await db
+      .insert(accounts)
+      .values({
+        personId: communityAdminPersonId,
+        email: communityAdminUser.email,
+        passwordHash: 'not-used',
+      })
+      .returning();
+    communityAdminAccountId = communityAdminAccount.id;
+
+    const [guardAccount] = await db
+      .insert(accounts)
+      .values({
+        personId: guardPerson.id,
+        email: guardUser.email,
+        passwordHash: 'not-used',
+      })
+      .returning();
+    guardAccountId = guardAccount.id;
+    guardPersonId = guardPerson.id;
+
+    const platformEmail = `platform-fixture-${suffix}@test.local`;
+    const [platformUser] = await db
+      .insert(users)
+      .values({
+        email: platformEmail,
+        passwordHash: 'not-used',
+        name: 'Platform Fixture',
+      })
+      .returning();
+    platformUserId = platformUser.id;
+    const [platformPerson] = await db
+      .insert(people)
+      .values({
+        firstName: 'Platform',
+        lastName: 'Fixture',
+        contactEmail: platformEmail,
+        status: 'active',
+      })
+      .returning();
+    platformPersonId = platformPerson.id;
+    const [platformAccount] = await db
+      .insert(accounts)
+      .values({
+        personId: platformPersonId,
+        email: platformEmail,
+        passwordHash: 'not-used',
+      })
+      .returning();
+    platformAccountId = platformAccount.id;
+
     // Login fixture: the suite must not depend on the demo seed, which CI never runs.
     loginAccountEmail = `login-fixture-${suffix}@test.local`;
     const [loginAccountUser] = await db
@@ -480,10 +550,10 @@ describe('location node integration', () => {
     app = (await buildApp()).app;
 
     token = app.jwt.sign({
-      sub: randomUUID(),
+      sub: platformAccountId,
       email: 'integration@test.local',
-      accountId: randomUUID(),
-      personId: orgAdminPersonId,
+      accountId: platformAccountId,
+      personId: platformPersonId,
       orgId: organizationId,
       membershipId: 'platform',
       role: 'org_admin',
@@ -492,9 +562,9 @@ describe('location node integration', () => {
       isPlatformAdmin: true,
     });
     orgAdminToken = app.jwt.sign({
-      sub: orgAdminUserId,
+      sub: orgAdminAccountId,
       email: orgAdminUser.email,
-      accountId: randomUUID(),
+      accountId: orgAdminAccountId,
       personId: orgAdminPersonId,
       orgId: organizationId,
       membershipId: orgAdminMembership.id,
@@ -504,9 +574,9 @@ describe('location node integration', () => {
       isPlatformAdmin: false,
     });
     communityAdminToken = app.jwt.sign({
-      sub: communityAdminUserId,
+      sub: communityAdminAccountId,
       email: communityAdminUser.email,
-      accountId: randomUUID(),
+      accountId: communityAdminAccountId,
       personId: communityAdminPersonId,
       orgId: organizationId,
       membershipId: communityAdminMembership.id,
@@ -516,9 +586,9 @@ describe('location node integration', () => {
       isPlatformAdmin: false,
     });
     guardToken = app.jwt.sign({
-      sub: guardUserId,
+      sub: guardAccountId,
       email: guardUser.email,
-      accountId: randomUUID(),
+      accountId: guardAccountId,
       personId: guardPerson.id,
       orgId: organizationId,
       membershipId: guardMembership.id,
@@ -535,6 +605,7 @@ describe('location node integration', () => {
     await db.delete(users).where(eq(users.id, orgAdminUserId));
     await db.delete(users).where(eq(users.id, communityAdminUserId));
     await db.delete(users).where(eq(users.id, guardUserId));
+    await db.delete(users).where(eq(users.id, platformUserId));
     await db.delete(organizations).where(eq(organizations.id, organizationId));
     await db
       .delete(people)
@@ -543,6 +614,7 @@ describe('location node integration', () => {
           legalRepresentativePersonId,
           orgAdminPersonId,
           communityAdminPersonId,
+          platformPersonId,
           loginAccountPersonId,
         ]),
       );

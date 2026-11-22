@@ -5,7 +5,6 @@ import {
   calls,
   kiosks,
   people,
-  users,
   accounts,
   accessPoints,
   communities,
@@ -230,13 +229,13 @@ export async function updateCall(
   if (input.operatorPersonId !== undefined) {
     updates.operatorPersonId = input.operatorPersonId;
   } else if (input.operatorId !== undefined) {
-    // Transición: hay llamadores que todavía envían users.id.
+    // Transición: el campo heredado transporta el id de la cuenta (antes llevaba
+    // un id de `users`). Se resuelve la persona dueña de la cuenta.
     if (input.operatorId) {
       const [operator] = await db
         .select({ personId: accounts.personId })
-        .from(users)
-        .innerJoin(accounts, eq(accounts.email, users.email))
-        .where(eq(users.id, input.operatorId))
+        .from(accounts)
+        .where(eq(accounts.id, input.operatorId))
         .limit(1);
       updates.operatorPersonId = operator?.personId ?? null;
     } else {

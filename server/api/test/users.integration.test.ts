@@ -252,7 +252,7 @@ describe('users list filters integration', () => {
 
     orgAdminToken = app.jwt.sign({
       ...base,
-      sub: orgAdminUserId,
+      sub: orgAdminAccountId,
       accountId: orgAdminAccountId,
       personId: orgAdminPersonId,
       membershipId: orgAdminMembershipId,
@@ -262,7 +262,7 @@ describe('users list filters integration', () => {
 
     communityAdminToken = app.jwt.sign({
       ...base,
-      sub: communityAdminUserId,
+      sub: communityAdminAccountId,
       accountId: communityAdminAccountId,
       personId: communityAdminPersonId,
       membershipId: communityAdminMembershipId,

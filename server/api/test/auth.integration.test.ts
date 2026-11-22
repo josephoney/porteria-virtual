@@ -161,6 +161,54 @@ describe('auth sessions sobre accounts', () => {
     assert.ok(body.user.id);
   });
 
+  it('firma el access token con el id de la cuenta en sub', async () => {
+    const body = parse(await login(CURRENT_PASSWORD));
+    const payload = app.jwt.verify<{ sub: string; accountId?: string; personId?: string }>(
+      body.accessToken,
+    );
+
+    assert.equal(payload.sub, accountId);
+    assert.equal(payload.accountId, accountId);
+    assert.equal(payload.personId, personId);
+  });
+
+  it('resuelve el usuario autenticado a partir de la cuenta', async () => {
+    const session = parse(await login(CURRENT_PASSWORD));
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = parse(response);
+    assert.equal(body.id, userId);
+    assert.equal(body.email, email);
+  });
+
+  it('rechaza un token previo cuyo sub es un users.id', async () => {
+    const legacyToken = app.jwt.sign({
+      sub: userId,
+      accountId,
+      personId,
+      email,
+      orgId: organizationId,
+      membershipId,
+      role: 'org_admin',
+      communityId,
+      unitId: null,
+      isPlatformAdmin: false,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      headers: { authorization: `Bearer ${legacyToken}` },
+    });
+
+    assert.equal(response.statusCode, 401);
+  });
+
   it('rechaza una contraseña incorrecta', async () => {
     const response = await login('no-es-la-contrasena');
     assert.equal(response.statusCode, 401);
