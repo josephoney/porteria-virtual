@@ -20,7 +20,6 @@ import * as slugService from '../services/slug.service.js';
 import * as invitationService from '../services/invitation.service.js';
 import * as eventsService from '../services/events.service.js';
 import * as usersService from '../services/users.service.js';
-import * as authService from '../services/auth.service.js';
 import {
   createOrganizationSchema,
   updateOrganizationSchema,
@@ -94,12 +93,14 @@ async function getActiveOrganizationAdministrator(
 ): Promise<ActiveOrganizationAdministrator | null> {
   const [row] = await db
     .select({
-      userId: users.id,
-      email: users.email,
-      name: users.name,
+      userId: accounts.id,
+      email: accounts.email,
+      firstName: people.firstName,
+      lastName: people.lastName,
     })
     .from(memberships)
-    .innerJoin(users, eq(memberships.userId, users.id))
+    .innerJoin(people, eq(memberships.personId, people.id))
+    .innerJoin(accounts, eq(accounts.personId, people.id))
     .where(
       and(
         eq(memberships.organizationId, organizationId),
@@ -109,7 +110,14 @@ async function getActiveOrganizationAdministrator(
     )
     .limit(1);
 
-  return row ? { status: 'active', ...row } : null;
+  return row
+    ? {
+        status: 'active',
+        userId: row.userId,
+        email: row.email,
+        name: `${row.firstName} ${row.lastName}`.trim(),
+      }
+    : null;
 }
 
 async function transferOrganizationAdministrator(
@@ -118,13 +126,28 @@ async function transferOrganizationAdministrator(
   email: string,
   previousEmail: string | null,
 ): Promise<{ administrator: OrganizationAdministrator } | { error: string; status: number }> {
-  const [targetUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const [targetAccount] = await db
+    .select({
+      accountId: accounts.id,
+      personId: accounts.personId,
+      email: accounts.email,
+      firstName: people.firstName,
+      lastName: people.lastName,
+    })
+    .from(accounts)
+    .innerJoin(people, eq(accounts.personId, people.id))
+    .where(eq(accounts.email, email))
+    .limit(1);
 
-  if (targetUser) {
-    const personId = await authService.personIdForEmail(targetUser.email);
-    if (!personId) {
-      return { error: 'Person not found for this account', status: 409 };
-    }
+  if (targetAccount) {
+    const personId = targetAccount.personId;
+    // Escritura dual: la membresía sigue guardando el id legacy de `users`
+    // mientras la columna exista, pero la identidad es la persona.
+    const [legacyUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
 
     await db.transaction(async (tx) => {
       const [existingMembership] = await tx
@@ -132,7 +155,7 @@ async function transferOrganizationAdministrator(
         .from(memberships)
         .where(
           and(
-            eq(memberships.userId, targetUser.id),
+            eq(memberships.personId, personId),
             eq(memberships.organizationId, organization.id),
             eq(memberships.role, 'org_admin'),
             isNull(memberships.communityId),
@@ -153,7 +176,7 @@ async function transferOrganizationAdministrator(
         const [created] = await tx
           .insert(memberships)
           .values({
-            userId: targetUser.id,
+            userId: legacyUser?.id ?? null,
             personId,
             organizationId: organization.id,
             role: 'org_admin',
@@ -196,9 +219,9 @@ async function transferOrganizationAdministrator(
     return {
       administrator: {
         status: 'active',
-        userId: targetUser.id,
-        email: targetUser.email,
-        name: targetUser.name,
+        userId: targetAccount.accountId,
+        email: targetAccount.email,
+        name: `${targetAccount.firstName} ${targetAccount.lastName}`.trim(),
       },
     };
   }
@@ -368,14 +391,12 @@ export async function platformRoutes(app: FastifyInstance) {
         lastName: people.lastName,
         email: people.contactEmail,
         accountEmail: accounts.email,
-        userEmail: users.email,
         role: memberships.role,
         status: memberships.status,
       })
       .from(memberships)
       .innerJoin(people, eq(memberships.personId, people.id))
       .leftJoin(accounts, eq(accounts.personId, people.id))
-      .leftJoin(users, eq(memberships.userId, users.id))
       .where(
         and(
           eq(memberships.organizationId, id),
@@ -387,8 +408,7 @@ export async function platformRoutes(app: FastifyInstance) {
     const administrator = administratorRow
       ? {
           ...administratorRow,
-          email:
-            administratorRow.email ?? administratorRow.userEmail ?? administratorRow.accountEmail,
+          email: administratorRow.email ?? administratorRow.accountEmail,
           name: `${administratorRow.firstName} ${administratorRow.lastName}`.trim(),
         }
       : null;

@@ -185,14 +185,14 @@ function canManage(invitation: typeof invitations.$inferSelect, requester: Invit
 }
 
 async function findMembership(
-  userId: string,
+  personId: string,
   organizationId: string,
   communityId: string | null,
   unitId: string | null,
   role: string,
 ) {
   const conditions = [
-    eq(memberships.userId, userId),
+    eq(memberships.personId, personId),
     eq(memberships.organizationId, organizationId),
     eq(memberships.role, role as MembershipRole),
     eq(memberships.status, 'active'),
@@ -240,10 +240,14 @@ export async function createInvitation(
 
   const email = data.email.trim().toLowerCase();
 
-  const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (existingUser) {
+  const [existingAccount] = await db
+    .select({ personId: accounts.personId })
+    .from(accounts)
+    .where(eq(accounts.email, email))
+    .limit(1);
+  if (existingAccount) {
     const existingMembership = await findMembership(
-      existingUser.id,
+      existingAccount.personId,
       scope.organizationId,
       scope.communityId,
       scope.unitId,
@@ -472,7 +476,7 @@ export async function acceptInvitation(
       .onConflictDoNothing();
 
     const membership = await findMembership(
-      existingUser.id,
+      personId,
       invitation.organizationId,
       invitation.communityId,
       invitation.unitId,

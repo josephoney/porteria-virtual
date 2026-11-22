@@ -182,7 +182,7 @@ describe('auth sessions sobre accounts', () => {
 
     assert.equal(response.statusCode, 200);
     const body = parse(response);
-    assert.equal(body.id, userId);
+    assert.equal(body.id, accountId);
     assert.equal(body.email, email);
   });
 

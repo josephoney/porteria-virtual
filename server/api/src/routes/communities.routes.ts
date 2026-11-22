@@ -10,7 +10,6 @@ import {
   memberships,
   people,
   accounts,
-  users,
   invitations,
 } from '@porteria/database/schema';
 import type { CommunityStructureSummary } from '@porteria/shared';
@@ -148,10 +147,10 @@ export async function communityRoutes(app: FastifyInstance) {
         ? await db
             .select({
               communityId: memberships.communityId,
-              adminEmail: users.email,
+              adminEmail: accounts.email,
             })
             .from(memberships)
-            .innerJoin(users, eq(memberships.userId, users.id))
+            .innerJoin(accounts, eq(accounts.personId, memberships.personId))
             .where(
               and(
                 inArray(memberships.communityId, communityIds),
@@ -159,7 +158,7 @@ export async function communityRoutes(app: FastifyInstance) {
                 eq(memberships.status, 'active'),
               ),
             )
-            .orderBy(users.email)
+            .orderBy(accounts.email)
         : [];
       const administrators = new Map<string, string>();
       for (const row of administratorRows) {
@@ -326,14 +325,12 @@ export async function communityRoutes(app: FastifyInstance) {
           lastName: people.lastName,
           email: people.contactEmail,
           accountEmail: accounts.email,
-          userEmail: users.email,
           role: memberships.role,
           status: memberships.status,
         })
         .from(memberships)
         .innerJoin(people, eq(memberships.personId, people.id))
         .leftJoin(accounts, eq(accounts.personId, people.id))
-        .leftJoin(users, eq(memberships.userId, users.id))
         .where(
           and(
             eq(memberships.organizationId, community.organizationId),
@@ -346,8 +343,7 @@ export async function communityRoutes(app: FastifyInstance) {
       const administrator = administratorRow
         ? {
             ...administratorRow,
-            email:
-              administratorRow.email ?? administratorRow.userEmail ?? administratorRow.accountEmail,
+            email: administratorRow.email ?? administratorRow.accountEmail,
             name: `${administratorRow.firstName} ${administratorRow.lastName}`.trim(),
           }
         : null;

@@ -460,19 +460,29 @@ async function seed() {
   console.log('  Users created');
 
   // Reset demo memberships so the seed stays deterministic and removes legacy
-  // backfilled rows with incomplete scope.
-  const demoUserIds = [
-    orgAdmin.id,
-    orgAdmin2.id,
-    communityAdmin.id,
-    operator.id,
-    guard.id,
-    resident.id,
-    resident2.id,
-    resident3.id,
-    multi.id,
+  // backfilled rows with incomplete scope. La membresía se identifica por
+  // persona: la cuenta es el puente desde el email del usuario demo.
+  const demoEmails = [
+    orgAdmin.email,
+    orgAdmin2.email,
+    communityAdmin.email,
+    operator.email,
+    guard.email,
+    resident.email,
+    resident2.email,
+    resident3.email,
+    multi.email,
   ];
-  await db.delete(memberships).where(inArray(memberships.userId, demoUserIds));
+  const demoAccounts = demoEmails.length
+    ? await db
+        .select({ personId: accounts.personId })
+        .from(accounts)
+        .where(inArray(accounts.email, demoEmails))
+    : [];
+  const demoPersonIds = [...new Set(demoAccounts.map((account) => account.personId))];
+  if (demoPersonIds.length) {
+    await db.delete(memberships).where(inArray(memberships.personId, demoPersonIds));
+  }
 
   await addMembership({ userId: orgAdmin.id, organizationId: adminOrg.id, role: 'org_admin' });
   await addMembership({

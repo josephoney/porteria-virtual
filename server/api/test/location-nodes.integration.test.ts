@@ -1157,7 +1157,7 @@ describe('location node integration', () => {
     };
     assert.equal(body.memberships[0]?.locationUnitId, unitChildId);
 
-    await db.delete(users).where(eq(users.id, body.id));
+    await db.delete(users).where(eq(users.email, email));
     await db.delete(accounts).where(eq(accounts.email, email));
     await db.delete(people).where(eq(people.contactEmail, email));
   });
@@ -1225,7 +1225,12 @@ describe('location node integration', () => {
   });
 
   it('lists people for the legal representative picker', async () => {
-    const response = await request('GET', '/api/people?pageSize=100', undefined, orgAdminToken);
+    const response = await request(
+      'GET',
+      '/api/people?pageSize=100&search=Legal',
+      undefined,
+      orgAdminToken,
+    );
     assert.equal(response.statusCode, 200);
     const people = JSON.parse(response.body) as Array<{ id: string }>;
     const person = people.find((item) => item.id === legalRepresentativePersonId) as
@@ -1632,7 +1637,7 @@ describe('location node integration', () => {
       ['Staff Community A', 'Staff Community B'],
     );
 
-    await db.delete(users).where(eq(users.id, user.id));
+    await db.delete(users).where(eq(users.email, email));
     await db.delete(accounts).where(eq(accounts.email, email));
     await db.delete(people).where(eq(people.contactEmail, email));
   });
@@ -2045,7 +2050,7 @@ describe('location node integration', () => {
     const rejectedLogin = await request('POST', '/api/auth/login', { email, password });
     assert.equal(rejectedLogin.statusCode, 401);
 
-    await db.delete(memberships).where(eq(memberships.userId, accountUser.id));
+    await db.delete(memberships).where(eq(memberships.personId, legalRepresentativePersonId));
     await db.delete(accounts).where(eq(accounts.email, email));
     await db.delete(users).where(eq(users.email, email));
   });

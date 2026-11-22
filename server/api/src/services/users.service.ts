@@ -1,4 +1,4 @@
-import { eq, and, count, countDistinct, inArray, or, ilike, type SQL } from 'drizzle-orm';
+import { eq, and, countDistinct, inArray, or, ilike, sql, type SQL } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import {
   users,
@@ -10,7 +10,6 @@ import {
   organizations,
 } from '@porteria/database/schema';
 import { hashPassword, setPassword, verifyPassword } from './credentials.service.js';
-import { userForAccount } from './auth.service.js';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
 
@@ -53,7 +52,43 @@ export interface UserResult {
   updatedAt: Date;
 }
 
+/**
+ * Columnas de la identidad expuesta por el recurso de usuarios. La cuenta es la
+ * fuente de verdad; la persona aporta los datos de perfil.
+ */
+const accountPersonColumns = {
+  id: accounts.id,
+  personId: accounts.personId,
+  email: accounts.email,
+  active: accounts.active,
+  isPlatformAdmin: accounts.isPlatformAdmin,
+  createdAt: accounts.createdAt,
+  updatedAt: accounts.updatedAt,
+  firstName: people.firstName,
+  lastName: people.lastName,
+  documentNumber: people.documentNumber,
+  phone: people.phone,
+};
+
+interface AccountPersonRow {
+  id: string;
+  personId: string;
+  email: string;
+  active: boolean;
+  isPlatformAdmin: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  firstName: string;
+  lastName: string;
+  documentNumber: string | null;
+  phone: string | null;
+}
+
 const db = createDb();
+
+function fullName(row: AccountPersonRow): string {
+  return [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
+}
 
 function toMembershipView(row: typeof memberships.$inferSelect): MembershipView {
   return {
@@ -114,62 +149,35 @@ async function enrichMembershipViews(views: MembershipView[]): Promise<Membershi
 }
 
 async function enrichUsers(data: UserResult[]): Promise<UserResult[]> {
-  const [enriched, accountRows] = await Promise.all([
-    enrichMembershipViews(data.flatMap((user) => user.memberships)),
-    data.length
-      ? db
-          .select({
-            id: accounts.id,
-            personId: accounts.personId,
-            email: accounts.email,
-            firstName: people.firstName,
-            lastName: people.lastName,
-            documentNumber: people.documentNumber,
-            phone: people.phone,
-          })
-          .from(accounts)
-          .leftJoin(people, eq(accounts.personId, people.id))
-          .where(
-            inArray(
-              accounts.email,
-              data.map((user) => user.email),
-            ),
-          )
-      : Promise.resolve([]),
-  ]);
+  const enriched = await enrichMembershipViews(data.flatMap((user) => user.memberships));
   const membershipsById = new Map(enriched.map((membership) => [membership.id, membership]));
-  const accountsByEmail = new Map(accountRows.map((account) => [account.email, account]));
-  return data.map((user) => {
-    const account = accountsByEmail.get(user.email);
-    return {
-      ...user,
-      accountId: account?.id ?? null,
-      personId: account?.personId ?? null,
-      personName: account
-        ? [account.firstName, account.lastName].filter(Boolean).join(' ').trim() || null
-        : null,
-      personDocumentNumber: account?.documentNumber ?? null,
-      personPhone: account?.phone ?? null,
-      memberships: user.memberships.map(
-        (membership) => membershipsById.get(membership.id) ?? membership,
-      ),
-    };
-  });
+  return data.map((user) => ({
+    ...user,
+    memberships: user.memberships.map(
+      (membership) => membershipsById.get(membership.id) ?? membership,
+    ),
+  }));
 }
 
 function toUserResult(
-  user: typeof users.$inferSelect,
+  row: AccountPersonRow,
   membershipRows: (typeof memberships.$inferSelect)[],
 ): UserResult {
+  const name = fullName(row);
   return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    isPlatformAdmin: user.isPlatformAdmin,
-    active: user.active,
+    id: row.id,
+    accountId: row.id,
+    personId: row.personId,
+    personName: name || null,
+    personDocumentNumber: row.documentNumber ?? null,
+    personPhone: row.phone ?? null,
+    email: row.email,
+    name: name || row.email,
+    isPlatformAdmin: row.isPlatformAdmin,
+    active: row.active,
     memberships: membershipRows.map(toMembershipView),
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -181,8 +189,8 @@ function canManage(requester: Requester): boolean {
   );
 }
 
-function scopeConditions(requester: Requester, targetUserId: string) {
-  const conditions = [eq(memberships.userId, targetUserId)];
+function scopeConditions(requester: Requester, targetPersonId: string) {
+  const conditions = [eq(memberships.personId, targetPersonId)];
   if (!requester.isPlatformAdmin) {
     conditions.push(eq(memberships.organizationId, requester.orgId));
   }
@@ -192,39 +200,30 @@ function scopeConditions(requester: Requester, targetUserId: string) {
   return conditions;
 }
 
-/** Resuelve la cuenta asociada a una fila de `users` por el email compartido. */
-export async function accountIdForUserId(userId: string): Promise<string | null> {
-  const [row] = await db
-    .select({ accountId: accounts.id })
-    .from(users)
-    .innerJoin(accounts, eq(accounts.email, users.email))
-    .where(eq(users.id, userId))
-    .limit(1);
-  return row?.accountId ?? null;
-}
-
 export async function getUserById(id: string, requester: Requester): Promise<UserResult | null> {
-  const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
-  if (!user) return null;
+  const [account] = await db
+    .select(accountPersonColumns)
+    .from(accounts)
+    .innerJoin(people, eq(accounts.personId, people.id))
+    .where(eq(accounts.id, id))
+    .limit(1);
+  if (!account) return null;
 
-  // La sesión identifica la cuenta, mientras que `id` sigue siendo el id de
-  // `users` en esta fase. Ser uno mismo significa que ambos apuntan a la misma
-  // fila: se resuelve la cuenta del objetivo y se compara con la de la sesión.
-  const isSelf = requester.accountId
-    ? (await accountIdForUserId(id)) === requester.accountId
-    : false;
+  // La sesión identifica la cuenta y el recurso también: ser uno mismo es una
+  // comparación directa entre el id del path y el claim de la sesión.
+  const isSelf = requester.accountId === id;
   if (!isSelf && !canManage(requester)) return null;
 
   const membershipRows = isSelf
-    ? await db.select().from(memberships).where(eq(memberships.userId, id))
+    ? await db.select().from(memberships).where(eq(memberships.personId, account.personId))
     : await db
         .select()
         .from(memberships)
-        .where(and(...scopeConditions(requester, id)));
+        .where(and(...scopeConditions(requester, account.personId)));
 
   if (!isSelf && membershipRows.length === 0) return null;
 
-  const [result] = await enrichUsers([toUserResult(user, membershipRows)]);
+  const [result] = await enrichUsers([toUserResult(account, membershipRows)]);
   return result;
 }
 
@@ -259,17 +258,18 @@ export async function listUsers(
 
   const filterConditions: SQL[] = [];
   if (search) {
+    const term = `%${search}%`;
     const searchCondition = or(
-      ilike(users.email, `%${search}%`),
-      ilike(users.name, `%${search}%`),
-      ilike(people.firstName, `%${search}%`),
-      ilike(people.lastName, `%${search}%`),
-      ilike(people.documentNumber, `%${search}%`),
+      ilike(accounts.email, term),
+      ilike(sql`${people.firstName} || ' ' || ${people.lastName}`, term),
+      ilike(people.firstName, term),
+      ilike(people.lastName, term),
+      ilike(people.documentNumber, term),
     );
     if (searchCondition) filterConditions.push(searchCondition);
   }
   if (status) {
-    filterConditions.push(eq(users.active, status === 'active'));
+    filterConditions.push(eq(accounts.active, status === 'active'));
   }
 
   const scopeWhereClause = scopeConditions.length > 0 ? and(...scopeConditions) : undefined;
@@ -278,32 +278,30 @@ export async function listUsers(
       ? and(...scopeConditions, ...filterConditions)
       : undefined;
 
-  const userIdRows = await db
-    .selectDistinct({ id: users.id, createdAt: users.createdAt })
-    .from(users)
-    .innerJoin(memberships, eq(memberships.userId, users.id))
-    .leftJoin(accounts, eq(accounts.email, users.email))
-    .leftJoin(people, eq(people.id, accounts.personId))
+  const accountRows = await db
+    .selectDistinct({ id: accounts.id, createdAt: accounts.createdAt })
+    .from(accounts)
+    .innerJoin(people, eq(accounts.personId, people.id))
+    .innerJoin(memberships, eq(memberships.personId, accounts.personId))
     .where(whereClause)
-    .orderBy(users.createdAt)
+    .orderBy(accounts.createdAt, accounts.id)
     .limit(pageSize)
     .offset(offset);
 
   const [totalRow] = await db
-    .select({ count: countDistinct(users.id) })
-    .from(users)
-    .innerJoin(memberships, eq(memberships.userId, users.id))
-    .leftJoin(accounts, eq(accounts.email, users.email))
-    .leftJoin(people, eq(people.id, accounts.personId))
+    .select({ count: countDistinct(accounts.id) })
+    .from(accounts)
+    .innerJoin(people, eq(accounts.personId, people.id))
+    .innerJoin(memberships, eq(memberships.personId, accounts.personId))
     .where(whereClause);
 
   const [scopeTotalRow] = await db
-    .select({ count: countDistinct(users.id) })
-    .from(users)
-    .innerJoin(memberships, eq(memberships.userId, users.id))
+    .select({ count: countDistinct(accounts.id) })
+    .from(accounts)
+    .innerJoin(memberships, eq(memberships.personId, accounts.personId))
     .where(scopeWhereClause);
 
-  const ids = userIdRows.map((row) => row.id);
+  const ids = accountRows.map((row) => row.id);
   if (ids.length === 0) {
     return {
       data: [],
@@ -314,18 +312,28 @@ export async function listUsers(
     };
   }
 
-  const userRows = await db.select().from(users).where(inArray(users.id, ids));
-  const membershipRows = await db
-    .select()
-    .from(memberships)
-    .where(inArray(memberships.userId, ids));
+  const userRows = await db
+    .select(accountPersonColumns)
+    .from(accounts)
+    .innerJoin(people, eq(accounts.personId, people.id))
+    .where(inArray(accounts.id, ids));
+  const usersById = new Map(userRows.map((row) => [row.id, row]));
 
-  const data = userRows.map((user) =>
-    toUserResult(
-      user,
-      membershipRows.filter((m) => m.userId === user.id),
-    ),
-  );
+  const personIds = [...new Set(userRows.map((row) => row.personId))];
+  const membershipRows = personIds.length
+    ? await db.select().from(memberships).where(inArray(memberships.personId, personIds))
+    : [];
+  const membershipsByPerson = new Map<string, (typeof memberships.$inferSelect)[]>();
+  for (const membership of membershipRows) {
+    const current = membershipsByPerson.get(membership.personId) ?? [];
+    current.push(membership);
+    membershipsByPerson.set(membership.personId, current);
+  }
+
+  const data = ids
+    .map((id) => usersById.get(id))
+    .filter((row): row is AccountPersonRow => Boolean(row))
+    .map((row) => toUserResult(row, membershipsByPerson.get(row.personId) ?? []));
 
   return {
     data: await enrichUsers(data),
@@ -354,7 +362,11 @@ export async function createUser(
   },
   requester: Requester,
 ): Promise<UserResult | null> {
-  const [existing] = await db.select().from(users).where(eq(users.email, data.email)).limit(1);
+  const [existing] = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(eq(accounts.email, data.email))
+    .limit(1);
   if (existing) return null;
 
   const communityIds = data.communityIds?.length
@@ -367,6 +379,8 @@ export async function createUser(
     data.email;
 
   const result = await db.transaction(async (tx) => {
+    // Escritura dual: `users` sigue recibiendo la fila legacy hasta el próximo
+    // cambio; la identidad que expone la API es la cuenta.
     const [user] = await tx
       .insert(users)
       .values({
@@ -391,13 +405,16 @@ export async function createUser(
       })
       .returning();
 
-    await tx.insert(accounts).values({
-      personId: person.id,
-      email: data.email,
-      passwordHash,
-      active: true,
-      isPlatformAdmin: false,
-    });
+    const [account] = await tx
+      .insert(accounts)
+      .values({
+        personId: person.id,
+        email: data.email,
+        passwordHash,
+        active: true,
+        isPlatformAdmin: false,
+      })
+      .returning();
 
     for (const communityId of communityIds) {
       const [membership] = await tx
@@ -431,7 +448,7 @@ export async function createUser(
       );
     }
 
-    return user;
+    return account;
   });
 
   return getUserById(result.id, requester);
@@ -445,13 +462,30 @@ export async function updateUser(
   const existing = await getUserById(id, requester);
   if (!existing) return null;
 
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  const now = new Date();
+  const updates: Record<string, unknown> = { updatedAt: now };
   if (data.name !== undefined) updates.name = data.name;
   if (data.active !== undefined) updates.active = data.active;
 
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx.update(users).set(updates).where(eq(users.id, id)).returning();
-    if (!row) return null;
+  await db.transaction(async (tx) => {
+    // Escritura dual: se conserva la fila legacy hasta que `users` se retire.
+    await tx.update(users).set(updates).where(eq(users.email, existing.email));
+
+    const accountUpdates: Record<string, unknown> = { updatedAt: now };
+    if (data.active !== undefined) accountUpdates.active = data.active;
+    await tx.update(accounts).set(accountUpdates).where(eq(accounts.id, id));
+
+    if (data.name !== undefined) {
+      const [firstName, ...lastNameParts] = data.name.trim().split(/\s+/);
+      await tx
+        .update(people)
+        .set({
+          firstName: firstName || existing.email,
+          lastName: lastNameParts.join(' '),
+          updatedAt: now,
+        })
+        .where(eq(people.id, existing.personId!));
+    }
 
     await enqueueEvent(
       tx,
@@ -464,11 +498,8 @@ export async function updateUser(
         payload: { updatedUserId: id, changedFields: Object.keys(data) },
       }),
     );
-
-    return row;
   });
 
-  if (!updated) return null;
   return getUserById(id, requester);
 }
 
@@ -495,17 +526,27 @@ export async function changePassword(
 }
 
 export async function getMe(accountId: string): Promise<UserResult | null> {
-  const user = await userForAccount(accountId);
-  if (!user) return null;
-  const membershipRows = await db.select().from(memberships).where(eq(memberships.userId, user.id));
-  return toUserResult(user, membershipRows);
+  const [account] = await db
+    .select(accountPersonColumns)
+    .from(accounts)
+    .innerJoin(people, eq(accounts.personId, people.id))
+    .where(eq(accounts.id, accountId))
+    .limit(1);
+  if (!account) return null;
+
+  const membershipRows = await db
+    .select()
+    .from(memberships)
+    .where(eq(memberships.personId, account.personId));
+  const [result] = await enrichUsers([toUserResult(account, membershipRows)]);
+  return result;
 }
 
 export async function countUsers(orgId: string): Promise<number> {
   const [result] = await db
-    .select({ count: count() })
-    .from(users)
-    .innerJoin(memberships, eq(memberships.userId, users.id))
+    .select({ count: countDistinct(accounts.id) })
+    .from(accounts)
+    .innerJoin(memberships, eq(memberships.personId, accounts.personId))
     .where(eq(memberships.organizationId, orgId));
   return result?.count ?? 0;
 }

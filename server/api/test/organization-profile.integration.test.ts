@@ -27,7 +27,8 @@ let orgAdminToken: string;
 let communityAdminToken: string;
 let organizationId: string;
 let communityId: string;
-let orgAdminUserId: string;
+let orgAdminAccountId: string;
+let orgAdminPersonId: string;
 let orgAdminMembershipId: string;
 let firstAdministratorEmail: string;
 const createdEmails: string[] = [];
@@ -119,7 +120,7 @@ async function createUserFixture(input: {
 
 async function activeOrgAdmins(organization: string) {
   return db
-    .select({ id: memberships.id, userId: memberships.userId })
+    .select({ id: memberships.id, personId: memberships.personId })
     .from(memberships)
     .where(
       and(
@@ -192,7 +193,8 @@ describe('organization profile geography and administrator transfer', () => {
       organizationId,
       communityId: null,
     });
-    orgAdminUserId = orgAdmin.user.id;
+    orgAdminAccountId = orgAdmin.account.id;
+    orgAdminPersonId = orgAdmin.person.id;
     orgAdminMembershipId = orgAdmin.membership.id;
     orgAdminToken = app.jwt.sign({
       sub: orgAdmin.account.id,
@@ -376,12 +378,12 @@ describe('organization profile geography and administrator transfer', () => {
     assert.equal(response.statusCode, 200);
     const body = parse(response);
     assert.equal(body.administrator.status, 'active');
-    assert.equal(body.administrator.userId, orgAdminUserId);
+    assert.equal(body.administrator.userId, orgAdminAccountId);
     assert.equal(body.administrator.email, firstAdministratorEmail);
 
     const admins = await activeOrgAdmins(organizationId);
     assert.equal(admins.length, 1);
-    assert.equal(admins[0].userId, orgAdminUserId);
+    assert.equal(admins[0].personId, orgAdminPersonId);
   });
 
   it('transfers the administration immediately when the email already has an account', async () => {
@@ -407,12 +409,12 @@ describe('organization profile geography and administrator transfer', () => {
     assert.equal(response.statusCode, 200);
     const body = parse(response);
     assert.equal(body.administrator.status, 'active');
-    assert.equal(body.administrator.userId, replacement.user.id);
+    assert.equal(body.administrator.userId, replacement.account.id);
     assert.equal(body.administrator.email, replacementEmail);
 
     const admins = await activeOrgAdmins(organizationId);
     assert.equal(admins.length, 1);
-    assert.equal(admins[0].userId, replacement.user.id);
+    assert.equal(admins[0].personId, replacement.person.id);
 
     const [previous] = await db
       .select({ status: memberships.status })
@@ -440,7 +442,7 @@ describe('organization profile geography and administrator transfer', () => {
     // The current administrator stays active until the invitation is accepted.
     const beforeAcceptance = await activeOrgAdmins(organizationId);
     assert.equal(beforeAcceptance.length, 1);
-    assert.notEqual(beforeAcceptance[0].userId, orgAdminUserId);
+    assert.notEqual(beforeAcceptance[0].personId, orgAdminPersonId);
 
     const token = body.administrator.acceptUrl.split('/invite/')[1];
     const accepted = await app.inject({
@@ -451,16 +453,16 @@ describe('organization profile geography and administrator transfer', () => {
     assert.equal(accepted.statusCode, 200);
     createdEmails.push(invitedEmail);
 
-    const [invitedUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, invitedEmail))
+    const [invitedAccount] = await db
+      .select({ personId: accounts.personId })
+      .from(accounts)
+      .where(eq(accounts.email, invitedEmail))
       .limit(1);
-    assert.ok(invitedUser);
+    assert.ok(invitedAccount);
 
     const afterAcceptance = await activeOrgAdmins(organizationId);
     assert.equal(afterAcceptance.length, 1);
-    assert.equal(afterAcceptance[0].userId, invitedUser.id);
+    assert.equal(afterAcceptance[0].personId, invitedAccount.personId);
 
     const [pending] = await db
       .select({ id: invitations.id })

@@ -3,6 +3,7 @@ import { and, asc, count, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { createDb } from '@porteria/database';
 import {
+  accounts,
   communities,
   locationResidents,
   locationStructures,
@@ -43,10 +44,7 @@ async function communityInScope(
   return true;
 }
 
-async function unitInScope(
-  unitId: string,
-  user: ReturnType<typeof getUser>,
-): Promise<boolean> {
+async function unitInScope(unitId: string, user: ReturnType<typeof getUser>): Promise<boolean> {
   if (user.isPlatformAdmin) return true;
   const [unit] = await db
     .select({ communityId: locationUnits.communityId, organizationId: communities.organizationId })
@@ -54,7 +52,11 @@ async function unitInScope(
     .innerJoin(communities, eq(locationUnits.communityId, communities.id))
     .where(eq(locationUnits.id, unitId));
   if (!unit || unit.organizationId !== user.orgId) return false;
-  if (['community_admin', 'operator', 'guard'].includes(user.role) && user.communityId !== unit.communityId) return false;
+  if (
+    ['community_admin', 'operator', 'guard'].includes(user.role) &&
+    user.communityId !== unit.communityId
+  )
+    return false;
   return true;
 }
 
@@ -73,14 +75,18 @@ export async function unitRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   });
 
   app.addHook('preValidation', async (request: FastifyRequest, reply: FastifyReply) => {
     const params = request.params as Record<string, string | undefined>;
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidPattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     for (const key of ['id', 'residentId']) {
       if (params[key] && !uuidPattern.test(params[key]!)) {
         return reply.status(400).send({
@@ -122,18 +128,13 @@ export async function unitRoutes(app: FastifyInstance) {
 
       const conditions: SQL[] = [
         eq(locationUnits.levelPosition, locationStructures.levelCount),
-        ...(user.isPlatformAdmin
-          ? []
-          : [eq(communities.organizationId, user.orgId)]),
+        ...(user.isPlatformAdmin ? [] : [eq(communities.organizationId, user.orgId)]),
       ];
       const scope = unitScope(user, query.communityId);
       if (scope) conditions.push(scope);
       if (query.sectionId) {
         conditions.push(
-          or(
-            eq(parentUnit.id, query.sectionId),
-            eq(grandparentUnit.id, query.sectionId),
-          ) as SQL,
+          or(eq(parentUnit.id, query.sectionId), eq(grandparentUnit.id, query.sectionId)) as SQL,
         );
       }
       if (query.status) {
@@ -181,10 +182,7 @@ export async function unitRoutes(app: FastifyInstance) {
           })
           .from(locationUnits)
           .innerJoin(communities, eq(locationUnits.communityId, communities.id))
-          .innerJoin(
-            locationStructures,
-            eq(locationUnits.structureId, locationStructures.id),
-          )
+          .innerJoin(locationStructures, eq(locationUnits.structureId, locationStructures.id))
           .leftJoin(parentUnit, eq(locationUnits.parentId, parentUnit.id))
           .leftJoin(grandparentUnit, eq(parentUnit.parentId, grandparentUnit.id))
           .where(where)
@@ -195,10 +193,7 @@ export async function unitRoutes(app: FastifyInstance) {
           .select({ value: count() })
           .from(locationUnits)
           .innerJoin(communities, eq(locationUnits.communityId, communities.id))
-          .innerJoin(
-            locationStructures,
-            eq(locationUnits.structureId, locationStructures.id),
-          )
+          .innerJoin(locationStructures, eq(locationUnits.structureId, locationStructures.id))
           .leftJoin(parentUnit, eq(locationUnits.parentId, parentUnit.id))
           .leftJoin(grandparentUnit, eq(parentUnit.parentId, grandparentUnit.id))
           .where(where),
@@ -261,10 +256,7 @@ export async function unitRoutes(app: FastifyInstance) {
           levelCount: locationStructures.levelCount,
         })
         .from(locationUnits)
-        .innerJoin(
-          locationStructures,
-          eq(locationUnits.structureId, locationStructures.id),
-        )
+        .innerJoin(locationStructures, eq(locationUnits.structureId, locationStructures.id))
         .where(
           and(
             eq(locationUnits.id, body.sectionId),
@@ -414,12 +406,7 @@ export async function unitRoutes(app: FastifyInstance) {
         })
         .from(locationResidents)
         .innerJoin(users, eq(locationResidents.userId, users.id))
-        .where(
-          and(
-            eq(locationResidents.id, residentId),
-            eq(locationResidents.locationUnitId, id),
-          ),
-        )
+        .where(and(eq(locationResidents.id, residentId), eq(locationResidents.locationUnitId, id)))
         .limit(1);
       if (!resident) {
         return reply.status(404).send({
@@ -465,7 +452,26 @@ export async function unitRoutes(app: FastifyInstance) {
           message: 'Unit not found',
         });
       }
-      const residentUserId = body.userId;
+      // El selector del panel envía el id de la cuenta; `location_residents`
+      // todavía referencia `users.id`, así que se resuelve la fila legacy.
+      const [residentAccount] = await db
+        .select({ email: accounts.email })
+        .from(accounts)
+        .where(eq(accounts.id, body.userId))
+        .limit(1);
+      const [residentUser] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(residentAccount ? eq(users.email, residentAccount.email) : eq(users.id, body.userId))
+        .limit(1);
+      if (!residentUser) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'User not found',
+        });
+      }
+      const residentUserId = residentUser.id;
       const residentRelationship = body.relationship;
       try {
         const created = await db.transaction(async (tx) => {
@@ -537,12 +543,7 @@ export async function unitRoutes(app: FastifyInstance) {
       const [resident] = await db
         .select({ id: locationResidents.id, userId: locationResidents.userId })
         .from(locationResidents)
-        .where(
-          and(
-            eq(locationResidents.id, residentId),
-            eq(locationResidents.locationUnitId, id),
-          ),
-        )
+        .where(and(eq(locationResidents.id, residentId), eq(locationResidents.locationUnitId, id)))
         .limit(1);
       if (!resident) {
         return reply.status(404).send({
@@ -616,12 +617,7 @@ export async function unitRoutes(app: FastifyInstance) {
       const [existing] = await db
         .select()
         .from(locationResidents)
-        .where(
-          and(
-            eq(locationResidents.id, residentId),
-            eq(locationResidents.locationUnitId, id),
-          ),
-        );
+        .where(and(eq(locationResidents.id, residentId), eq(locationResidents.locationUnitId, id)));
       if (!existing) {
         return reply.status(404).send({
           statusCode: 404,
@@ -633,8 +629,8 @@ export async function unitRoutes(app: FastifyInstance) {
       const nextStatus = body.status ?? existing.status;
       const endDate =
         nextStatus === 'inactive'
-          ? body.validTo ?? existing.validTo ?? new Date().toISOString().slice(0, 10)
-          : body.validTo ?? existing.validTo;
+          ? (body.validTo ?? existing.validTo ?? new Date().toISOString().slice(0, 10))
+          : (body.validTo ?? existing.validTo);
 
       try {
         const updated = await db.transaction(async (tx) => {
@@ -659,9 +655,7 @@ export async function unitRoutes(app: FastifyInstance) {
               request,
               communityId: unit.communityId,
               eventType:
-                nextStatus === 'inactive'
-                  ? 'location_resident.ended'
-                  : 'location_resident.updated',
+                nextStatus === 'inactive' ? 'location_resident.ended' : 'location_resident.updated',
               metadata: {
                 residentId: row.id,
                 locationUnitId: id,

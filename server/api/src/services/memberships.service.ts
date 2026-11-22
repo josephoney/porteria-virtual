@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { memberships, accessPoints, users } from '@porteria/database/schema';
+import { memberships, accessPoints, users, accounts } from '@porteria/database/schema';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
 import { canAssignRole } from './role-policy.service.js';
@@ -106,10 +106,32 @@ export async function createMembership(
     return { error: 'Role out of scope' };
   }
 
-  const [user] = await db.select().from(users).where(eq(users.id, data.userId)).limit(1);
-  if (!user) return { error: 'User not found' };
+  // El id recibido es el de la cuenta (lo que expone el recurso de usuarios).
+  // Se resuelve la persona a partir de ella y se conserva la fila legacy de
+  // `users` sólo para la escritura dual de `memberships.user_id`.
+  const [account] = await db
+    .select({ id: accounts.id, personId: accounts.personId, email: accounts.email })
+    .from(accounts)
+    .where(eq(accounts.id, data.userId))
+    .limit(1);
 
-  const personId = await personIdForEmail(user.email);
+  let personId: string | null;
+  let legacyUserId: string | null;
+  if (account) {
+    personId = account.personId;
+    const [legacyUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, account.email))
+      .limit(1);
+    legacyUserId = legacyUser?.id ?? null;
+  } else {
+    // Compatibilidad con llamadas que todavía enviaban `users.id`.
+    const [user] = await db.select().from(users).where(eq(users.id, data.userId)).limit(1);
+    if (!user) return { error: 'User not found' };
+    personId = await personIdForEmail(user.email);
+    legacyUserId = user.id;
+  }
   if (!personId) return { error: 'Person not found' };
 
   const communityId =
@@ -154,7 +176,7 @@ export async function createMembership(
     const [membership] = await tx
       .insert(memberships)
       .values({
-        userId: data.userId,
+        userId: legacyUserId,
         personId,
         organizationId: requester.orgId,
         communityId,

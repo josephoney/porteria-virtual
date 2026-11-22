@@ -26,16 +26,16 @@ let communityAId: string;
 let communityBId: string;
 let communityAName: string;
 let communityBName: string;
-let orgAdminUserId: string;
 let orgAdminPersonId: string;
 let orgAdminAccountId: string;
 let orgAdminMembershipId: string;
 let orgAdminToken: string;
-let communityAdminUserId: string;
 let communityAdminPersonId: string;
 let communityAdminAccountId: string;
 let communityAdminMembershipId: string;
 let communityAdminToken: string;
+let multiAccountId: string;
+let anaAccountId: string;
 const userIds: string[] = [];
 const personIds: string[] = [];
 
@@ -99,6 +99,7 @@ async function createUserFixture(input: {
       personId: person.id,
       email: input.email,
       passwordHash: 'x',
+      active: input.active ?? true,
     })
     .returning();
 
@@ -162,7 +163,6 @@ describe('users list filters integration', () => {
       role: 'org_admin',
       communityId: null,
     });
-    orgAdminUserId = orgAdmin.user.id;
     orgAdminPersonId = orgAdmin.person.id;
     orgAdminAccountId = orgAdmin.account.id;
     orgAdminMembershipId = orgAdmin.membership.id;
@@ -178,12 +178,11 @@ describe('users list filters integration', () => {
       role: 'community_admin',
       communityId: communityAId,
     });
-    communityAdminUserId = communityAdmin.user.id;
     communityAdminPersonId = communityAdmin.person.id;
     communityAdminAccountId = communityAdmin.account.id;
     communityAdminMembershipId = communityAdmin.membership.id;
 
-    await createUserFixture({
+    const ana = await createUserFixture({
       suffix,
       key: 'ana',
       email: `ana.lopez-${suffix}@test.local`,
@@ -194,6 +193,7 @@ describe('users list filters integration', () => {
       role: 'resident',
       communityId: communityAId,
     });
+    anaAccountId = ana.account.id;
 
     await createUserFixture({
       suffix,
@@ -231,6 +231,7 @@ describe('users list filters integration', () => {
       role: 'resident',
       communityId: communityAId,
     });
+    multiAccountId = multi.account.id;
     await db.insert(memberships).values({
       userId: multi.user.id,
       personId: multi.person.id,
@@ -302,10 +303,10 @@ describe('users list filters integration', () => {
     assert.equal(filteredBody.scopeTotal, 6);
   });
 
-  it('searches by email, account name, first name, last name and document', async () => {
+  it('searches by email, person name, first name, last name and document', async () => {
     const searches = [
       ['ana.lopez', 1],
-      ['Ana Lopez', 1],
+      ['Ana López', 1],
       ['Bruno', 1],
       ['Díaz', 1],
       ['55555555', 1],
@@ -391,13 +392,49 @@ describe('users list filters integration', () => {
     assert.deepEqual(names.sort(), [communityAName, communityBName].sort());
   });
 
-  it('toggles the global account status through PATCH /api/users/:id', async () => {
-    const response = await request('PATCH', `/api/users/${orgAdminUserId}`, orgAdminToken, {
+  it('exposes the account id and resolves memberships by person', async () => {
+    const response = await request('GET', `/api/users/${multiAccountId}`, orgAdminToken);
+    assert.equal(response.statusCode, 200, response.body);
+    const user = parse(response);
+    assert.equal(user.id, multiAccountId);
+    assert.equal(user.accountId, multiAccountId);
+    assert.ok(user.personId);
+    assert.equal(user.memberships.length, 2);
+    const names = (user.memberships as Json[]).map((membership) => membership.communityName);
+    assert.deepEqual(names.sort(), [communityAName, communityBName].sort());
+  });
+
+  it('returns 404 for an unknown account id', async () => {
+    const response = await request('GET', `/api/users/${randomUUID()}`, orgAdminToken);
+    assert.equal(response.statusCode, 404);
+  });
+
+  it('toggles the global account status through PATCH /api/users/:id by account id', async () => {
+    const response = await request('PATCH', `/api/users/${orgAdminAccountId}`, orgAdminToken, {
       active: false,
     });
     assert.equal(response.statusCode, 200, response.body);
     assert.equal(parse(response).active, false);
 
-    await request('PATCH', `/api/users/${orgAdminUserId}`, orgAdminToken, { active: true });
+    await request('PATCH', `/api/users/${orgAdminAccountId}`, orgAdminToken, { active: true });
+  });
+
+  it('updates the person profile through PATCH /api/users/:id', async () => {
+    const response = await request('PATCH', `/api/users/${anaAccountId}`, orgAdminToken, {
+      name: 'Ana María López',
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    const user = parse(response);
+    assert.equal(user.id, anaAccountId);
+    assert.equal(user.name, 'Ana María López');
+    assert.equal(user.personName, 'Ana María López');
+
+    const search = await request(
+      'GET',
+      '/api/users?page=1&pageSize=50&search=María',
+      orgAdminToken,
+    );
+    assert.equal(search.statusCode, 200, search.body);
+    assert.equal(parse(search).total, 1);
   });
 });
