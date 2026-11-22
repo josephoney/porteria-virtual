@@ -107,6 +107,49 @@ EXPO_PUBLIC_API_URL=https://<dominio>
 
 Y relanzar Metro con `--clear`.
 
+## Dejar Metro corriendo (tmux)
+
+Metro muere cuando se cierra el SSH. `tmux` lo mantiene vivo en el servidor.
+
+```bash
+ssh porteria
+
+tmux new -s expo            # crear la sesión
+cd ~/porteria/apps/zima-qr-access
+npx expo start -m tunnel --clear
+
+# Ctrl+B, soltar, y D  → se sale dejando Metro corriendo
+```
+
+Para volver:
+
+```bash
+tmux ls                     # ¿sigue viva?
+tmux a -t expo              # adjuntarse a ella
+```
+
+| Comando | Qué hace |
+|---|---|
+| `tmux new -s expo` | Crea la sesión `expo` |
+| `tmux ls` | Lista las sesiones |
+| `tmux a -t expo` | Se adjunta a la sesión `expo` |
+| `Ctrl+B` luego `D` | **Detach**: sale y deja todo corriendo |
+| `Ctrl+B` luego `[` | Modo copia para scrollear; `q` para salir |
+| `Ctrl+B` luego `C` | Nueva ventana dentro de la sesión |
+| `Ctrl+B` luego `N` / `P` | Ventana siguiente / anterior |
+| `exit` o `Ctrl+D` | **Mata** la sesión y lo que corre dentro |
+
+Detalles que importan:
+
+- `Ctrl+B` es el prefijo: se suelta antes de pulsar la segunda tecla.
+- Para **conservar** el proceso se usa detach (`Ctrl+B D`), nunca `exit`.
+  Cerrar la ventana de SSH sin detach también deja la sesión viva.
+- `tmux ls` con «no server running» significa que no queda ninguna sesión: hay
+  que relanzar Metro.
+- El servidor de tmux se apaga cuando no queda ninguna sesión abierta.
+- Si Metro quedó corriendo desde hace días, relanzarlo con `--clear` antes de
+  probar cambios de `.env` o código nativo.
+
 ## Problemas conocidos
 
 - **Los eventos en vivo llegan de a bloques.** Falta el `flush_interval -1` en el
