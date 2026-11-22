@@ -52,3 +52,22 @@
 - [ ] 6.5 Subuser cannot create another subuser
 - [ ] 6.6 Revocation blocks new passes and filters scope
 - [ ] 6.7 `pnpm lint` and `tsc --noEmit` pass
+
+## 7. Delegated access links
+
+- [ ] 7.1 Create `subuser_access_links` (delegation, token hash, expiry, device
+  key, revocation, timestamps) with indexes.
+- [ ] 7.2 Generate the migration and review the rollback notes.
+- [ ] 7.3 Implement issue, regenerate and revoke for a delegation.
+- [ ] 7.4 Bind the link to the first device and reject a second one.
+- [ ] 7.5 Issue a session limited to the delegation permissions and locations.
+- [ ] 7.6 Record the delegation as authorizer on passes created from the link.
+- [ ] 7.7 Unit tests: issue, binding, second device, expiry and revocation.
+
+## 8. Access link verification
+
+- [ ] 8.1 Managed subuser creates a pass from the link and appears in the
+  bitacora.
+- [ ] 8.2 Subuser with account keeps using normal login.
+- [ ] 8.3 Revoking the delegation cuts access immediately.
+- [ ] 8.4 `openspec validate add-delegated-subusers --strict`.

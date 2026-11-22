@@ -25,6 +25,10 @@ ni trazabilidad individual de quién autorizó cada acceso.
 - **Non-goals:** no se modifica el flujo QR en esta propuesta (7), ni la jerarquía
   administrativa (3), ni la estructura de ubicaciones (4). Depende de persona/cuenta (5).
 
+- **Acceso por enlace delegado:** el subusuario gestionado puede operar por sí
+  mismo mediante un enlace con vigencia, vinculado al primer dispositivo, sin
+  contraseña.
+
 ## Capabilities
 
 ### New Capabilities

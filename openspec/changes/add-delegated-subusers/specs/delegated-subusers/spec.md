@@ -90,3 +90,32 @@ A subuser with account SHALL see only delegated locations.
 #### Scenario: Managed subuser login
 - **WHEN** a managed subuser tries to log in
 - **THEN** the request is rejected because there is no account
+- **THEN** the response points to the delegated access link
+
+### Requirement: Delegated access links
+
+A managed subuser SHALL operate through a time-bound access link instead of a
+password.
+
+#### Scenario: Issue link
+- **WHEN** the main user issues an access link for a managed subuser
+- **THEN** a single-use-setup token is stored hashed
+- **THEN** the link expires at the configured moment
+
+#### Scenario: First device binding
+- **WHEN** the subuser opens the link on a device
+- **THEN** the link binds to that device
+- **THEN** a second device is rejected
+
+#### Scenario: Acting within scope
+- **WHEN** the subuser accesses with a valid link
+- **THEN** only delegated permissions and locations are available
+- **THEN** the bitacora records the subuser as authorizer
+
+#### Scenario: Expired link
+- **WHEN** the link is past its expiry
+- **THEN** access is rejected with a stable code
+
+#### Scenario: Revoked link
+- **WHEN** the main user revokes the link or the delegation
+- **THEN** access stops immediately
