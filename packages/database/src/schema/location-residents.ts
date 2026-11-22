@@ -1,18 +1,14 @@
-import {
-  pgTable,
-  uuid,
-  date,
-  timestamp,
-  pgEnum,
-  uniqueIndex,
-} from 'drizzle-orm/pg-core';
-import { users } from './users';
+import { pgTable, uuid, date, timestamp, pgEnum, uniqueIndex } from 'drizzle-orm/pg-core';
+import { people } from './people';
 import { locationUnits } from './location-units';
 
-export const locationResidentRelationshipEnum = pgEnum(
-  'location_resident_relationship',
-  ['owner', 'tenant', 'resident', 'family', 'staff'],
-);
+export const locationResidentRelationshipEnum = pgEnum('location_resident_relationship', [
+  'owner',
+  'tenant',
+  'resident',
+  'family',
+  'staff',
+]);
 
 export const locationResidentStatusEnum = pgEnum('location_resident_status', [
   'active',
@@ -26,9 +22,9 @@ export const locationResidents = pgTable(
     locationUnitId: uuid('location_unit_id')
       .notNull()
       .references(() => locationUnits.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id')
+    personId: uuid('person_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => people.id, { onDelete: 'cascade' }),
     relationship: locationResidentRelationshipEnum('relationship').notNull(),
     validFrom: date('valid_from').notNull(),
     validTo: date('valid_to'),
@@ -37,8 +33,10 @@ export const locationResidents = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
-    unitUserRelationshipIdx: uniqueIndex(
-      'location_residents_unit_user_relationship_idx',
-    ).on(table.locationUnitId, table.userId, table.relationship),
+    unitPersonRelationshipIdx: uniqueIndex('location_residents_unit_person_relationship_idx').on(
+      table.locationUnitId,
+      table.personId,
+      table.relationship,
+    ),
   }),
 );

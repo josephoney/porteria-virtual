@@ -204,6 +204,13 @@
       "when": 1795361439202,
       "tag": "0028_invitations_person_only",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1795383454793,
+      "tag": "0029_guard_rounds_location_residents_person_only",
+      "breakpoints": true
     }
   ]
 }

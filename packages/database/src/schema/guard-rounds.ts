@@ -1,5 +1,4 @@
 import { pgTable, uuid, varchar, timestamp, pgEnum } from 'drizzle-orm/pg-core';
-import { users } from './users';
 import { people } from './people';
 import { communities } from './communities';
 
@@ -12,12 +11,9 @@ export const roundStatusEnum = pgEnum('round_status', [
 
 export const guardRounds = pgTable('guard_rounds', {
   id: uuid('id').defaultRandom().primaryKey(),
-  guardId: uuid('guard_id')
+  guardPersonId: uuid('guard_person_id')
     .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  guardPersonId: uuid('guard_person_id').references(() => people.id, {
-    onDelete: 'set null',
-  }),
+    .references(() => people.id, { onDelete: 'cascade' }),
   communityId: uuid('community_id')
     .notNull()
     .references(() => communities.id, { onDelete: 'cascade' }),

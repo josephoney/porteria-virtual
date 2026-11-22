@@ -14,9 +14,9 @@ interface UserOption {
 
 interface ResidentRow {
   id: string;
-  userId: string;
-  userName: string;
-  userEmail: string;
+  personId: string;
+  personName: string;
+  personEmail: string | null;
   relationship: string;
   status: string;
 }
@@ -120,8 +120,8 @@ export function ResidentAssignmentPanel({ unitId, unitName }: ResidentAssignment
           {residents.map((resident) => (
             <li key={resident.id} className="flex items-center justify-between gap-3 px-3 py-2">
               <div>
-                <p className="text-sm font-medium">{resident.userName}</p>
-                <p className="text-xs text-muted-foreground">{resident.userEmail}</p>
+                <p className="text-sm font-medium">{resident.personName}</p>
+                <p className="text-xs text-muted-foreground">{resident.personEmail}</p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">

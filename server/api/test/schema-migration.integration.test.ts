@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
+import {
+  accounts,
+  communities,
+  guardRounds,
+  organizations,
+  people,
+} from '@porteria/database/schema';
 
 const db = createDb();
 
@@ -95,6 +103,105 @@ describe('schema migration 0008', () => {
       'invitations.location_unit_id',
     ]) {
       assert.equal(columns.has(expected), true, expected);
+    }
+  });
+
+  it('has no user references in rounds or residents', async () => {
+    const columns = await db.execute<{ table_name: string; column_name: string }>(sql`
+      select table_name, column_name
+      from information_schema.columns
+      where table_schema = 'public'
+        and (table_name, column_name) in (
+          ('guard_rounds', 'guard_id'),
+          ('location_residents', 'user_id')
+        )
+    `);
+    assert.equal(columns.rows.length, 0);
+
+    const notNull = await db.execute<{ table_name: string; is_nullable: string }>(sql`
+      select table_name, is_nullable
+      from information_schema.columns
+      where table_schema = 'public'
+        and (table_name, column_name) in (
+          ('guard_rounds', 'guard_person_id'),
+          ('location_residents', 'person_id')
+        )
+    `);
+    assert.equal(notNull.rows.length, 2);
+    assert.equal(
+      notNull.rows.every((row) => row.is_nullable === 'NO'),
+      true,
+    );
+
+    const foreignKeys = await db.execute<{ conname: string; confdeltype: string }>(sql`
+      select conname, confdeltype
+      from pg_constraint
+      where contype = 'f'
+        and conrelid in ('guard_rounds'::regclass, 'location_residents'::regclass)
+        and confrelid = 'people'::regclass
+    `);
+    assert.deepEqual(foreignKeys.rows.map((row) => row.conname).sort(), [
+      'guard_rounds_guard_person_id_people_id_fk',
+      'location_residents_person_id_people_id_fk',
+    ]);
+    assert.equal(
+      foreignKeys.rows.every((row) => row.confdeltype === 'c'),
+      true,
+    );
+  });
+
+  it('creates and lists a guard round for a person without an account', async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const [organization] = await db
+      .insert(organizations)
+      .values({ name: `Rounds Org ${suffix}`, slug: `rounds-org-${suffix}` })
+      .returning();
+    const [community] = await db
+      .insert(communities)
+      .values({
+        organizationId: organization.id,
+        name: `Rounds Community ${suffix}`,
+        slug: `rounds-community-${suffix}`,
+        address: 'Test address',
+        timezone: 'UTC',
+      })
+      .returning();
+    const [guardPerson] = await db
+      .insert(people)
+      .values({ firstName: 'Guardia', lastName: 'Sin Cuenta', status: 'active' })
+      .returning();
+
+    try {
+      const [round] = await db
+        .insert(guardRounds)
+        .values({
+          guardPersonId: guardPerson.id,
+          communityId: community.id,
+          name: 'Ronda sin cuenta',
+        })
+        .returning();
+      assert.equal(round.guardPersonId, guardPerson.id);
+
+      const [listed] = await db
+        .select({
+          id: guardRounds.id,
+          guardPersonId: guardRounds.guardPersonId,
+          guardFirstName: people.firstName,
+        })
+        .from(guardRounds)
+        .innerJoin(people, eq(people.id, guardRounds.guardPersonId))
+        .where(eq(guardRounds.id, round.id));
+      assert.equal(listed.guardPersonId, guardPerson.id);
+      assert.equal(listed.guardFirstName, 'Guardia');
+
+      const guardAccounts = await db
+        .select({ id: accounts.id })
+        .from(accounts)
+        .where(eq(accounts.personId, guardPerson.id));
+      assert.equal(guardAccounts.length, 0);
+    } finally {
+      await db.delete(organizations).where(eq(organizations.id, organization.id));
+      await db.delete(people).where(eq(people.id, guardPerson.id));
     }
   });
 });

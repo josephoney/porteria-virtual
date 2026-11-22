@@ -475,10 +475,20 @@ async function seed() {
   ];
   const demoAccounts = demoEmails.length
     ? await db
-        .select({ personId: accounts.personId })
+        .select({ email: accounts.email, personId: accounts.personId })
         .from(accounts)
         .where(inArray(accounts.email, demoEmails))
     : [];
+  const personByEmail = new Map(demoAccounts.map((account) => [account.email, account.personId]));
+  const personIdFor = (email: string) => {
+    const personId = personByEmail.get(email);
+    if (!personId) {
+      throw new Error(
+        `La asociación de residente necesita una persona: ${email} no tiene cuenta con person_id`,
+      );
+    }
+    return personId;
+  };
   const demoPersonIds = [...new Set(demoAccounts.map((account) => account.personId))];
   if (demoPersonIds.length) {
     await db.delete(memberships).where(inArray(memberships.personId, demoPersonIds));
@@ -550,35 +560,35 @@ async function seed() {
     .values([
       {
         locationUnitId: unitA101.id,
-        userId: resident.id,
+        personId: personIdFor(resident.email),
         relationship: 'owner',
         validFrom: '2026-01-01',
         status: 'active',
       },
       {
         locationUnitId: unitA101.id,
-        userId: resident2.id,
+        personId: personIdFor(resident2.email),
         relationship: 'resident',
         validFrom: '2026-01-01',
         status: 'active',
       },
       {
         locationUnitId: unitA201.id,
-        userId: resident3.id,
+        personId: personIdFor(resident3.email),
         relationship: 'tenant',
         validFrom: '2026-01-01',
         status: 'active',
       },
       {
         locationUnitId: unitA102.id,
-        userId: multi.id,
+        personId: personIdFor(multi.email),
         relationship: 'owner',
         validFrom: '2026-01-01',
         status: 'active',
       },
       {
         locationUnitId: unitA201.id,
-        userId: multi.id,
+        personId: personIdFor(multi.email),
         relationship: 'resident',
         validFrom: '2026-01-01',
         status: 'active',

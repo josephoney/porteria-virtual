@@ -8,7 +8,7 @@ import {
   locationResidents,
   locationStructures,
   locationUnits,
-  users,
+  people,
 } from '@porteria/database/schema';
 import { requireRole } from '../middlewares/rbac.js';
 import { auditCommunityEvent } from '../services/audit.service.js';
@@ -361,16 +361,17 @@ export async function unitRoutes(app: FastifyInstance) {
       return db
         .select({
           id: locationResidents.id,
-          userId: locationResidents.userId,
-          userName: users.name,
-          userEmail: users.email,
+          personId: locationResidents.personId,
+          personName: sql<string>`trim(${people.firstName} || ' ' || ${people.lastName})`,
+          personEmail: accounts.email,
           relationship: locationResidents.relationship,
           validFrom: locationResidents.validFrom,
           validTo: locationResidents.validTo,
           status: locationResidents.status,
         })
         .from(locationResidents)
-        .innerJoin(users, eq(locationResidents.userId, users.id))
+        .innerJoin(people, eq(locationResidents.personId, people.id))
+        .leftJoin(accounts, eq(accounts.personId, people.id))
         .where(eq(locationResidents.locationUnitId, id))
         .orderBy(asc(locationResidents.createdAt));
     },
@@ -396,16 +397,17 @@ export async function unitRoutes(app: FastifyInstance) {
         .select({
           id: locationResidents.id,
           locationUnitId: locationResidents.locationUnitId,
-          userId: locationResidents.userId,
-          userName: users.name,
-          userEmail: users.email,
+          personId: locationResidents.personId,
+          personName: sql<string>`trim(${people.firstName} || ' ' || ${people.lastName})`,
+          personEmail: accounts.email,
           relationship: locationResidents.relationship,
           validFrom: locationResidents.validFrom,
           validTo: locationResidents.validTo,
           status: locationResidents.status,
         })
         .from(locationResidents)
-        .innerJoin(users, eq(locationResidents.userId, users.id))
+        .innerJoin(people, eq(locationResidents.personId, people.id))
+        .leftJoin(accounts, eq(accounts.personId, people.id))
         .where(and(eq(locationResidents.id, residentId), eq(locationResidents.locationUnitId, id)))
         .limit(1);
       if (!resident) {
@@ -452,26 +454,21 @@ export async function unitRoutes(app: FastifyInstance) {
           message: 'Unit not found',
         });
       }
-      // El selector del panel envía el id de la cuenta; `location_residents`
-      // todavía referencia `users.id`, así que se resuelve la fila legacy.
+      // El selector del panel envía el id de la cuenta; la asociación se guarda
+      // contra la persona dueña de esa cuenta.
       const [residentAccount] = await db
-        .select({ email: accounts.email })
+        .select({ personId: accounts.personId })
         .from(accounts)
         .where(eq(accounts.id, body.userId))
         .limit(1);
-      const [residentUser] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(residentAccount ? eq(users.email, residentAccount.email) : eq(users.id, body.userId))
-        .limit(1);
-      if (!residentUser) {
+      if (!residentAccount) {
         return reply.status(400).send({
           statusCode: 400,
           error: 'Bad Request',
           message: 'User not found',
         });
       }
-      const residentUserId = residentUser.id;
+      const residentPersonId = residentAccount.personId;
       const residentRelationship = body.relationship;
       try {
         const created = await db.transaction(async (tx) => {
@@ -479,7 +476,7 @@ export async function unitRoutes(app: FastifyInstance) {
             .insert(locationResidents)
             .values({
               locationUnitId: id,
-              userId: residentUserId,
+              personId: residentPersonId,
               relationship: residentRelationship,
               validFrom: body.validFrom || new Date().toISOString().slice(0, 10),
               validTo: body.validTo || null,
@@ -500,7 +497,7 @@ export async function unitRoutes(app: FastifyInstance) {
               metadata: {
                 residentId: row.id,
                 locationUnitId: id,
-                userId: row.userId,
+                personId: row.personId,
                 relationship: row.relationship,
               },
               executor: tx,
@@ -541,7 +538,7 @@ export async function unitRoutes(app: FastifyInstance) {
         });
       }
       const [resident] = await db
-        .select({ id: locationResidents.id, userId: locationResidents.userId })
+        .select({ id: locationResidents.id, personId: locationResidents.personId })
         .from(locationResidents)
         .where(and(eq(locationResidents.id, residentId), eq(locationResidents.locationUnitId, id)))
         .limit(1);
@@ -556,7 +553,7 @@ export async function unitRoutes(app: FastifyInstance) {
         .select({
           id: locationResidents.id,
           locationUnitId: locationResidents.locationUnitId,
-          userId: locationResidents.userId,
+          personId: locationResidents.personId,
           relationship: locationResidents.relationship,
           validFrom: locationResidents.validFrom,
           validTo: locationResidents.validTo,
@@ -568,7 +565,7 @@ export async function unitRoutes(app: FastifyInstance) {
         .where(
           and(
             eq(locationResidents.locationUnitId, id),
-            eq(locationResidents.userId, resident.userId),
+            eq(locationResidents.personId, resident.personId),
           ),
         )
         .orderBy(asc(locationResidents.validFrom));
@@ -659,7 +656,7 @@ export async function unitRoutes(app: FastifyInstance) {
               metadata: {
                 residentId: row.id,
                 locationUnitId: id,
-                userId: row.userId,
+                personId: row.personId,
                 relationship: row.relationship,
                 status: row.status,
                 validTo: row.validTo,

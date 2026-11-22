@@ -38,6 +38,8 @@ export const peopleRelations = relations(people, ({ one, many }) => ({
   memberships: many(memberships),
   calls: many(calls, { relationName: 'operatorCalls' }),
   sentInvitations: many(invitations, { relationName: 'sentInvitations' }),
+  guardRounds: many(guardRounds),
+  locationResidents: many(locationResidents),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -126,9 +128,9 @@ export const locationResidentsRelations = relations(locationResidents, ({ one })
     fields: [locationResidents.locationUnitId],
     references: [locationUnits.id],
   }),
-  user: one(users, {
-    fields: [locationResidents.userId],
-    references: [users.id],
+  person: one(people, {
+    fields: [locationResidents.personId],
+    references: [people.id],
   }),
 }));
 
@@ -211,7 +213,6 @@ export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(memberships),
   refreshTokens: many(refreshTokens),
   createdVisitors: many(visitors, { relationName: 'createdVisitors' }),
-  guardRounds: many(guardRounds),
   createdAccessCodes: many(accessCodes, { relationName: 'createdCodes' }),
 }));
 
@@ -275,9 +276,9 @@ export const eventsRelations = relations(events, ({ one }) => ({
 }));
 
 export const guardRoundsRelations = relations(guardRounds, ({ one, many }) => ({
-  guard: one(users, {
-    fields: [guardRounds.guardId],
-    references: [users.id],
+  guardPerson: one(people, {
+    fields: [guardRounds.guardPersonId],
+    references: [people.id],
   }),
   community: one(communities, {
     fields: [guardRounds.communityId],

@@ -39,6 +39,9 @@ let floorBId: string;
 let unitAId: string;
 let unitChildId: string;
 let residentUserId: string;
+let residentPersonId: string;
+let residentAccountId: string;
+let residentEmail: string;
 let residentId: string;
 let orgAdminUserId: string;
 let orgAdminToken: string;
@@ -323,12 +326,32 @@ describe('location node integration', () => {
       })
       .returning();
     residentUserId = residentUser.id;
+    residentEmail = residentUser.email;
+    const [residentPerson] = await db
+      .insert(people)
+      .values({
+        firstName: 'Resident',
+        lastName: 'Test',
+        contactEmail: residentUser.email,
+        status: 'active',
+      })
+      .returning();
+    residentPersonId = residentPerson.id;
+    const [residentAccount] = await db
+      .insert(accounts)
+      .values({
+        personId: residentPersonId,
+        email: residentUser.email,
+        passwordHash: 'not-used',
+      })
+      .returning();
+    residentAccountId = residentAccount.id;
 
     const [resident] = await db
       .insert(locationResidents)
       .values({
         locationUnitId: unitAId,
-        userId: residentUserId,
+        personId: residentPersonId,
         relationship: 'owner',
         validFrom: new Date().toISOString().slice(0, 10),
         status: 'active',
@@ -616,6 +639,7 @@ describe('location node integration', () => {
           communityAdminPersonId,
           platformPersonId,
           loginAccountPersonId,
+          residentPersonId,
         ]),
       );
     await app.close();
@@ -1850,7 +1874,7 @@ describe('location node integration', () => {
 
   it('audits resident associations', async () => {
     const response = await request('POST', `/api/units/${unitChildId}/residents`, {
-      userId: residentUserId,
+      userId: residentAccountId,
       relationship: 'family',
     });
     assert.equal(response.statusCode, 201);
@@ -1869,6 +1893,30 @@ describe('location node integration', () => {
       (event?.metadata as { locationUnitId?: string } | undefined)?.locationUnitId,
       unitChildId,
     );
+  });
+
+  it('associates a resident by account id and resolves the person', async () => {
+    const created = await request('POST', `/api/units/${unitChildId}/residents`, {
+      userId: residentAccountId,
+      relationship: 'staff',
+    });
+    assert.equal(created.statusCode, 201);
+    const association = JSON.parse(created.body) as { id: string; personId: string };
+    assert.equal(association.personId, residentPersonId);
+
+    const list = await request('GET', `/api/units/${unitChildId}/residents`);
+    assert.equal(list.statusCode, 200);
+    const rows = JSON.parse(list.body) as Array<{
+      id: string;
+      personId: string;
+      personName: string;
+      personEmail: string | null;
+    }>;
+    const row = rows.find((item) => item.id === association.id);
+    assert.ok(row);
+    assert.equal(row.personId, residentPersonId);
+    assert.equal(row.personName, 'Resident Test');
+    assert.equal(row.personEmail, residentEmail);
   });
 
   it('manages units through the structure-scoped endpoint', async () => {
@@ -1931,7 +1979,7 @@ describe('location node integration', () => {
       'POST',
       `/api/units/${unitChildId}/residents`,
       {
-        userId: residentUserId,
+        userId: residentAccountId,
         relationship: 'tenant',
       },
       orgAdminToken,
