@@ -1,38 +1,45 @@
 ## 1. Preparación
 
 - [x] 1.1 Inventariar las 33 referencias a `users` y clasificarlas en lectura
-  de identidad, lectura de credencial y escritura.
+      de identidad, lectura de credencial y escritura.
 - [x] 1.2 Crear `server/api/src/services/credentials.service.ts` con
-  `hashPassword`, `verifyPassword`, `setPassword`, `revokeAllSessions` y la
-  política de longitud mínima.
+      `hashPassword`, `verifyPassword`, `setPassword`, `revokeAllSessions` y la
+      política de longitud mínima.
 - [x] 1.3 Reemplazar los usos directos de `bcrypt` por el módulo nuevo.
-  Quedan fuera a propósito: el hash de PIN de pases (`pass.service`,
-  `public-pass.service`), que no es una credencial de cuenta, y
-  `packages/database` (`seed`, `bootstrap-admin`), que no puede importar
-  desde `server/api`.
+      Quedan fuera a propósito: el hash de PIN de pases (`pass.service`,
+      `public-pass.service`), que no es una credencial de cuenta, y
+      `packages/database` (`seed`, `bootstrap-admin`), que no puede importar
+      desde `server/api`.
 - [x] 1.4 Agregar tests unitarios del módulo, incluida la revocación de sesiones.
-  La revocación se cubre en integración en 3.4, que es donde cambia el flujo
-  de sesiones.
+      La revocación se cubre en integración en 3.4, que es donde cambia el flujo
+      de sesiones.
 
 ## 2. Backfill de sesiones
 
-- [ ] 2.1 Migración: agregar `refresh_tokens.account_id` nullable.
-- [ ] 2.2 Backfill por email entre `users` y `accounts`, informando filas sin
-  correspondencia.
-- [ ] 2.3 Revisar manualmente las filas sin correspondencia antes de continuar.
-- [ ] 2.4 Migración: `account_id` pasa a `NOT NULL` y se elimina `user_id`.
-- [ ] 2.5 Actualizar el modelo y las consultas de refresh token.
+- [x] 2.1 Migración: agregar `refresh_tokens.account_id` nullable.
+      Ya existía desde `0009_lively_northstar.sql`; no hizo falta una migración
+      nueva.
+- [x] 2.2 Backfill por email entre `users` y `accounts`, informando filas sin
+      correspondencia. También quedó cubierto por `0009`.
+- [x] 2.3 Revisar manualmente las filas sin correspondencia antes de continuar.
+      La guarda de la migración abortó con 5 `users` sin cuenta; todas eran
+      fixtures `@test.local` de corridas de integración anteriores, eliminadas
+      antes de migrar.
+- [x] 2.4 Migración: `account_id` pasa a `NOT NULL` y se elimina `user_id`.
+      `0025_refresh_tokens_account_only.sql`, con guardas que abortan si quedan
+      tokens sin cuenta o `users` sin `accounts`.
+- [x] 2.5 Actualizar el modelo y las consultas de refresh token.
 
 ## 3. Autenticación sobre `accounts`
 
 - [ ] 3.1 Cambiar login, refresh, context y logout para operar sólo con
-  `account_id` y `person_id`.
+      `account_id` y `person_id`.
 - [ ] 3.2 Unificar la verificación de contraseña en las dos ramas actuales de
-  `auth.service.ts`.
+      `auth.service.ts`.
 - [ ] 3.3 Ajustar `changePassword` para usar `setPassword` y dejar de escribir
-  en `users`.
+      en `users`.
 - [ ] 3.4 Tests de integración: login, refresh, logout, cambio de contraseña y
-  sesión invalidada tras el cambio.
+      sesión invalidada tras el cambio.
 
 ## 4. Compatibilidad de `users`
 

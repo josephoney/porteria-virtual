@@ -229,9 +229,9 @@ export const visitorsRelations = relations(visitors, ({ one, many }) => ({
 }));
 
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
-  user: one(users, {
-    fields: [refreshTokens.userId],
-    references: [users.id],
+  account: one(accounts, {
+    fields: [refreshTokens.accountId],
+    references: [accounts.id],
   }),
 }));
 

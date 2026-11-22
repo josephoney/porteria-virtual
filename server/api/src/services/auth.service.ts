@@ -120,6 +120,18 @@ async function identityForUser(user: typeof users.$inferSelect): Promise<Account
   return account ? { accountId: account.id, personId: account.personId } : {};
 }
 
+async function userForAccount(accountId: string): Promise<typeof users.$inferSelect | null> {
+  const [account] = await db
+    .select({ email: accounts.email })
+    .from(accounts)
+    .where(eq(accounts.id, accountId))
+    .limit(1);
+  if (!account) return null;
+
+  const [user] = await db.select().from(users).where(eq(users.email, account.email)).limit(1);
+  return user ?? null;
+}
+
 interface AuthenticatedSubject {
   user: typeof users.$inferSelect;
   identity: AccountIdentity;
@@ -139,24 +151,18 @@ async function authenticate(email: string, password: string): Promise<Authentica
     .where(eq(accounts.email, email))
     .limit(1);
 
-  if (account) {
-    if (!account.active) return null;
-    const valid = await verifyPassword(password, account.passwordHash);
-    if (!valid) return null;
-  }
+  if (!account || !account.active) return null;
+
+  const valid = await verifyPassword(password, account.passwordHash);
+  if (!valid) return null;
 
   const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
   if (!user || !user.active) return null;
 
-  if (!account) {
-    const valid = await verifyPassword(password, user.passwordHash);
-    if (!valid) return null;
-  }
-
   return {
     user,
-    identity: account ? { accountId: account.id, personId: account.personId } : {},
-    isPlatformAdmin: user.isPlatformAdmin || Boolean(account?.isPlatformAdmin),
+    identity: { accountId: account.id, personId: account.personId },
+    isPlatformAdmin: user.isPlatformAdmin || account.isPlatformAdmin,
   };
 }
 
@@ -191,9 +197,14 @@ async function createTokens(
   const accessToken = signAccessToken(payload);
   const refreshToken = generateRefreshToken(membership.id);
 
+  if (!identity.accountId) {
+    // No debería ocurrir: todo usuario tiene cuenta desde el split people/accounts.
+    // La migración 0025 aborta si quedan usuarios sin cuenta.
+    throw new Error('account_required');
+  }
+
   await db.insert(refreshTokens).values({
-    userId: user.id,
-    accountId: identity.accountId ?? null,
+    accountId: identity.accountId,
     tokenHash: hashToken(refreshToken),
     expiresAt: new Date(Date.now() + config.jwt.refreshExpiresInMs),
   });
@@ -268,7 +279,7 @@ export async function refreshToken(token: string): Promise<RefreshResponse | nul
 
   await db.update(refreshTokens).set({ revoked: true }).where(eq(refreshTokens.id, stored.id));
 
-  const [user] = await db.select().from(users).where(eq(users.id, stored.userId)).limit(1);
+  const user = await userForAccount(stored.accountId);
   if (!user || !user.active) return null;
 
   let membership: MembershipSummary | null;
@@ -337,7 +348,7 @@ export async function getUserByRefreshToken(
 
   if (!stored) return null;
 
-  const [user] = await db.select().from(users).where(eq(users.id, stored.userId)).limit(1);
+  const user = await userForAccount(stored.accountId);
   if (!user) return null;
 
   if (parsed.membershipId === PLATFORM_MEMBERSHIP_ID) {

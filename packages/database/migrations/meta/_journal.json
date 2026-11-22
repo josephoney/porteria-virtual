@@ -176,6 +176,13 @@
       "when": 1795033622442,
       "tag": "0024_flimsy_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795314567687,
+      "tag": "0025_refresh_tokens_account_only",
+      "breakpoints": true
     }
   ]
 }
