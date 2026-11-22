@@ -9,6 +9,8 @@ export interface CreateCallDto {
 
 export interface UpdateCallDto {
   status?: 'active' | 'ended' | 'missed';
+  operatorPersonId?: string;
+  /** @deprecated usar operatorPersonId */
   operatorId?: string;
   endedAt?: string;
   duration?: number;

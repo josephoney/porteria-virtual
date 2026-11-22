@@ -67,6 +67,9 @@
 ## 5. Retiro
 
 - [ ] 5.1 Reescribir las referencias restantes contra `people` y `accounts`.
+      Hecho: `calls.operator_id` pasó a `operator_person_id` (`0027`), con filtros,
+      joins y dashboard por persona. Falta: `invitations.invited_by`, los joins por
+      `memberships.user_id` y las escrituras que quedan en `users`.
 - [ ] 5.2 Eliminar la vista `users`.
 - [ ] 5.3 Actualizar bootstrap, seed y scripts de administración.
 - [ ] 5.4 Tests de integración completos en verde.

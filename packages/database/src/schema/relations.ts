@@ -36,6 +36,7 @@ export const peopleRelations = relations(people, ({ one, many }) => ({
     references: [accounts.personId],
   }),
   memberships: many(memberships),
+  calls: many(calls, { relationName: 'operatorCalls' }),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -208,7 +209,6 @@ export const kiosksRelations = relations(kiosks, ({ one, many }) => ({
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(memberships),
   refreshTokens: many(refreshTokens),
-  calls: many(calls, { relationName: 'operatorCalls' }),
   createdVisitors: many(visitors, { relationName: 'createdVisitors' }),
   guardRounds: many(guardRounds),
   createdAccessCodes: many(accessCodes, { relationName: 'createdCodes' }),
@@ -240,9 +240,9 @@ export const callsRelations = relations(calls, ({ one }) => ({
     fields: [calls.kioskId],
     references: [kiosks.id],
   }),
-  operator: one(users, {
-    fields: [calls.operatorId],
-    references: [users.id],
+  operator: one(people, {
+    fields: [calls.operatorPersonId],
+    references: [people.id],
     relationName: 'operatorCalls',
   }),
   organization: one(organizations, {

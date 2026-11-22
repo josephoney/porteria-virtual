@@ -190,6 +190,13 @@
       "when": 1795319707858,
       "tag": "0026_memberships_person_only",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795356744780,
+      "tag": "0027_calls_person_only",
+      "breakpoints": true
     }
   ]
 }

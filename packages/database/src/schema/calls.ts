@@ -1,6 +1,5 @@
 import { pgTable, uuid, text, integer, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 import { kiosks } from './kiosks';
-import { users } from './users';
 import { people } from './people';
 import { organizations } from './organizations';
 import { accessPoints } from './access-points';
@@ -13,7 +12,6 @@ export const calls = pgTable('calls', {
   kioskId: uuid('kiosk_id')
     .notNull()
     .references(() => kiosks.id, { onDelete: 'cascade' }),
-  operatorId: uuid('operator_id').references(() => users.id, { onDelete: 'set null' }),
   operatorPersonId: uuid('operator_person_id').references(() => people.id, {
     onDelete: 'set null',
   }),

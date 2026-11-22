@@ -13,6 +13,7 @@ function getUser(request: FastifyRequest) {
     orgId: u.orgId,
     communityId: u.communityId ?? null,
     isPlatformAdmin: Boolean(u.isPlatformAdmin),
+    personId: u.personId ?? null,
   };
 }
 
@@ -33,7 +34,10 @@ export async function callsRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   });
@@ -44,11 +48,11 @@ export async function callsRoutes(app: FastifyInstance) {
     async (request: FastifyRequest) => {
       const u = getUser(request);
       const query = callsQuerySchema.parse(request.query);
-      const effectiveOperatorId = u.role === 'operator' ? u.sub : query.operatorId;
+      const effectiveOperatorPersonId = u.role === 'operator' ? u.personId : query.operatorPersonId;
 
       return callsService.listCalls(u.orgId, {
         ...query,
-        operatorId: effectiveOperatorId,
+        operatorPersonId: effectiveOperatorPersonId ?? undefined,
         communityId: effectiveCommunityId(u, query.communityId),
       });
     },

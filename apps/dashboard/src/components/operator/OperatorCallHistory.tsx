@@ -33,10 +33,10 @@ export function OperatorCallHistory() {
   const [expanded, setExpanded] = useState(false);
 
   const fetchCalls = useCallback(async () => {
-    if (!user) return;
+    if (!user?.personId) return;
     try {
       const { data } = await get<{ data: CallData[] }>(
-        `/api/calls?operatorId=${user.id}&pageSize=50`,
+        `/api/calls?operatorPersonId=${user.personId}&pageSize=50`,
       );
       setCalls(data.data);
     } catch {

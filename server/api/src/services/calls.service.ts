@@ -1,7 +1,15 @@
-import { eq, and, gte, lte, count, desc } from 'drizzle-orm';
+import { eq, and, gte, lte, count, desc, sql } from 'drizzle-orm';
 import type { CallStatus } from '@porteria/shared';
 import { createDb } from '@porteria/database';
-import { calls, kiosks, users, people, accessPoints, communities } from '@porteria/database/schema';
+import {
+  calls,
+  kiosks,
+  people,
+  users,
+  accounts,
+  accessPoints,
+  communities,
+} from '@porteria/database/schema';
 import { createEventEnvelope } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
 
@@ -43,7 +51,7 @@ export async function listCalls(
     status?: string;
     from?: string;
     to?: string;
-    operatorId?: string;
+    operatorPersonId?: string;
     communityId?: string;
   },
 ): Promise<{ data: CallResult[]; total: number; page: number; pageSize: number }> {
@@ -53,7 +61,9 @@ export async function listCalls(
   if (filters.status) conditions.push(eq(calls.status, filters.status as CallStatus));
   if (filters.from) conditions.push(gte(calls.startedAt, new Date(filters.from)));
   if (filters.to) conditions.push(lte(calls.startedAt, new Date(filters.to)));
-  if (filters.operatorId) conditions.push(eq(calls.operatorId, filters.operatorId));
+  if (filters.operatorPersonId) {
+    conditions.push(eq(calls.operatorPersonId, filters.operatorPersonId));
+  }
   if (filters.communityId) conditions.push(eq(calls.communityId, filters.communityId));
 
   const data = await db
@@ -66,13 +76,13 @@ export async function listCalls(
       communityId: calls.communityId,
       communityName: communities.name,
       kioskName: kiosks.name,
-      operatorName: users.name,
+      operatorName: sql<string | null>`concat_ws(' ', ${people.firstName}, ${people.lastName})`,
       accessPointName: accessPoints.name,
     })
     .from(calls)
     .innerJoin(communities, eq(calls.communityId, communities.id))
     .leftJoin(kiosks, eq(calls.kioskId, kiosks.id))
-    .leftJoin(users, eq(calls.operatorId, users.id))
+    .leftJoin(people, eq(calls.operatorPersonId, people.id))
     .leftJoin(accessPoints, eq(calls.accessPointId, accessPoints.id))
     .where(and(...conditions))
     .orderBy(desc(calls.startedAt))
@@ -103,13 +113,13 @@ export async function getCallById(id: string, orgId: string): Promise<CallResult
       communityId: calls.communityId,
       communityName: communities.name,
       kioskName: kiosks.name,
-      operatorName: users.name,
+      operatorName: sql<string | null>`concat_ws(' ', ${people.firstName}, ${people.lastName})`,
       accessPointName: accessPoints.name,
     })
     .from(calls)
     .innerJoin(communities, eq(calls.communityId, communities.id))
     .leftJoin(kiosks, eq(calls.kioskId, kiosks.id))
-    .leftJoin(users, eq(calls.operatorId, users.id))
+    .leftJoin(people, eq(calls.operatorPersonId, people.id))
     .leftJoin(accessPoints, eq(calls.accessPointId, accessPoints.id))
     .where(and(eq(calls.id, id), eq(calls.organizationId, orgId)))
     .limit(1);
@@ -206,6 +216,8 @@ export async function updateCall(
   callId: string,
   input: {
     status?: string;
+    operatorPersonId?: string | null;
+    /** @deprecated usar operatorPersonId; se resuelve la persona desde el usuario. */
     operatorId?: string | null;
     endedAt?: string;
     duration?: number;
@@ -215,13 +227,15 @@ export async function updateCall(
   const updates: Record<string, unknown> = {};
 
   if (input.status) updates.status = input.status;
-  if (input.operatorId !== undefined) {
-    updates.operatorId = input.operatorId;
+  if (input.operatorPersonId !== undefined) {
+    updates.operatorPersonId = input.operatorPersonId;
+  } else if (input.operatorId !== undefined) {
+    // Transición: hay llamadores que todavía envían users.id.
     if (input.operatorId) {
       const [operator] = await db
-        .select({ personId: people.id })
+        .select({ personId: accounts.personId })
         .from(users)
-        .innerJoin(people, eq(people.contactEmail, users.email))
+        .innerJoin(accounts, eq(accounts.email, users.email))
         .where(eq(users.id, input.operatorId))
         .limit(1);
       updates.operatorPersonId = operator?.personId ?? null;
@@ -238,11 +252,7 @@ export async function updateCall(
 
   try {
     await db.transaction(async (tx) => {
-      const [updated] = await tx
-        .update(calls)
-        .set(updates)
-        .where(eq(calls.id, callId))
-        .returning();
+      const [updated] = await tx.update(calls).set(updates).where(eq(calls.id, callId)).returning();
 
       if (!updated) throw new Error('CALL_NOT_FOUND');
 
@@ -251,7 +261,7 @@ export async function updateCall(
           tx,
           createEventEnvelope({
             eventType: input.eventType,
-            actorRole: input.operatorId ? 'operator' : 'kiosk',
+            actorRole: input.operatorPersonId || input.operatorId ? 'operator' : 'kiosk',
             organizationId: updated.organizationId,
             communityId: updated.communityId,
             accessPointId: updated.accessPointId ?? null,

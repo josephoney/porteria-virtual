@@ -77,7 +77,7 @@ export const callsQuerySchema = z.object({
   status: z.enum(['pending', 'active', 'ended', 'missed']).optional(),
   from: z.string().optional(),
   to: z.string().optional(),
-  operatorId: z.string().optional(),
+  operatorPersonId: z.string().uuid().optional(),
   communityId: z.string().uuid().optional(),
 });
 
