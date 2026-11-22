@@ -22,7 +22,6 @@ import {
   memberships,
   organizations,
   people,
-  users,
 } from '@porteria/database/schema';
 
 const db = createDb();
@@ -1422,9 +1421,6 @@ describe('location node integration', () => {
       .where(eq(people.contactEmail, email));
     assert.equal(personRows.length, 1);
 
-    const legacyRows = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
-    assert.equal(legacyRows.length, 0);
-
     await db.delete(accounts).where(eq(accounts.email, email));
     await db.delete(people).where(eq(people.contactEmail, email));
   });
@@ -1588,9 +1584,6 @@ describe('location node integration', () => {
       .from(accounts)
       .where(eq(accounts.email, email));
     assert.equal(accountRows.length, 1);
-
-    const legacyRows = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
-    assert.equal(legacyRows.length, 0);
 
     const list = await request(
       'GET',
@@ -2022,9 +2015,6 @@ describe('location node integration', () => {
     };
     assert.equal(account.email, email);
     assert.equal(account.active, true);
-
-    const legacyRows = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
-    assert.equal(legacyRows.length, 0);
 
     await db.insert(memberships).values({
       personId: legalRepresentativePersonId,

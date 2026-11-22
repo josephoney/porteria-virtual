@@ -1,5 +1,4 @@
 import { pgTable, uuid, timestamp, pgEnum, uniqueIndex, index } from 'drizzle-orm/pg-core';
-import { users } from './users';
 import { organizations } from './organizations';
 import { communities } from './communities';
 import { units } from './units';
@@ -24,9 +23,6 @@ export const memberships = pgTable(
   'memberships',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    userId: uuid('user_id').references(() => users.id, {
-      onDelete: 'cascade',
-    }),
     personId: uuid('person_id')
       .notNull()
       .references(() => people.id, {

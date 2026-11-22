@@ -150,6 +150,28 @@ describe('schema migration 0008', () => {
     );
   });
 
+  it('has retired the legacy users table and its columns', async () => {
+    const tables = await db.execute<{ table_name: string }>(sql`
+      select table_name
+      from information_schema.tables
+      where table_schema = 'public'
+        and table_name = 'users'
+    `);
+    assert.equal(tables.rows.length, 0);
+
+    const columns = await db.execute<{ table_name: string; column_name: string }>(sql`
+      select table_name, column_name
+      from information_schema.columns
+      where table_schema = 'public'
+        and (table_name, column_name) in (
+          ('access_codes', 'created_by'),
+          ('visitors', 'created_by'),
+          ('memberships', 'user_id')
+        )
+    `);
+    assert.equal(columns.rows.length, 0);
+  });
+
   it('creates and lists a guard round for a person without an account', async () => {
     const suffix = randomUUID().slice(0, 8);
     const [organization] = await db

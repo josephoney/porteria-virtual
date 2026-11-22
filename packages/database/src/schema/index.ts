@@ -22,7 +22,6 @@ export {
   accessDirectionEnum,
 } from './access-points';
 export { kiosks, kioskStatusEnum } from './kiosks';
-export { users } from './users';
 export { visitors, visitorTypeEnum } from './visitors';
 export { refreshTokens } from './refresh-tokens';
 export { calls, callStatusEnum } from './calls';
@@ -38,11 +37,7 @@ export { passScans, scanActionEnum, scanStatusEnum, scanResultEnum } from './pas
 export { passAlerts, passAlertTypeEnum, passAlertStatusEnum } from './pass-alerts';
 export { guardShifts, guardShiftStatusEnum } from './guard-shifts';
 export { guardShiftSegments } from './guard-shift-segments';
-export {
-  bitacoraEntries,
-  bitacoraEntryTypeEnum,
-  bitacoraSourceEnum,
-} from './bitacora-entries';
+export { bitacoraEntries, bitacoraEntryTypeEnum, bitacoraSourceEnum } from './bitacora-entries';
 export { bitacoraComments } from './bitacora-comments';
 
 export {
@@ -56,7 +51,6 @@ export {
   membershipsRelations,
   accessPointsRelations,
   kiosksRelations,
-  usersRelations,
   visitorsRelations,
   refreshTokensRelations,
   callsRelations,

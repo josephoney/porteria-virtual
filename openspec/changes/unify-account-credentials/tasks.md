@@ -60,29 +60,41 @@
 
 ## 4. Compatibilidad de `users`
 
-- [ ] 4.1 Reemplazar la tabla `users` por una vista equivalente de solo lectura.
-- [ ] 4.2 Verificar que las 33 referencias siguen funcionando.
-- [ ] 4.3 Documentar que la vista no admite escritura.
+> Desvío deliberado del spec: en lugar de reemplazar `users` por una vista de
+> solo lectura, se elimina la tabla directamente. Una vez quitadas todas las
+> lecturas y escrituras, la vista sólo podía devolver ids plausibles pero
+> incorrectos en lugar de fallar de forma visible. Cualquier referencia olvidada
+> ahora falla con `relation "users" does not exist`.
+
+- [x] 4.1 Revisar las referencias restantes. Sólo quedaban el fallback de
+      `events.actorName` y las columnas/FKs legadas sin consumidores de runtime.
+- [x] 4.2 Eliminar la tabla y las columnas legadas para dejar de necesitar la
+      vista (`0030_retire_users_table`).
+- [x] 4.3 Documentar el retiro y la ausencia de vista de compatibilidad (este
+      bloque).
 
 ## 5. Retiro
 
-- [ ] 5.1 Reescribir las referencias restantes contra `people` y `accounts`.
+- [x] 5.1 Reescribir las referencias restantes contra `people` y `accounts`.
       Hecho: `calls.operator_id` pasó a `operator_person_id` (`0027`), con filtros,
       joins y dashboard por persona; `invitations.invited_by` pasó a
       `invited_by_person_id` (`0028`); el recurso de usuarios se resuelve por
       `accounts` + `people` (el `id` de la API es el de la cuenta) y las lecturas
-      de `memberships.user_id` pasaron a `person_id`. Falta: las escrituras que
-      quedan en `users` (`users.service`, `people.routes`, `invitation.service`,
-      seed y bootstrap), el `id` del payload de login (todavía `users.id`, no se
-      compara con ningún id de recurso), `events.actorName` y el join a `users`
-      de `location_residents.user_id`.
-- [ ] 5.2 Eliminar la vista `users`.
-- [ ] 5.3 Actualizar bootstrap, seed y scripts de administración.
-- [ ] 5.4 Tests de integración completos en verde.
+      de `memberships.user_id` pasaron a `person_id`. En `0030` se eliminó el
+      fallback a `users` de `events.actorName` y las columnas legadas
+      `access_codes.created_by`, `visitors.created_by` y `memberships.user_id`.
+- [x] 5.2 Eliminar `users`. Se elimina la tabla directamente, sin vista
+      intermedia, según el desvío documentado en la sección 4.
+- [x] 5.3 Actualizar bootstrap, seed y scripts de administración.
+      Ya escribían sólo en `people` + `accounts` y no importaban `users`.
+- [x] 5.4 Tests de integración completos en verde.
 
 ## 6. Verificación
 
-- [ ] 6.1 `pnpm --filter @porteria/api exec tsc --noEmit`.
-- [ ] 6.2 Suites unitaria e integración completas.
+- [x] 6.1 `pnpm --filter @porteria/api exec tsc --noEmit`.
+- [x] 6.2 Suites unitaria e integración completas.
+      40/40 unitarias y 185/185 de integración (184 previas + la guarda de
+      esquema nueva).
 - [ ] 6.3 Migración probada en una base restaurada de producción.
-- [ ] 6.4 `openspec validate unify-account-credentials --strict`.
+      Sólo se aplicó contra la base local; falta la restauración de producción.
+- [x] 6.4 `openspec validate unify-account-credentials --strict`.

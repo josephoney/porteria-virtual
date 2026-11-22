@@ -18,7 +18,6 @@ export interface Requester {
 
 export interface MembershipResult {
   id: string;
-  userId: string | null;
   personId: string;
   organizationId: string;
   communityId: string | null;
@@ -49,7 +48,6 @@ export function validateMembershipScope(
 function toMembershipResult(row: typeof memberships.$inferSelect): MembershipResult {
   return {
     id: row.id,
-    userId: row.userId,
     personId: row.personId,
     organizationId: row.organizationId,
     communityId: row.communityId,

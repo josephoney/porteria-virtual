@@ -2,7 +2,6 @@ import type { MembershipRole, MembershipStatus } from '../enums/index.js';
 
 export interface Membership {
   id: string;
-  userId: string;
   personId: string | null;
   organizationId: string;
   communityId: string | null;

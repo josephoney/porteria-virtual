@@ -59,8 +59,7 @@ export async function listEvents(
       actorRole: events.actorRole,
       actorName: sql<string | null>`coalesce(
         (select concat_ws(' ', p1.first_name, p1.last_name) from people p1 where p1.id = ${events.actorPersonId}),
-        (select concat_ws(' ', p2.first_name, p2.last_name) from people p2 join accounts a2 on a2.person_id = p2.id where a2.id = ${events.actorId}),
-        (select u.name from users u where u.id = ${events.actorId})
+        (select concat_ws(' ', p2.first_name, p2.last_name) from people p2 join accounts a2 on a2.person_id = p2.id where a2.id = ${events.actorId})
       )`,
       metadata: events.metadata,
       createdAt: events.createdAt,

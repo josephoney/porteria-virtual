@@ -15,7 +15,6 @@ import {
   memberships,
   organizations,
   people,
-  users,
 } from '@porteria/database/schema';
 import { hashPassword } from '../src/services/credentials.service.js';
 
@@ -152,8 +151,18 @@ describe('auth sessions sobre accounts', () => {
     assert.equal(body.user.id, accountId);
     assert.equal(body.activeMembership.id, membershipId);
 
-    const legacyRows = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
-    assert.equal(legacyRows.length, 0);
+    // La identidad vive solo en people + accounts: el login no crea una fila
+    // en la tabla legada.
+    const accountRows = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.id, accountId));
+    const personRows = await db
+      .select({ id: people.id })
+      .from(people)
+      .where(eq(people.id, personId));
+    assert.equal(accountRows.length, 1);
+    assert.equal(personRows.length, 1);
   });
 
   it('firma el access token con el id de la cuenta en sub', async () => {

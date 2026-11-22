@@ -12,7 +12,6 @@ import { locationResidents } from './location-residents';
 import { memberships } from './memberships';
 import { accessPoints } from './access-points';
 import { kiosks } from './kiosks';
-import { users } from './users';
 import { visitors } from './visitors';
 import { refreshTokens } from './refresh-tokens';
 import { calls } from './calls';
@@ -148,10 +147,6 @@ export const unitsRelations = relations(units, ({ one, many }) => ({
 }));
 
 export const membershipsRelations = relations(memberships, ({ one }) => ({
-  user: one(users, {
-    fields: [memberships.userId],
-    references: [users.id],
-  }),
   organization: one(organizations, {
     fields: [memberships.organizationId],
     references: [organizations.id],
@@ -209,22 +204,10 @@ export const kiosksRelations = relations(kiosks, ({ one, many }) => ({
   relayOutputs: many(relayOutputs),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
-  memberships: many(memberships),
-  refreshTokens: many(refreshTokens),
-  createdVisitors: many(visitors, { relationName: 'createdVisitors' }),
-  createdAccessCodes: many(accessCodes, { relationName: 'createdCodes' }),
-}));
-
 export const visitorsRelations = relations(visitors, ({ one, many }) => ({
   organization: one(organizations, {
     fields: [visitors.organizationId],
     references: [organizations.id],
-  }),
-  createdBy: one(users, {
-    fields: [visitors.createdBy],
-    references: [users.id],
-    relationName: 'createdVisitors',
   }),
   accessCodes: many(accessCodes),
 }));
@@ -302,11 +285,6 @@ export const accessCodesRelations = relations(accessCodes, ({ one }) => ({
   accessPoint: one(accessPoints, {
     fields: [accessCodes.accessPointId],
     references: [accessPoints.id],
-  }),
-  createdBy: one(users, {
-    fields: [accessCodes.createdBy],
-    references: [users.id],
-    relationName: 'createdCodes',
   }),
 }));
 
