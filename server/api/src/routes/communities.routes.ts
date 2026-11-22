@@ -56,6 +56,7 @@ function getUser(request: FastifyRequest) {
   const u = request.user;
   return {
     sub: u.sub,
+    personId: u.personId ?? null,
     role: u.role,
     orgId: u.orgId,
     communityId: u.communityId ?? null,
@@ -101,16 +102,18 @@ export async function communityRoutes(app: FastifyInstance) {
       if (!organizationId) return [];
       const conditions = [eq(communities.organizationId, organizationId)];
       if (!u.isPlatformAdmin && u.role === 'community_admin') {
-        const adminMemberships = await db
-          .select({ communityId: memberships.communityId })
-          .from(memberships)
-          .where(
-            and(
-              eq(memberships.userId, u.sub),
-              eq(memberships.role, 'community_admin'),
-              eq(memberships.status, 'active'),
-            ),
-          );
+        const adminMemberships = u.personId
+          ? await db
+              .select({ communityId: memberships.communityId })
+              .from(memberships)
+              .where(
+                and(
+                  eq(memberships.personId, u.personId),
+                  eq(memberships.role, 'community_admin'),
+                  eq(memberships.status, 'active'),
+                ),
+              )
+          : [];
         const assignedCommunityIds = adminMemberships
           .map((membership) => membership.communityId)
           .filter((id): id is string => Boolean(id));

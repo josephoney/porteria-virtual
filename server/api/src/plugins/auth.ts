@@ -98,7 +98,7 @@ export function registerMembershipGuard(app: FastifyInstance) {
       .where(eq(memberships.id, payload.membershipId))
       .limit(1);
 
-    if (!membership || membership.status !== 'active' || membership.userId !== payload.sub) {
+    if (!membership || membership.status !== 'active' || membership.personId !== payload.personId) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',

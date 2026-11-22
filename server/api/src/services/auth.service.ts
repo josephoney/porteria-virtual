@@ -98,11 +98,11 @@ function platformMembership(): MembershipSummary {
   };
 }
 
-async function getActiveMemberships(userId: string): Promise<MembershipSummary[]> {
+async function getActiveMemberships(personId: string): Promise<MembershipSummary[]> {
   const rows = await db
     .select()
     .from(memberships)
-    .where(and(eq(memberships.userId, userId), eq(memberships.status, 'active')));
+    .where(and(eq(memberships.personId, personId), eq(memberships.status, 'active')));
   return rows.map(toMembershipSummary);
 }
 
@@ -239,7 +239,8 @@ export async function login(email: string, password: string): Promise<LoginRespo
     return createTokens(user, platformMembership(), identity, subject.isPlatformAdmin);
   }
 
-  const activeMemberships = await getActiveMemberships(user.id);
+  if (!identity.personId) return null;
+  const activeMemberships = await getActiveMemberships(identity.personId);
   if (activeMemberships.length === 0) return null;
   if (activeMemberships.length === 1) {
     return createTokens(user, activeMemberships[0], identity, subject.isPlatformAdmin);
@@ -260,7 +261,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
 }
 
 async function resolveMembership(
-  userId: string,
+  personId: string,
   membershipId: string,
 ): Promise<MembershipSummary | null> {
   const [membership] = await db
@@ -269,7 +270,7 @@ async function resolveMembership(
     .where(
       and(
         eq(memberships.id, membershipId),
-        eq(memberships.userId, userId),
+        eq(memberships.personId, personId),
         eq(memberships.status, 'active'),
       ),
     )
@@ -295,17 +296,19 @@ export async function refreshToken(token: string): Promise<RefreshResponse | nul
   const user = await userForAccount(stored.accountId);
   if (!user || !user.active) return null;
 
+  const identity = await identityForUser(user);
   let membership: MembershipSummary | null;
   const isPlatformAdmin = await isPlatformAdminForUser(user);
   if (parsed.membershipId === PLATFORM_MEMBERSHIP_ID) {
     if (!isPlatformAdmin) return null;
     membership = platformMembership();
   } else {
-    membership = await resolveMembership(user.id, parsed.membershipId);
+    if (!identity.personId) return null;
+    membership = await resolveMembership(identity.personId, parsed.membershipId);
   }
 
   if (!membership) return null;
-  return createTokens(user, membership, await identityForUser(user), isPlatformAdmin);
+  return createTokens(user, membership, identity, isPlatformAdmin);
 }
 
 export async function switchContext(
@@ -316,13 +319,15 @@ export async function switchContext(
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user || !user.active) return null;
 
+  const identity = await identityForUser(user);
   const isPlatformAdmin = await isPlatformAdminForUser(user);
   let membership: MembershipSummary | null;
   if (membershipId === PLATFORM_MEMBERSHIP_ID) {
     if (!isPlatformAdmin) return null;
     membership = platformMembership();
   } else {
-    membership = await resolveMembership(user.id, membershipId);
+    if (!identity.personId) return null;
+    membership = await resolveMembership(identity.personId, membershipId);
   }
 
   if (!membership) return null;
@@ -334,7 +339,7 @@ export async function switchContext(
       .where(eq(refreshTokens.tokenHash, hashToken(currentRefreshToken)));
   }
 
-  return createTokens(user, membership, await identityForUser(user), isPlatformAdmin);
+  return createTokens(user, membership, identity, isPlatformAdmin);
 }
 
 export async function logout(token: string): Promise<boolean> {
@@ -373,7 +378,9 @@ export async function getUserByRefreshToken(
     };
   }
 
-  const membership = await resolveMembership(user.id, parsed.membershipId);
+  const identity = await identityForUser(user);
+  if (!identity.personId) return null;
+  const membership = await resolveMembership(identity.personId, parsed.membershipId);
   if (!membership) return null;
 
   return {
@@ -414,7 +421,8 @@ export async function loginScoped(
     };
   }
 
-  const activeMemberships = await getActiveMemberships(user.id);
+  if (!identity.personId) return { ok: false, reason: 'no_community_access' };
+  const activeMemberships = await getActiveMemberships(identity.personId);
   const scoped = activeMemberships.filter((m) => m.communityId === community.id);
 
   if (scoped.length === 0) return { ok: false, reason: 'no_community_access' };

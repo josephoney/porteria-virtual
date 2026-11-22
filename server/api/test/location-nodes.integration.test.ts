@@ -519,7 +519,7 @@ describe('location node integration', () => {
       sub: guardUserId,
       email: guardUser.email,
       accountId: randomUUID(),
-      personId: communityAdminPersonId,
+      personId: guardPerson.id,
       orgId: organizationId,
       membershipId: guardMembership.id,
       role: 'guard',
