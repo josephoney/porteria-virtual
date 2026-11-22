@@ -1,12 +1,18 @@
 ## 1. Preparación
 
-- [ ] 1.1 Inventariar las 33 referencias a `users` y clasificarlas en lectura
+- [x] 1.1 Inventariar las 33 referencias a `users` y clasificarlas en lectura
   de identidad, lectura de credencial y escritura.
-- [ ] 1.2 Crear `server/api/src/services/credentials.service.ts` con
+- [x] 1.2 Crear `server/api/src/services/credentials.service.ts` con
   `hashPassword`, `verifyPassword`, `setPassword`, `revokeAllSessions` y la
   política de longitud mínima.
-- [ ] 1.3 Reemplazar los usos directos de `bcrypt` por el módulo nuevo.
-- [ ] 1.4 Agregar tests unitarios del módulo, incluida la revocación de sesiones.
+- [x] 1.3 Reemplazar los usos directos de `bcrypt` por el módulo nuevo.
+  Quedan fuera a propósito: el hash de PIN de pases (`pass.service`,
+  `public-pass.service`), que no es una credencial de cuenta, y
+  `packages/database` (`seed`, `bootstrap-admin`), que no puede importar
+  desde `server/api`.
+- [x] 1.4 Agregar tests unitarios del módulo, incluida la revocación de sesiones.
+  La revocación se cubre en integración en 3.4, que es donde cambia el flujo
+  de sesiones.
 
 ## 2. Backfill de sesiones
 

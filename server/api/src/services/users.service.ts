@@ -9,7 +9,7 @@ import {
   locationUnits,
   organizations,
 } from '@porteria/database/schema';
-import bcrypt from 'bcryptjs';
+import { hashPassword, verifyPassword } from './credentials.service.js';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
 
@@ -342,7 +342,7 @@ export async function createUser(
   const communityIds = data.communityIds?.length
     ? [...new Set(data.communityIds)]
     : [requester.role === 'community_admin' ? requester.communityId : (data.communityId ?? null)];
-  const passwordHash = await bcrypt.hash(data.password, 10);
+  const passwordHash = await hashPassword(data.password);
   const displayName =
     data.name?.trim() ||
     [data.firstName, data.lastName].filter(Boolean).join(' ').trim() ||
@@ -462,10 +462,10 @@ export async function changePassword(
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) return false;
 
-  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  const valid = await verifyPassword(currentPassword, user.passwordHash);
   if (!valid) return false;
 
-  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const passwordHash = await hashPassword(newPassword);
   await db.transaction(async (tx) => {
     await tx.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
     await tx

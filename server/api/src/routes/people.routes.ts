@@ -10,7 +10,7 @@ import {
   refreshTokens,
   users,
 } from '@porteria/database/schema';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '../services/credentials.service.js';
 import { requireRole } from '../middlewares/rbac.js';
 import { insertEvent } from '../services/events.service.js';
 import { can } from '../services/admin-permissions.service.js';
@@ -163,7 +163,9 @@ export async function peopleRoutes(app: FastifyInstance) {
     { preHandler: [requireRole('org_admin', 'community_admin')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const u = request.user;
-      if (!can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId ?? null })) {
+      if (
+        !can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId ?? null })
+      ) {
         return reply.status(403).send({
           statusCode: 403,
           error: 'Forbidden',
@@ -195,10 +197,7 @@ export async function peopleRoutes(app: FastifyInstance) {
           .select({ id: people.id })
           .from(people)
           .where(
-            and(
-              eq(people.documentType, documentType),
-              eq(people.documentNumber, documentNumber),
-            ),
+            and(eq(people.documentType, documentType), eq(people.documentNumber, documentNumber)),
           )
           .limit(1);
         if (existing) {
@@ -273,7 +272,9 @@ export async function peopleRoutes(app: FastifyInstance) {
     { preHandler: [requireRole('org_admin', 'community_admin')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const u = request.user;
-      if (!can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId ?? null })) {
+      if (
+        !can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId ?? null })
+      ) {
         return reply.status(403).send({
           statusCode: 403,
           error: 'Forbidden',
@@ -338,7 +339,9 @@ export async function peopleRoutes(app: FastifyInstance) {
     { preHandler: [requireRole('org_admin', 'community_admin')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const u = request.user;
-      if (!can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId ?? null })) {
+      if (
+        !can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId ?? null })
+      ) {
         return reply.status(403).send({ error: 'Forbidden' });
       }
       const { id } = request.params as { id: string };
@@ -367,7 +370,7 @@ export async function peopleRoutes(app: FastifyInstance) {
         return reply.status(409).send({ error: 'Person already has an account' });
       }
 
-      const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await hashPassword(password);
       try {
         const [linkedUser] = await db
           .select({ id: users.id })
@@ -419,7 +422,9 @@ export async function peopleRoutes(app: FastifyInstance) {
     { preHandler: [requireRole('org_admin', 'community_admin')] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const u = request.user;
-      if (!can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId ?? null })) {
+      if (
+        !can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId ?? null })
+      ) {
         return reply.status(403).send({ error: 'Forbidden' });
       }
       const { id } = request.params as { id: string };
@@ -429,23 +434,15 @@ export async function peopleRoutes(app: FastifyInstance) {
         active?: boolean;
       };
 
-      const [account] = await db
-        .select()
-        .from(accounts)
-        .where(eq(accounts.personId, id))
-        .limit(1);
+      const [account] = await db.select().from(accounts).where(eq(accounts.personId, id)).limit(1);
       if (!account) return reply.status(404).send({ error: 'Account not found' });
 
-      const passwordHash = body.password
-        ? await bcrypt.hash(body.password, 10)
-        : undefined;
+      const passwordHash = body.password ? await hashPassword(body.password) : undefined;
       try {
         const [updated] = await db
           .update(accounts)
           .set({
-            ...(body.email !== undefined
-              ? { email: body.email.trim().toLowerCase() }
-              : {}),
+            ...(body.email !== undefined ? { email: body.email.trim().toLowerCase() } : {}),
             ...(passwordHash ? { passwordHash } : {}),
             ...(body.active !== undefined ? { active: body.active } : {}),
             updatedAt: new Date(),
@@ -461,7 +458,8 @@ export async function peopleRoutes(app: FastifyInstance) {
         }
 
         await insertEvent({
-          eventType: body.active === false ? 'person.account_deactivated' : 'person.account_updated',
+          eventType:
+            body.active === false ? 'person.account_deactivated' : 'person.account_updated',
           actorId: request.user.sub,
           actorPersonId: request.user.personId ?? null,
           actorRole: request.user.role,

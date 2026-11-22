@@ -13,7 +13,7 @@ import type {
   MembershipSummary,
   RefreshResponse,
 } from '@porteria/shared';
-import bcrypt from 'bcryptjs';
+import { verifyPassword } from './credentials.service.js';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import config from '../config.js';
@@ -141,7 +141,7 @@ async function authenticate(email: string, password: string): Promise<Authentica
 
   if (account) {
     if (!account.active) return null;
-    const valid = await bcrypt.compare(password, account.passwordHash);
+    const valid = await verifyPassword(password, account.passwordHash);
     if (!valid) return null;
   }
 
@@ -149,7 +149,7 @@ async function authenticate(email: string, password: string): Promise<Authentica
   if (!user || !user.active) return null;
 
   if (!account) {
-    const valid = await bcrypt.compare(password, user.passwordHash);
+    const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) return null;
   }
 

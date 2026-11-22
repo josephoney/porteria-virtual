@@ -1,6 +1,6 @@
 import { and, eq, isNull, desc, ne } from 'drizzle-orm';
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from './credentials.service.js';
 import { createDb } from '@porteria/database';
 import {
   invitations,
@@ -498,7 +498,7 @@ export async function acceptInvitation(
     return { ok: false, code: 'invalid_payload' };
   }
 
-  const passwordHash = await bcrypt.hash(body.password, 10);
+  const passwordHash = await hashPassword(body.password);
 
   try {
     const tokens = await db.transaction(async (tx) => {
