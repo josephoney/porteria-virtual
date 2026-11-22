@@ -20,6 +20,7 @@ import * as slugService from '../services/slug.service.js';
 import * as invitationService from '../services/invitation.service.js';
 import * as eventsService from '../services/events.service.js';
 import * as usersService from '../services/users.service.js';
+import * as authService from '../services/auth.service.js';
 import {
   createOrganizationSchema,
   updateOrganizationSchema,
@@ -119,11 +120,10 @@ async function transferOrganizationAdministrator(
   const [targetUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
 
   if (targetUser) {
-    const [person] = await db
-      .select({ id: people.id })
-      .from(people)
-      .where(eq(people.contactEmail, targetUser.email))
-      .limit(1);
+    const personId = await authService.personIdForEmail(targetUser.email);
+    if (!personId) {
+      return { error: 'Person not found for this account', status: 409 };
+    }
 
     await db.transaction(async (tx) => {
       const [existingMembership] = await tx
@@ -153,7 +153,7 @@ async function transferOrganizationAdministrator(
           .insert(memberships)
           .values({
             userId: targetUser.id,
-            personId: person?.id ?? null,
+            personId,
             organizationId: organization.id,
             role: 'org_admin',
             status: 'active',

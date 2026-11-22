@@ -417,10 +417,20 @@ describe('location node integration', () => {
       })
       .returning();
     guardUserId = guardUser.id;
+    const [guardPerson] = await db
+      .insert(people)
+      .values({
+        firstName: 'Guard',
+        lastName: 'Fixture',
+        contactEmail: guardUser.email,
+        status: 'active',
+      })
+      .returning();
     const [guardMembership] = await db
       .insert(memberships)
       .values({
         userId: guardUserId,
+        personId: guardPerson.id,
         organizationId,
         communityId,
         unitId: null,
@@ -458,6 +468,7 @@ describe('location node integration', () => {
     // Login refuses users without an active membership; give the fixture one.
     await db.insert(memberships).values({
       userId: loginAccountUserId,
+      personId: loginAccountPersonId,
       organizationId,
       communityId: null,
       unitId: null,

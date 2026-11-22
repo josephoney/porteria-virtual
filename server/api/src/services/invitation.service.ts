@@ -446,17 +446,14 @@ export async function acceptInvitation(
     if (!authenticatedUserId) return { ok: false, code: 'login_required' };
     if (existingUser.id !== authenticatedUserId) return { ok: false, code: 'email_mismatch' };
 
-    const [existingPerson] = await db
-      .select({ id: people.id })
-      .from(people)
-      .where(eq(people.contactEmail, existingUser.email))
-      .limit(1);
+    const personId = await authService.personIdForEmail(existingUser.email);
+    if (!personId) return { ok: false, code: 'not_found' };
 
     await db
       .insert(memberships)
       .values({
         userId: existingUser.id,
-        personId: existingPerson?.id ?? null,
+        personId,
         organizationId: invitation.organizationId,
         communityId: invitation.communityId,
         unitId: invitation.unitId,

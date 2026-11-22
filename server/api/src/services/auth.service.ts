@@ -120,6 +120,19 @@ async function identityForUser(user: typeof users.$inferSelect): Promise<Account
   return account ? { accountId: account.id, personId: account.personId } : {};
 }
 
+/**
+ * Persona dueña de una cuenta. Las membresías cuelgan de `people`, no de
+ * `users`, así que todo alta de membresía necesita resolver esto primero.
+ */
+export async function personIdForEmail(email: string): Promise<string | null> {
+  const [account] = await db
+    .select({ personId: accounts.personId })
+    .from(accounts)
+    .where(eq(accounts.email, email))
+    .limit(1);
+  return account?.personId ?? null;
+}
+
 async function userForAccount(accountId: string): Promise<typeof users.$inferSelect | null> {
   const [account] = await db
     .select({ email: accounts.email })

@@ -169,19 +169,25 @@ async function addMembership(data: {
     .from(users)
     .where(eq(users.id, data.userId))
     .limit(1);
-  const [person] = user
+  const [account] = user
     ? await db
-        .select({ id: people.id })
-        .from(people)
-        .where(eq(people.contactEmail, user.email))
+        .select({ personId: accounts.personId })
+        .from(accounts)
+        .where(eq(accounts.email, user.email))
         .limit(1)
     : [];
+
+  if (!account?.personId) {
+    throw new Error(
+      `La membresía necesita una persona: ${user?.email ?? data.userId} no tiene cuenta con person_id`,
+    );
+  }
 
   await db
     .insert(memberships)
     .values({
       userId: data.userId,
-      personId: person?.id ?? null,
+      personId: account.personId,
       organizationId: data.organizationId,
       communityId: data.communityId ?? null,
       unitId: data.unitId ?? null,

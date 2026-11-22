@@ -5,6 +5,7 @@ import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
 import { canAssignRole } from './role-policy.service.js';
 import { validateLocationUnit } from './location-unit.service.js';
+import { personIdForEmail } from './auth.service.js';
 
 const db = createDb();
 
@@ -18,7 +19,8 @@ export interface Requester {
 
 export interface MembershipResult {
   id: string;
-  userId: string;
+  userId: string | null;
+  personId: string;
   organizationId: string;
   communityId: string | null;
   unitId: string | null;
@@ -49,6 +51,7 @@ function toMembershipResult(row: typeof memberships.$inferSelect): MembershipRes
   return {
     id: row.id,
     userId: row.userId,
+    personId: row.personId,
     organizationId: row.organizationId,
     communityId: row.communityId,
     unitId: row.unitId,
@@ -106,6 +109,9 @@ export async function createMembership(
   const [user] = await db.select().from(users).where(eq(users.id, data.userId)).limit(1);
   if (!user) return { error: 'User not found' };
 
+  const personId = await personIdForEmail(user.email);
+  if (!personId) return { error: 'Person not found' };
+
   const communityId =
     requester.role === 'community_admin' ? requester.communityId : (data.communityId ?? null);
 
@@ -149,6 +155,7 @@ export async function createMembership(
       .insert(memberships)
       .values({
         userId: data.userId,
+        personId,
         organizationId: requester.orgId,
         communityId,
         unitId: data.unitId ?? null,

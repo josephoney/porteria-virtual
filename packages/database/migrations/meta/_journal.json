@@ -183,6 +183,13 @@
       "when": 1795314567687,
       "tag": "0025_refresh_tokens_account_only",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795319707858,
+      "tag": "0026_memberships_person_only",
+      "breakpoints": true
     }
   ]
 }
