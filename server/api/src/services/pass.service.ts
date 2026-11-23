@@ -867,5 +867,12 @@ export async function getResidentQr(
   }
 
   const qr = signPassQrToken(passId);
-  return { ok: true, data: { token: qr.token, expiresAt: qr.expiresAt.toISOString() } };
+  return {
+    ok: true,
+    data: {
+      token: qr.token,
+      expiresAt: qr.expiresAt.toISOString(),
+      expiresInSeconds: config.passes.qrTtlSeconds,
+    },
+  };
 }

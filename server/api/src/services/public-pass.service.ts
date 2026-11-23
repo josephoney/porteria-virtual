@@ -221,7 +221,14 @@ export async function getPublicQr(
   }
 
   const qr = signPassQrToken(found.pass.id);
-  return { ok: true, data: { token: qr.token, expiresAt: qr.expiresAt.toISOString() } };
+  return {
+    ok: true,
+    data: {
+      token: qr.token,
+      expiresAt: qr.expiresAt.toISOString(),
+      expiresInSeconds: config.passes.qrTtlSeconds,
+    },
+  };
 }
 
 export async function getPublicStatus(

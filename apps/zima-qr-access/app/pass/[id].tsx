@@ -2,7 +2,7 @@ import type { PassQrResponse, PassStatus, PassTicketTone } from '@porteria/share
 import { passTicketState } from '@porteria/shared';
 import * as Clipboard from 'expo-clipboard';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Share, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -14,6 +14,9 @@ import { Badge, Button, Card, LoadingView, Screen, ui } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDateTime, formatValidity } from '@/lib/format';
 import { colors, radius, spacing } from '@/theme';
+
+/** Segundos antes del vencimiento en los que se pide un token nuevo. */
+const QR_REFRESH_BEFORE_SECONDS = 5;
 
 function finalMessage(status: PassStatus): string {
   switch (status) {
@@ -82,14 +85,18 @@ export default function PassDetailScreen() {
   );
 
   const isActive = pass?.status === 'active';
+  // Vencimiento medido con el reloj del dispositivo: el TTL llega como
+  // duración, así el desfase entre celular y servidor no altera el conteo.
+  const qrDeadlineRef = useRef(0);
 
   const loadQr = useCallback(async () => {
     if (!passId || !isActive) return;
     try {
       const next = await request<PassQrResponse>(`/api/passes/${passId}/qr`);
+      qrDeadlineRef.current = Date.now() + next.expiresInSeconds * 1000;
       setQr(next);
       setQrError(null);
-      setSeconds(Math.max(0, Math.ceil((new Date(next.expiresAt).getTime() - Date.now()) / 1000)));
+      setSeconds(next.expiresInSeconds);
     } catch (loadError) {
       if (loadError instanceof ApiError && (loadError.status === 409 || loadError.status === 410)) {
         await loadPass();
@@ -107,19 +114,22 @@ export default function PassDetailScreen() {
 
     void loadQr();
     const timer = setInterval(() => {
-      void loadQr();
       void loadPass();
     }, 20_000);
     return () => clearInterval(timer);
-  }, [isActive, loadQr]);
+  }, [isActive, loadQr, loadPass]);
 
   useEffect(() => {
-    if (!qr) return;
     const timer = setInterval(() => {
-      setSeconds(Math.max(0, Math.ceil((new Date(qr.expiresAt).getTime() - Date.now()) / 1000)));
+      const remaining = Math.max(0, Math.ceil((qrDeadlineRef.current - Date.now()) / 1000));
+      setSeconds(remaining);
+      if (qrDeadlineRef.current > 0 && remaining <= QR_REFRESH_BEFORE_SECONDS) {
+        qrDeadlineRef.current = 0;
+        void loadQr();
+      }
     }, 1_000);
     return () => clearInterval(timer);
-  }, [qr]);
+  }, [loadQr]);
 
   if (!session) {
     return <Redirect href="/" />;

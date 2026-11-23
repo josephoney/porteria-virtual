@@ -39,7 +39,14 @@ export interface PassLinkResponse {
 
 export interface PassQrResponse {
   token: string;
+  /**
+   * Instante de vencimiento según el reloj del servidor. Se conserva por
+   * compatibilidad: los clientes deben contar con `expiresInSeconds`, porque
+   * restar este valor contra el reloj del dispositivo mezcla dos relojes.
+   */
   expiresAt: string;
+  /** Vida útil del token en segundos, medida desde que el cliente lo recibe. */
+  expiresInSeconds: number;
 }
 
 export interface BindPassDto {

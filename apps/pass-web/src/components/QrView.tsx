@@ -30,6 +30,9 @@ const TICKET_TONE_TEXT: Record<PassTicketTone, string> = {
   neutral: '#0B1220',
 };
 
+/** Segundos antes del vencimiento en los que se pide un token nuevo. */
+const QR_REFRESH_BEFORE_SECONDS = 5;
+
 export function QrView({ token, preview, onExit }: QrViewProps) {
   const [qr, setQr] = useState<PassQrResponse | null>(null);
   const [seconds, setSeconds] = useState(0);
@@ -39,10 +42,15 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
   const [remainingUses, setRemainingUses] = useState(preview.remainingUses);
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
+  // Momento de vencimiento medido con el reloj del dispositivo. Se recalcula
+  // en cada respuesta a partir del TTL, no del `expiresAt` del servidor.
+  const deadlineRef = useRef(0);
 
   const refreshQr = useCallback(async () => {
     try {
       const next = await getQr(token);
+      deadlineRef.current = Date.now() + next.expiresInSeconds * 1000;
+      setSeconds(next.expiresInSeconds);
       setQr(next);
     } catch (error) {
       if (error instanceof ApiError) onExitRef.current(error.code);
@@ -52,9 +60,6 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
 
   useEffect(() => {
     void refreshQr();
-    const qrTimer = window.setInterval(() => {
-      void refreshQr();
-    }, 20_000);
 
     const statusTimer = window.setInterval(() => {
       void (async () => {
@@ -76,19 +81,23 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
     }, 5_000);
 
     return () => {
-      window.clearInterval(qrTimer);
       window.clearInterval(statusTimer);
     };
   }, [refreshQr, token]);
 
   useEffect(() => {
-    if (!qr) return;
-    const update = () =>
-      setSeconds(Math.max(0, Math.round((new Date(qr.expiresAt).getTime() - Date.now()) / 1000)));
-    update();
-    const timer = window.setInterval(update, 1_000);
+    const timer = window.setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000));
+      setSeconds(remaining);
+      // Se pide uno nuevo antes de vencer: escanear un token que expira
+      // mientras el guardia lo apunta es el peor caso posible.
+      if (deadlineRef.current > 0 && remaining <= QR_REFRESH_BEFORE_SECONDS) {
+        deadlineRef.current = 0;
+        void refreshQr();
+      }
+    }, 1_000);
     return () => window.clearInterval(timer);
-  }, [qr]);
+  }, [refreshQr]);
 
   const ticket = passTicketState({
     type: preview.type,
