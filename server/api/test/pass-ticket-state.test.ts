@@ -47,7 +47,7 @@ describe('passTicketState', () => {
     );
 
     assert.equal(state.kind, 'exhausted');
-    assert.equal(state.tone, 'warning');
+    assert.equal(state.tone, 'danger');
     assert.equal(state.label, 'Sin usos hoy');
   });
 

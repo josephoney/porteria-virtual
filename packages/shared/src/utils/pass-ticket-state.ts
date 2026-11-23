@@ -118,9 +118,9 @@ export function passTicketState(pass: PassTicketPass, now = new Date()): PassTic
 
     return {
       kind: 'exhausted',
-      tone: 'warning',
+      tone: 'danger',
       label: 'Sin usos hoy',
-      detail: 'El pase se renueva el próximo día permitido.',
+      detail: 'Hoy ya no puede entrar. Se renueva el próximo día permitido.',
       icon: '!',
     };
   }

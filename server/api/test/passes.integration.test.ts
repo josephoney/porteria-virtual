@@ -1542,7 +1542,7 @@ describe('dynamic pass integration', () => {
 
     const ticket = passTicketState(detailBody);
     assert.equal(ticket.kind, 'exhausted');
-    assert.equal(ticket.tone, 'warning');
+    assert.equal(ticket.tone, 'danger');
     assert.equal(ticket.label, 'Sin usos hoy');
   });
 

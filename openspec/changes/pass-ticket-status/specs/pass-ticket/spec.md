@@ -43,12 +43,17 @@ The ticket SHALL show the green state «Puede volver a entrar» with the remaini
 
 ### Requirement: No uses left today
 
-The ticket SHALL show "Sin usos hoy" for an active range or weekly pass that has no uses left on the current local day. It SHALL NOT label the pass as "Usado", because the pass becomes available again on the next allowed day.
+The ticket SHALL show a red «Sin usos hoy» state for an active range or weekly pass that has no uses left on the current local day. It SHALL NOT label the pass as "Usado", because the pass becomes available again on the next allowed day.
 
 #### Scenario: Daily uses exhausted
 
 - **WHEN** a range or weekly pass is active, outside, and its remaining uses today are zero
-- **THEN** the ticket shows "Sin usos hoy" and the next allowed day re-enables entry
+- **THEN** the ticket shows the red «Sin usos hoy» state
+
+#### Scenario: Uses re-enabled on the next allowed day
+
+- **WHEN** the local day changes, or the next authorized entry window starts, and the pass is still active
+- **THEN** the ticket returns to the green «Pendiente de ingreso» state with the uses available for that day
 
 ### Requirement: Final states
 
