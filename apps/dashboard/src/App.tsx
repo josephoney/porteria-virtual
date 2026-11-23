@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage';
 import { CommunityEntryPage } from './pages/CommunityEntryPage';
 import { InvitePage } from './pages/InvitePage';
 import { PlatformPage } from './pages/PlatformPage';
+import { SectionsPage } from './pages/SectionsPage';
 import { AnalysisPage } from './pages/AnalysisPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { OperatorPanel } from './components/operator/OperatorPanel';
@@ -127,7 +128,14 @@ function DashboardApp() {
               </RequirePlatformAdmin>
             }
           />
-          <Route path="platform/sections" element={<Navigate to="/platform/units" replace />} />
+          <Route
+            path="platform/sections"
+            element={
+              <RequirePlatformAdmin>
+                <SectionsPage />
+              </RequirePlatformAdmin>
+            }
+          />
           <Route
             path="platform/units"
             element={
@@ -217,7 +225,14 @@ function DashboardApp() {
               </RequireRole>
             }
           />
-          <Route path="admin/sections" element={<Navigate to="/admin/units" replace />} />
+          <Route
+            path="admin/sections"
+            element={
+              <RequireRole role={['org_admin', 'community_admin']}>
+                <SectionsPage />
+              </RequireRole>
+            }
+          />
           <Route
             path="admin/units"
             element={

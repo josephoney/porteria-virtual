@@ -995,6 +995,99 @@ describe('location node integration', () => {
     assert.equal(write.statusCode, 403);
   });
 
+  it('lets a platform admin create and edit a section with its type', async () => {
+    // Comunidad nueva: el POST crea la estructura por defecto cuando no existe.
+    const platformCommunityId = await createTestCommunity('platform-sections');
+    const createResponse = await request(
+      'POST',
+      '/api/sections',
+      {
+        communityId: platformCommunityId,
+        name: 'Platform Section',
+        code: `PLATFORM-SECTION-${randomUUID().slice(0, 8)}`,
+        sectionType: 'other',
+        sectionTypeLabel: 'Torre',
+      },
+      token,
+    );
+    assert.equal(createResponse.statusCode, 201, createResponse.body);
+    const created = JSON.parse(createResponse.body) as {
+      id: string;
+      sectionType: string;
+      sectionTypeLabel: string | null;
+    };
+    assert.equal(created.sectionType, 'other');
+    assert.equal(created.sectionTypeLabel, 'Torre');
+
+    try {
+      const updateResponse = await request(
+        'PATCH',
+        `/api/sections/${created.id}`,
+        { sectionType: 'block' },
+        token,
+      );
+      assert.equal(updateResponse.statusCode, 200, updateResponse.body);
+      const updated = JSON.parse(updateResponse.body) as {
+        sectionType: string;
+        sectionTypeLabel: string | null;
+      };
+      assert.equal(updated.sectionType, 'block');
+      assert.equal(updated.sectionTypeLabel, null);
+    } finally {
+      await db.delete(locationUnits).where(eq(locationUnits.id, created.id));
+    }
+  });
+
+  it('creates sections when the community structure has a custom name', async () => {
+    // El alta busca la estructura de la comunidad, no un nombre fijo: si la
+    // comunidad renombró su estructura, igual tiene que poder crear secciones.
+    const communityWithCustomStructure = await createTestCommunity('renamed-structure');
+    const first = await request(
+      'POST',
+      '/api/sections',
+      {
+        communityId: communityWithCustomStructure,
+        name: 'First Section',
+        code: `FIRST-${randomUUID().slice(0, 8)}`,
+        sectionType: 'tower',
+      },
+      token,
+    );
+    assert.equal(first.statusCode, 201, first.body);
+    const firstSection = JSON.parse(first.body) as { id: string };
+
+    await db
+      .update(locationStructures)
+      .set({ name: 'Torres del parque' })
+      .where(eq(locationStructures.communityId, communityWithCustomStructure));
+
+    try {
+      const second = await request(
+        'POST',
+        '/api/sections',
+        {
+          communityId: communityWithCustomStructure,
+          name: 'Second Section',
+          code: `SECOND-${randomUUID().slice(0, 8)}`,
+          sectionType: 'tower',
+        },
+        token,
+      );
+      assert.equal(second.statusCode, 201, second.body);
+      const secondSection = JSON.parse(second.body) as { id: string };
+
+      const structures = await db
+        .select({ id: locationStructures.id })
+        .from(locationStructures)
+        .where(eq(locationStructures.communityId, communityWithCustomStructure));
+      assert.equal(structures.length, 1);
+
+      await db.delete(locationUnits).where(eq(locationUnits.id, secondSection.id));
+    } finally {
+      await db.delete(locationUnits).where(eq(locationUnits.id, firstSection.id));
+    }
+  });
+
   it('rejects access tokens that predate people and accounts', async () => {
     const legacyToken = app!.jwt.sign({
       sub: orgAdminAccountId,

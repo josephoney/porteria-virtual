@@ -191,6 +191,10 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
     title: 'Comunidades',
     description: 'Comunidades agrupadas por organización.',
   },
+  sections: {
+    title: 'Secciones',
+    description: 'Secciones de ubicación y su tipo dentro de cada comunidad.',
+  },
   units: {
     title: 'Unidades',
     description: 'Estructura, secciones y unidades de cada comunidad.',
@@ -219,6 +223,7 @@ const sectionLoadingLabel: Record<string, string> = {
   dashboard: 'Cargando panel…',
   organizations: 'Cargando organizaciones…',
   communities: 'Cargando comunidades…',
+  sections: 'Cargando secciones…',
   invitations: 'Cargando invitaciones…',
   users: 'Cargando usuarios…',
   units: 'Cargando unidades…',

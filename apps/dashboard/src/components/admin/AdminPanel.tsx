@@ -289,6 +289,10 @@ const sectionMeta: Record<string, { title: string; description: string }> = {
     title: 'Comunidades',
     description: 'Comunidades dentro de tu alcance.',
   },
+  sections: {
+    title: 'Secciones',
+    description: 'Secciones de ubicación y su tipo dentro de cada comunidad.',
+  },
   units: {
     title: 'Unidades',
     description: 'Estructura, secciones y unidades de cada comunidad.',
@@ -310,6 +314,7 @@ const sectionMeta: Record<string, { title: string; description: string }> = {
 const sectionLoadingLabel: Record<string, string> = {
   dashboard: 'Cargando panel…',
   communities: 'Cargando comunidades…',
+  sections: 'Cargando secciones…',
   invitations: 'Cargando invitaciones…',
   units: 'Cargando unidades…',
 };

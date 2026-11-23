@@ -56,7 +56,11 @@ async function communityInScope(
     .where(eq(communities.id, communityId));
 
   if (!community || community.organizationId !== user.orgId) return false;
-  if (['community_admin', 'operator', 'guard'].includes(user.role) && user.communityId !== communityId) return false;
+  if (
+    ['community_admin', 'operator', 'guard'].includes(user.role) &&
+    user.communityId !== communityId
+  )
+    return false;
   return true;
 }
 
@@ -67,6 +71,21 @@ function sectionScope(user: ReturnType<typeof getUser>, requested?: string): SQL
   return requested ? eq(locationUnits.communityId, requested) : undefined;
 }
 
+/**
+ * `can()` deja al superadmin en sólo lectura porque la consola de plataforma no
+ * administra comunidades ni organizaciones. Las secciones sí son estructura de
+ * plataforma: el superadmin las crea y edita desde `/platform/sections`, así que
+ * la excepción vive acá y no en la matriz compartida. `requireRole` sigue
+ * gateando la ruta y el resto de las validaciones no cambia.
+ */
+function canWriteSection(
+  user: ReturnType<typeof getUser>,
+  scope: { organizationId: string; communityId?: string | null },
+): boolean {
+  if (user.isPlatformAdmin) return true;
+  return can(user, 'location.write', scope);
+}
+
 export async function sectionRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -75,7 +94,10 @@ export async function sectionRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   });
@@ -183,7 +205,7 @@ export async function sectionRoutes(app: FastifyInstance) {
         sectionTypeLabel?: string | null;
       };
       if (
-        !can(user, 'location.write', {
+        !canWriteSection(user, {
           organizationId: user.orgId,
           communityId: body.communityId,
         })
@@ -220,12 +242,7 @@ export async function sectionRoutes(app: FastifyInstance) {
       let [structure] = await db
         .select()
         .from(locationStructures)
-        .where(
-          and(
-            eq(locationStructures.communityId, body.communityId),
-            eq(locationStructures.name, 'Estructura principal'),
-          ),
-        );
+        .where(eq(locationStructures.communityId, body.communityId));
 
       if (!structure) {
         [structure] = await db
@@ -389,7 +406,7 @@ export async function sectionRoutes(app: FastifyInstance) {
       if (
         !existing ||
         !(await communityInScope(existing.communityId, user)) ||
-        !can(user, 'location.write', {
+        !canWriteSection(user, {
           organizationId: user.orgId,
           communityId: existing.communityId,
         })

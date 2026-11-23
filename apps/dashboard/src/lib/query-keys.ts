@@ -10,6 +10,9 @@ export const queryKeys = {
   tenantCommunities: ['communities', 'tenant'] as const,
   /** Agrupadores de todas las comunidades del alcance. */
   buildings: ['sections', { pageSize: 100 }] as const,
+  /** Página filtrada de secciones (`GET /api/sections`). */
+  sectionsList: (params: { page: number; communityId: string; type: string; search: string }) =>
+    ['sections', 'list', params] as const,
   /** Unidades de todas las comunidades del alcance. */
   units: ['units', { pageSize: 100 }] as const,
   /** Invitaciones del alcance del usuario. */

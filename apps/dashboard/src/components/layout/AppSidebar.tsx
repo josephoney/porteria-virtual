@@ -28,6 +28,7 @@ import {
   RiHome5Line,
   RiDashboardLine,
   RiMailLine,
+  RiNodeTree,
   RiQrCodeLine,
   RiGroupLine,
   type RemixiconComponentType,
@@ -90,6 +91,14 @@ const items: NavItem[] = [
     group: 'admin',
   },
   {
+    to: '/platform/sections',
+    label: 'Secciones',
+    icon: RiNodeTree,
+    roles: [],
+    platformOnly: true,
+    group: 'admin',
+  },
+  {
     to: '/platform/units',
     label: 'Unidades',
     icon: RiBox3Line,
@@ -135,6 +144,13 @@ const items: NavItem[] = [
     label: 'Comunidades',
     icon: RiBuilding2Line,
     roles: ['org_admin'],
+    group: 'admin',
+  },
+  {
+    to: '/admin/sections',
+    label: 'Secciones',
+    icon: RiNodeTree,
+    roles: ['org_admin', 'community_admin'],
     group: 'admin',
   },
   {

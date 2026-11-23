@@ -38,9 +38,9 @@
 ## 5. Sections and units
 
 - [x] 5.1 Consume the paginated sections API from `add-configurable-location-hierarchy`
-- [ ] 5.2 Show name, type, community, levels, units and status
-- [ ] 5.3 Add community/type/search filters
-- [ ] 5.4 Add create/edit with `sectionType` and `other` label
+- [x] 5.2 Show name, type, community, levels, units and status
+- [x] 5.3 Add community/type/search filters
+- [x] 5.4 Add create/edit with `sectionType` and `other` label
 - [ ] 5.5 Add units page filtered by community and section
 - [ ] 5.6 Verify type changes preserve children, units and residents
 

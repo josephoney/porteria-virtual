@@ -50,11 +50,11 @@ test.describe('Platform navigation', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Usuarios' })).toBeVisible();
   });
 
-  test('legacy sections route redirects to units', async ({ page }) => {
+  test('renders the sections page at /platform/sections', async ({ page }) => {
     await page.goto('/platform/sections');
 
-    await expect(page).toHaveURL(/\/platform\/units$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Unidades' })).toBeVisible();
+    await expect(page).toHaveURL(/\/platform\/sections$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Secciones' })).toBeVisible();
   });
 
   test('breadcrumb reflects the current platform section', async ({ page }) => {
@@ -89,11 +89,11 @@ test.describe('Tenant admin navigation', () => {
     });
   }
 
-  test('legacy sections route redirects to units', async ({ page }) => {
+  test('renders the sections page at /admin/sections', async ({ page }) => {
     await page.goto('/admin/sections');
 
-    await expect(page).toHaveURL(/\/admin\/units$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Unidades' })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/sections$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Secciones' })).toBeVisible();
   });
 
   test('navigates between tenant admin pages through the sidebar', async ({ page }) => {
