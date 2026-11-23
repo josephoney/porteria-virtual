@@ -32,7 +32,11 @@
 - [x] 5.1 Build `@porteria/shared` and typecheck the API.
 - [x] 5.2 Typecheck the mobile app and pass-web; lint/typecheck the dashboard pages touched.
 - [x] 5.3 Run Prettier and `openspec validate pass-companions --strict`.
-- [ ] 5.4 Run the API suites and a manual smoke test of the dashboard, mobile and guard flows.
+- [x] 5.4 Run the API suites and a manual smoke test of the dashboard, mobile and guard flows.
+      Suites en el PC: 40/40 unitarias y 185/185 de integración.
+      Smoke manual en staging con un pase de dos acompañantes: dashboard, formulario
+      móvil de residente, escaneo del guardia con acompañantes listados, búsqueda por
+      documento y página pública mostrando la cantidad sin documentos.
 
 ## 6. Follow-ups
 
