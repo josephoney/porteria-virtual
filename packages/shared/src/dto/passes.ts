@@ -7,6 +7,7 @@ import type {
   ScanStatus,
 } from '../enums/index.js';
 import type { AccessPass, PassCompanion } from '../types/pass.js';
+import type { PassTicketState } from '../utils/pass-ticket-state.js';
 
 export interface CreatePassDto {
   /** Entry and exit pairs. Ignored for entry-only passes, which always use one. */
@@ -81,6 +82,23 @@ export interface PassStatusResponse {
   exitCount: number;
   remainingUses: number;
   nextWindow: { from: string; to: string } | null;
+}
+
+/** One pass this device proved it holds, ready to open from the list. */
+export interface DevicePassEntry {
+  passId: string;
+  /** Link token, so the client can build the pass URL without storing it server-side. */
+  token: string;
+  communityName: string;
+  visitorFirstName: string;
+  locationPath: string;
+  ticket: PassTicketState;
+  /** False for revoked, expired or used-up passes: history, never an active QR. */
+  actionable: boolean;
+}
+
+export interface DevicePassIndexResponse {
+  passes: DevicePassEntry[];
 }
 
 export interface ScanPassResponse {

@@ -1,4 +1,9 @@
-import type { PassQrResponse, PassStatusResponse, PublicPassPreview } from '@porteria/shared';
+import type {
+  DevicePassIndexResponse,
+  PassQrResponse,
+  PassStatusResponse,
+  PublicPassPreview,
+} from '@porteria/shared';
 
 const BASE = '/api/public/passes';
 
@@ -52,4 +57,8 @@ export function getQr(token: string): Promise<PassQrResponse> {
 
 export function getStatus(token: string): Promise<PassStatusResponse> {
   return request<PassStatusResponse>(`/${encodeURIComponent(token)}/status`);
+}
+
+export function getPasses(): Promise<DevicePassIndexResponse> {
+  return request<DevicePassIndexResponse>('');
 }

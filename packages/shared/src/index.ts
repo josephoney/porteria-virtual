@@ -83,6 +83,8 @@ export type {
   BindPassDto,
   PublicPassPreview,
   PassStatusResponse,
+  DevicePassEntry,
+  DevicePassIndexResponse,
   ScanPassResponse,
   ScanDecisionResponse,
 } from './dto/passes.js';

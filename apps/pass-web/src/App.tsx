@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { PublicPassPreview } from '@porteria/shared';
 import { ApiError, bindPass, getPreview, getStatus } from './api';
 import { ErrorView } from './components/ErrorView';
+import { PassList } from './components/PassList';
 import { PinForm } from './components/PinForm';
 import { PreviewCard } from './components/PreviewCard';
 import { QrView } from './components/QrView';
@@ -9,13 +10,40 @@ import { FINAL_CODES, messageFor } from './lib/messages';
 
 type Screen = 'loading' | 'preview' | 'pin' | 'qr' | 'error';
 
-function readToken(): string | null {
-  const match = window.location.pathname.match(/^\/p\/([^/]+)\/?$/);
-  return match ? decodeURIComponent(match[1]) : null;
+const LIST_PATH = '/p/mis-pases';
+
+type Route = { kind: 'pass'; token: string } | { kind: 'list' } | { kind: 'invalid' };
+
+function readRoute(): Route {
+  const path = window.location.pathname.replace(/\/+$/, '');
+  if (path === LIST_PATH) return { kind: 'list' };
+
+  const match = path.match(/^\/p\/([^/]+)$/);
+  if (match) return { kind: 'pass', token: decodeURIComponent(match[1]) };
+
+  return { kind: 'invalid' };
 }
 
 export default function App() {
-  const token = readToken();
+  const route = readRoute();
+
+  if (route.kind === 'list') return <PassList />;
+
+  if (route.kind === 'invalid') {
+    return (
+      <ErrorView
+        code="not_found"
+        message={messageFor('not_found')}
+        final
+        onRetry={() => undefined}
+      />
+    );
+  }
+
+  return <PassScreen token={route.token} />;
+}
+
+function PassScreen({ token }: { token: string }) {
   const [screen, setScreen] = useState<Screen>('loading');
   const [preview, setPreview] = useState<PublicPassPreview | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -23,12 +51,6 @@ export default function App() {
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!token) {
-      setErrorCode('not_found');
-      setScreen('error');
-      return;
-    }
-
     let cancelled = false;
     setScreen('loading');
     setErrorCode(null);
@@ -70,7 +92,6 @@ export default function App() {
 
   const handleBind = useCallback(
     async (pin?: string) => {
-      if (!token) return;
       setBusy(true);
       setErrorCode(null);
 
@@ -146,7 +167,7 @@ export default function App() {
     );
   }
 
-  if (screen === 'qr' && token) {
+  if (screen === 'qr') {
     return <QrView token={token} preview={preview} onExit={handleExit} />;
   }
 

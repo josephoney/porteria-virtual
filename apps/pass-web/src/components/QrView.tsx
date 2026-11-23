@@ -6,31 +6,17 @@ import {
   PASS_ACTION_LABEL,
   passTicketState,
   type PassQrResponse,
-  type PassTicketTone,
   type PublicPassPreview,
 } from '@porteria/shared';
 import { ApiError, getQr, getStatus } from '../api';
 import { formatDateTime, formatRemaining, formatTime } from '../lib/format';
+import { TICKET_TONE_BACKGROUNDS, TICKET_TONE_TEXT } from '../lib/ticket-tone';
 
 interface QrViewProps {
   token: string;
   preview: PublicPassPreview;
   onExit: (code: string) => void;
 }
-
-const TICKET_TONE_BACKGROUNDS: Record<PassTicketTone, string> = {
-  success: '#39C27F',
-  warning: '#F2B84B',
-  danger: '#F26D6D',
-  neutral: '#E2E8F0',
-};
-
-const TICKET_TONE_TEXT: Record<PassTicketTone, string> = {
-  success: '#081018',
-  warning: '#081018',
-  danger: '#081018',
-  neutral: '#0B1220',
-};
 
 // El token se renueva al llegar a cero. El servidor acepta unos segundos de
 // desfase, así que el QR que quedó en pantalla sigue sirviendo mientras llega
@@ -228,6 +214,9 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
           Muestra este QR en la portería. Se renueva automáticamente cada{' '}
           {qr?.expiresInSeconds ?? 24} segundos.
         </p>
+        <a className="secondary-link" href="/p/mis-pases">
+          Mis pases
+        </a>
       </section>
     </main>
   );

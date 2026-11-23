@@ -168,6 +168,14 @@ async function publicQr(token: string, cookie?: string) {
   });
 }
 
+async function passIndex(cookie?: string) {
+  return app.inject({
+    method: 'GET',
+    url: '/api/public/passes',
+    headers: cookie ? { cookie } : undefined,
+  });
+}
+
 async function scan(qrToken: string, token = guardToken) {
   return request('POST', '/api/access/scan', { token: qrToken }, token);
 }
@@ -1018,6 +1026,150 @@ describe('dynamic pass integration', () => {
       headers: { cookie: `pass_device=${legacy}` },
     });
     assert.equal(status.statusCode, 200, status.body);
+  });
+
+  it('lists every pass the same device holds', async () => {
+    const first = await createPass();
+    const second = await createPass();
+    const firstToken = linkToken(first);
+    const secondToken = linkToken(second);
+
+    const firstBind = await bindCookies(firstToken);
+    const secondBind = await bindCookies(secondToken);
+
+    // Opening the link leaves the per-pass link cookie behind, so the device can
+    // rebuild the public URL without the server ever storing the token.
+    assert.equal(firstBind.cookies[`pass_link_${first.pass.id}`], firstToken);
+    assert.equal(secondBind.cookies[`pass_link_${second.pass.id}`], secondToken);
+
+    const client = cookieHeader({ ...firstBind.cookies, ...secondBind.cookies });
+    const response = await passIndex(client);
+    assert.equal(response.statusCode, 200, response.body);
+
+    const body = parse(response) as { passes: Array<Record<string, any>> };
+    assert.equal(body.passes.length, 2);
+    assert.deepEqual(
+      body.passes.map((entry) => entry.token).sort(),
+      [firstToken, secondToken].sort(),
+    );
+
+    const listed = body.passes.find((entry) => entry.passId === first.pass.id);
+    assert.ok(listed, 'expected the first pass in the index');
+    assert.equal(listed.token, firstToken);
+    assert.equal(listed.visitorFirstName, 'Visitante');
+    assert.match(String(listed.communityName), /^Pass Test Community /);
+    assert.match(String(listed.locationPath), /Pass Section \/ Pass Floor \/ Pass Unit A$/);
+    assert.equal(listed.actionable, true);
+    assert.equal((listed.ticket as { kind: string }).kind, 'pending');
+    assert.ok((listed.ticket as { label: string }).label);
+  });
+
+  it('returns an empty index for a device without cookies', async () => {
+    const response = await passIndex();
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(parse(response), { passes: [] });
+  });
+
+  it('never lists a pass whose device binding the client does not prove', async () => {
+    const mine = await createPass();
+    const theirs = await createPass();
+    const mineBind = await bindCookies(linkToken(mine));
+    const theirsBind = await bindCookies(linkToken(theirs));
+
+    // The first device holds its own binding plus the forwarded link of the
+    // other pass. The link alone never proves the binding, so it stays out.
+    const forwarded = cookieHeader({
+      ...mineBind.cookies,
+      [`pass_link_${theirs.pass.id}`]: linkToken(theirs),
+    });
+    const response = await passIndex(forwarded);
+    assert.equal(response.statusCode, 200, response.body);
+    const body = parse(response) as { passes: Array<{ passId: string }> };
+    assert.deepEqual(body.passes.map((entry) => entry.passId).sort(), [mine.pass.id].sort());
+    assert.ok(!body.passes.some((entry) => entry.passId === theirs.pass.id));
+
+    // The other device still sees its own pass.
+    const other = await passIndex(cookieHeader(theirsBind.cookies));
+    assert.equal(other.statusCode, 200, other.body);
+    const otherBody = parse(other) as { passes: Array<{ passId: string }> };
+    assert.deepEqual(otherBody.passes.map((entry) => entry.passId).sort(), [theirs.pass.id].sort());
+  });
+
+  it('keeps revoked, expired and used passes in the index as history', async () => {
+    const revoked = await createPass();
+    const expired = await createPass();
+    const used = await createPass();
+    const revokedBind = await bindCookies(linkToken(revoked));
+    const expiredBind = await bindCookies(linkToken(expired));
+    const usedBind = await bindCookies(linkToken(used));
+    const client = cookieHeader({
+      ...revokedBind.cookies,
+      ...expiredBind.cookies,
+      ...usedBind.cookies,
+    });
+
+    const revoke = await request(
+      'POST',
+      `/api/passes/${revoked.pass.id}/revoke`,
+      {},
+      residentToken,
+    );
+    assert.equal(revoke.statusCode, 200, revoke.body);
+
+    await db
+      .update(accessPasses)
+      .set({ validUntil: new Date(Date.now() - 60_000) })
+      .where(eq(accessPasses.id, expired.pass.id));
+    await db.update(accessPasses).set({ status: 'used' }).where(eq(accessPasses.id, used.pass.id));
+
+    const response = await passIndex(client);
+    assert.equal(response.statusCode, 200, response.body);
+    const body = parse(response) as { passes: Array<Record<string, any>> };
+    assert.equal(body.passes.length, 3);
+
+    const byId = (id: string) => body.passes.find((entry) => entry.passId === id);
+    const revokedEntry = byId(revoked.pass.id);
+    assert.ok(revokedEntry);
+    assert.equal(revokedEntry.actionable, false);
+    assert.equal((revokedEntry.ticket as { kind: string }).kind, 'revoked');
+
+    const expiredEntry = byId(expired.pass.id);
+    assert.ok(expiredEntry);
+    assert.equal(expiredEntry.actionable, false);
+    assert.equal((expiredEntry.ticket as { kind: string }).kind, 'expired');
+
+    const usedEntry = byId(used.pass.id);
+    assert.ok(usedEntry);
+    assert.equal(usedEntry.actionable, false);
+    assert.equal((usedEntry.ticket as { kind: string }).kind, 'used');
+  });
+
+  it('migrates a legacy-only device to the pass-scoped cookie', async () => {
+    const created = await createPass();
+    const token = linkToken(created);
+    const bound = await bindCookies(token);
+    const legacy = bound.cookies.pass_device;
+    assert.ok(legacy, 'expected the legacy cookie during the transition');
+
+    const qr = await app.inject({
+      method: 'GET',
+      url: `/api/public/passes/${token}/qr`,
+      headers: { cookie: `pass_device=${legacy}` },
+    });
+    assert.equal(qr.statusCode, 200, qr.body);
+
+    const issued = extractCookies(qr);
+    assert.equal(issued[`pass_device_${created.pass.id}`], legacy);
+    assert.equal(issued[`pass_link_${created.pass.id}`], token);
+
+    // From now on the device is listed without depending on the legacy cookie.
+    const index = await passIndex(cookieHeader(issued));
+    assert.equal(index.statusCode, 200, index.body);
+    const body = parse(index) as { passes: Array<{ passId: string }> };
+    assert.deepEqual(
+      body.passes.map((entry) => entry.passId),
+      [created.pass.id],
+    );
   });
 
   it('reopens the first pass after opening a second one', async () => {

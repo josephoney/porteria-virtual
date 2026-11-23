@@ -30,8 +30,19 @@ export type PassErrorCode =
   | 'destination_inactive'
   | 'batch_too_large';
 
+/**
+ * What a route needs to keep the device authorized on the way back: the pass
+ * that was just authorized, when its link expires, and the legacy cookie value
+ * when that is the binding the request proved.
+ */
+export interface PassGrant {
+  passId: string;
+  linkExpiresAt: Date;
+  legacyCookie: string | null;
+}
+
 export type PassResult<T> =
-  | { ok: true; data: T }
+  | { ok: true; data: T; grant?: PassGrant }
   | {
       ok: false;
       code: PassErrorCode;

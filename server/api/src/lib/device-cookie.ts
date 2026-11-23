@@ -3,16 +3,24 @@ import type { FastifyRequest } from 'fastify';
 /** Legacy single-pass cookie. Kept so devices bound before the change keep access. */
 export const PASS_DEVICE_COOKIE = 'pass_device';
 
+/** The link token of a pass this device opened, so the device can return to it. */
+export const PASS_LINK_COOKIE = 'pass_link';
+
 /** One binding per pass, so opening a second pass never overwrites the first. */
 export function passDeviceCookieName(passId: string): string {
   return `${PASS_DEVICE_COOKIE}_${passId}`;
 }
 
-export function serializePassDeviceCookie(
+/** One link token per pass; the server only stores its hash and cannot rebuild it. */
+export function passLinkCookieName(passId: string): string {
+  return `${PASS_LINK_COOKIE}_${passId}`;
+}
+
+function serializeCookie(
   value: string,
   maxAgeSeconds: number,
   secure: boolean,
-  cookieName: string = PASS_DEVICE_COOKIE,
+  cookieName: string,
 ): string {
   const parts = [
     `${cookieName}=${encodeURIComponent(value)}`,
@@ -23,6 +31,24 @@ export function serializePassDeviceCookie(
   ];
   if (secure) parts.push('Secure');
   return parts.join('; ');
+}
+
+export function serializePassDeviceCookie(
+  value: string,
+  maxAgeSeconds: number,
+  secure: boolean,
+  cookieName: string = PASS_DEVICE_COOKIE,
+): string {
+  return serializeCookie(value, maxAgeSeconds, secure, cookieName);
+}
+
+export function serializePassLinkCookie(
+  linkToken: string,
+  maxAgeSeconds: number,
+  secure: boolean,
+  passId: string,
+): string {
+  return serializeCookie(linkToken, maxAgeSeconds, secure, passLinkCookieName(passId));
 }
 
 export function parseCookies(header: string | undefined): Record<string, string> {
@@ -50,6 +76,8 @@ export function readPassDeviceCookie(request: FastifyRequest): string | null {
 export interface PassDeviceBinding {
   passId: string;
   value: string;
+  /** True for the old single-pass cookie, which is migrated to the pass-scoped name. */
+  legacy: boolean;
 }
 
 /**
@@ -62,7 +90,7 @@ export function readPassDeviceBindings(request: FastifyRequest): PassDeviceBindi
 
   const legacy = cookies[PASS_DEVICE_COOKIE];
   if (legacy) {
-    bindings.push({ passId: legacy.split('.')[0] ?? '', value: legacy });
+    bindings.push({ passId: legacy.split('.')[0] ?? '', value: legacy, legacy: true });
   }
 
   const prefix = `${PASS_DEVICE_COOKIE}_`;
@@ -70,7 +98,31 @@ export function readPassDeviceBindings(request: FastifyRequest): PassDeviceBindi
     if (!name.startsWith(prefix)) continue;
     const passId = name.slice(prefix.length);
     if (!passId) continue;
-    bindings.push({ passId, value });
+    bindings.push({ passId, value, legacy: false });
+  }
+
+  return bindings;
+}
+
+export interface PassLinkBinding {
+  passId: string;
+  linkToken: string;
+}
+
+/**
+ * Every link token the device still remembers. Each pass is looked up by the
+ * hash of its token, so the server never needs to store the token itself.
+ */
+export function readPassLinkBindings(request: FastifyRequest): PassLinkBinding[] {
+  const cookies = parseCookies(request.headers.cookie);
+  const prefix = `${PASS_LINK_COOKIE}_`;
+  const bindings: PassLinkBinding[] = [];
+
+  for (const [name, value] of Object.entries(cookies)) {
+    if (!name.startsWith(prefix)) continue;
+    const passId = name.slice(prefix.length);
+    if (!passId || !value) continue;
+    bindings.push({ passId, linkToken: value });
   }
 
   return bindings;

@@ -1,21 +1,23 @@
 import bcrypt from 'bcryptjs';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import { accessPasses, communities } from '@porteria/database/schema';
 import {
   PassStatus,
+  passTicketState,
   type BindPassDto,
+  type DevicePassEntry,
   type PassQrResponse,
   type PassStatusResponse,
   type PublicPassPreview,
 } from '@porteria/shared';
 import config from '../config.js';
-import type { PassDeviceBinding } from '../lib/device-cookie.js';
+import type { PassDeviceBinding, PassLinkBinding } from '../lib/device-cookie.js';
 import { randomToken, sha256Hex, verifyDeviceCookie } from '../lib/pass-tokens.js';
 import { buildLocationPath } from './location-path.service.js';
 import { buildPassRule } from './pass-schedule.service.js';
 import { signPassQrToken } from './pass-qr-token.service.js';
-import type { PassResult } from './pass-errors.js';
+import type { PassGrant, PassResult } from './pass-errors.js';
 
 const db = createDb();
 
@@ -37,15 +39,39 @@ async function findPassByToken(token: string): Promise<FoundPass | null> {
   return row ?? null;
 }
 
-function isBound(found: FoundPass, bindings: PassDeviceBinding[]): boolean {
+/**
+ * The binding that actually authorizes this pass. The pass-scoped cookie wins
+ * over the legacy one: the old name only survives the transition.
+ */
+function provenBinding(found: FoundPass, bindings: PassDeviceBinding[]): PassDeviceBinding | null {
   const deviceKeyHash = found.pass.deviceKeyHash;
-  if (!deviceKeyHash) return false;
+  if (!deviceKeyHash) return null;
 
-  return bindings
-    .filter((binding) => binding.passId === found.pass.id)
-    .some((binding) =>
+  const matches = bindings.filter(
+    (binding) =>
+      binding.passId === found.pass.id &&
       verifyDeviceCookie(binding.value, found.pass.id, deviceKeyHash, config.passes.qrSecret),
-    );
+  );
+
+  return matches.find((binding) => !binding.legacy) ?? matches[0] ?? null;
+}
+
+function isBound(found: FoundPass, bindings: PassDeviceBinding[]): boolean {
+  return provenBinding(found, bindings) !== null;
+}
+
+/**
+ * What the route needs to write the cookies that keep this device authorized:
+ * the pass, its link lifetime, and the legacy cookie value to migrate when that
+ * is what proved the binding.
+ */
+function grantFor(found: FoundPass, bindings: PassDeviceBinding[]): PassGrant {
+  const proven = provenBinding(found, bindings);
+  return {
+    passId: found.pass.id,
+    linkExpiresAt: found.pass.linkExpiresAt,
+    legacyCookie: proven?.legacy ? proven.value : null,
+  };
 }
 
 function isInsideSchedule(pass: AccessPassRow, timezone: string): boolean {
@@ -128,6 +154,7 @@ export async function previewPass(
       exitCount: found.pass.exitCount,
       remainingUses: (await buildPassRule(found.pass, found.timezone, new Date())).remainingUses,
     },
+    grant: grantFor(found, bindings),
   };
 }
 
@@ -151,6 +178,7 @@ export async function bindPass(
       return {
         ok: true,
         data: { passId: found.pass.id, deviceKey: null, linkExpiresAt: found.pass.linkExpiresAt },
+        grant: grantFor(found, bindings),
       };
     }
     return { ok: false, code: 'device_already_bound' };
@@ -202,6 +230,7 @@ export async function bindPass(
   return {
     ok: true,
     data: { passId: found.pass.id, deviceKey, linkExpiresAt: found.pass.linkExpiresAt },
+    grant: { passId: found.pass.id, linkExpiresAt: found.pass.linkExpiresAt, legacyCookie: null },
   };
 }
 
@@ -233,6 +262,7 @@ export async function getPublicQr(
       expiresAt: qr.expiresAt.toISOString(),
       expiresInSeconds: config.passes.qrTtlSeconds,
     },
+    grant: grantFor(found, bindings),
   };
 }
 
@@ -258,5 +288,95 @@ export async function getPublicStatus(
       exitCount: found.pass.exitCount,
       remainingUses: (await buildPassRule(found.pass, found.timezone, new Date())).remainingUses,
     },
+    grant: grantFor(found, bindings),
   };
+}
+
+/** Only these ticket states still have an active QR behind them. */
+function isActionableTicket(ticket: DevicePassEntry['ticket']): boolean {
+  return ticket.kind === 'pending' || ticket.kind === 'reentry' || ticket.kind === 'inside';
+}
+
+export interface DevicePassIndexData {
+  passes: DevicePassEntry[];
+  /** Legacy bindings this request proved, to migrate to the pass-scoped cookie. */
+  reissues: PassGrant[];
+}
+
+/**
+ * The passes this device can prove it holds. Each pass is found by the hash of
+ * the link token stored in its cookie, then filtered by the device binding the
+ * same request presents. A pass that cannot be proven never enters the list.
+ */
+export async function listDevicePasses(
+  links: PassLinkBinding[],
+  bindings: PassDeviceBinding[],
+): Promise<PassResult<DevicePassIndexData>> {
+  if (!config.features.dynamicQrEnabled) return { ok: false, code: 'dynamic_qr_disabled' };
+
+  const tokenByHash = new Map<string, string>();
+  for (const link of links) tokenByHash.set(sha256Hex(link.linkToken), link.linkToken);
+
+  if (tokenByHash.size === 0) return { ok: true, data: { passes: [], reissues: [] } };
+
+  const rows = await db
+    .select({
+      pass: accessPasses,
+      communityName: communities.name,
+      timezone: communities.timezone,
+    })
+    .from(accessPasses)
+    .innerJoin(communities, eq(accessPasses.communityId, communities.id))
+    .where(inArray(accessPasses.linkTokenHash, [...tokenByHash.keys()]));
+
+  const now = new Date();
+  const passes: DevicePassEntry[] = [];
+  const reissues: PassGrant[] = [];
+
+  for (const row of rows) {
+    const found: FoundPass = row;
+    // The binding must be proven by this very request, not remembered by the server.
+    if (!isBound(found, bindings)) continue;
+
+    const token = tokenByHash.get(found.pass.linkTokenHash);
+    if (!token) continue;
+
+    const [locationPath, rule] = await Promise.all([
+      buildLocationPath(found.pass.locationUnitId),
+      buildPassRule(found.pass, found.timezone, now),
+    ]);
+
+    const ticket = passTicketState({
+      type: found.pass.type,
+      status: found.pass.status,
+      presenceState: found.pass.presenceState,
+      recurrence: found.pass.recurrence,
+      maxUses: found.pass.maxUses,
+      exitCount: found.pass.exitCount,
+      validUntil: found.pass.validUntil,
+      rule,
+    });
+
+    const linkAlive = found.pass.linkExpiresAt.getTime() >= now.getTime();
+
+    passes.push({
+      passId: found.pass.id,
+      token,
+      communityName: found.communityName,
+      visitorFirstName: found.pass.visitorFirstName,
+      locationPath: locationPath ?? '',
+      ticket,
+      actionable: linkAlive && isActionableTicket(ticket),
+    });
+
+    const grant = grantFor(found, bindings);
+    if (grant.legacyCookie) reissues.push(grant);
+  }
+
+  passes.sort((a, b) => {
+    if (a.actionable !== b.actionable) return a.actionable ? -1 : 1;
+    return a.locationPath.localeCompare(b.locationPath, 'es');
+  });
+
+  return { ok: true, data: { passes, reissues } };
 }

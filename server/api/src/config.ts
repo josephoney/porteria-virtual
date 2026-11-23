@@ -82,6 +82,7 @@ const config = {
       bindPerMinute: parseInt(process.env.PASS_RATE_LIMIT_BIND || '20', 10),
       qrPerMinute: parseInt(process.env.PASS_RATE_LIMIT_QR || '60', 10),
       statusPerMinute: parseInt(process.env.PASS_RATE_LIMIT_STATUS || '120', 10),
+      indexPerMinute: parseInt(process.env.PASS_RATE_LIMIT_INDEX || '60', 10),
     },
   },
   guardShifts: {
