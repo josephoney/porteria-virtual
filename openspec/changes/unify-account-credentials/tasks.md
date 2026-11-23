@@ -95,6 +95,15 @@
 - [x] 6.2 Suites unitaria e integración completas.
       40/40 unitarias y 185/185 de integración (184 previas + la guarda de
       esquema nueva).
-- [ ] 6.3 Migración probada en una base restaurada de producción.
-      Sólo se aplicó contra la base local; falta la restauración de producción.
+- [x] 6.3 Migración probada en una base restaurada.
+      Producción todavía no está desplegada, así que el ensayo se hizo sobre el
+      respaldo de staging tomado inmediatamente antes del drop
+      (`~/backups/pre-drop-users.dump`, 30 migraciones aplicadas).
+      Resultado: la guarda pasó (0 usuarios sin cuenta), se backfillearon los 190
+      eventos que apuntaban a `users.id`, la tabla `users` desapareció y las tres
+      columnas legadas quedaron en cero.
+      Prueba negativa: se borró una cuenta para dejar un usuario sin correspondencia
+      y la migración abortó con `usuarios sin cuenta: 1 filas perderian su nombre`,
+      dejando la base intacta (tabla, columnas y 30 migraciones sin cambios).
+      Al desplegar producción hay que repetir el ensayo sobre su propio respaldo.
 - [x] 6.4 `openspec validate unify-account-credentials --strict`.
