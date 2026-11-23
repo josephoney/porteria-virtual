@@ -905,7 +905,7 @@ export function ResidentAuthorizationsPage() {
                                       value={
                                         detail.type === 'entry_only'
                                           ? 'Sólo entrada'
-                                          : 'Ingreso y egreso'
+                                          : 'Ingreso y salida'
                                       }
                                     />
                                     <DetailField label="Usos" value={detailUses(detail)} />

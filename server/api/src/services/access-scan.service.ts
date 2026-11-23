@@ -521,8 +521,8 @@ export async function confirmScan(
         passScanId: scanId,
         summary:
           scan.action === 'entry'
-            ? `Ingreso de ${pass.visitorFirstName} ${pass.visitorLastName}`
-            : `Egreso de ${pass.visitorFirstName} ${pass.visitorLastName}`,
+            ? `Ingresó ${pass.visitorFirstName} ${pass.visitorLastName}`
+            : `Salió ${pass.visitorFirstName} ${pass.visitorLastName}`,
         details: {
           action: scan.action,
           visitor: toVisitor(pass),

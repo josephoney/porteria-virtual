@@ -11,7 +11,7 @@ const meta = {
   },
   'bitacora-accesos': {
     title: 'Bitácora de accesos',
-    description: 'Registro inmutable de ingresos, egresos y novedades por lugar físico.',
+    description: 'Registro inmutable de ingresos, salidas y novedades por lugar físico.',
   },
   reports: {
     title: 'Reportes',

@@ -777,7 +777,7 @@ export default function CreatePassScreen() {
         )}
         <Text style={ui.muted}>
           {entryOnly
-            ? 'No hace falta registrar el egreso.'
+            ? 'No hace falta registrar la salida.'
             : recurrence === 'once'
               ? 'Se cuentan en total, sin importar el día.'
               : 'Se reinician cada día. 1 uso = entrada y salida.'}

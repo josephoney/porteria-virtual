@@ -797,7 +797,7 @@ export function ResidentAuthorizationBulkPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="entry_only">Solo ingreso</SelectItem>
-                    <SelectItem value="entry_exit">Ingreso y egreso</SelectItem>
+                    <SelectItem value="entry_exit">Ingreso y salida</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

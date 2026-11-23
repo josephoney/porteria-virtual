@@ -87,8 +87,8 @@ interface AccessBitacoraViewProps {
 }
 
 const typeLabels: Record<string, string> = {
-  pass_entry: 'Ingreso',
-  pass_exit: 'Egreso',
+  pass_entry: 'Ingresó',
+  pass_exit: 'Salió',
   pass_rejected: 'Rechazo',
   scan_denied: 'Escaneo denegado',
   shift_start: 'Inicio de turno',
@@ -387,7 +387,7 @@ export function AccessBitacoraView({
   const selectedVisitorDocument = readText(selectedVisitor?.document);
   const selectedAction = readText(selectedDetails?.action);
   const selectedActionLabel =
-    selectedAction === 'entry' ? 'Ingreso' : selectedAction === 'exit' ? 'Egreso' : null;
+    selectedAction === 'entry' ? 'Ingresó' : selectedAction === 'exit' ? 'Salió' : null;
   const selectedDetailDestination = readText(selectedDetails?.destinationName);
   const selectedReason = readText(selectedDetails?.reason);
   const selectedGuardNote = readText(selectedDetails?.note);

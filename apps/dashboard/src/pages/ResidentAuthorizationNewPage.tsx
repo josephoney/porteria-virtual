@@ -736,7 +736,7 @@ export function ResidentAuthorizationNewPage() {
                 }
                 span="full"
               />
-              <DetailField label="Tipo" value={entryOnly ? 'Sólo entrada' : 'Ingreso y egreso'} />
+              <DetailField label="Tipo" value={entryOnly ? 'Sólo entrada' : 'Ingreso y salida'} />
               <DetailField
                 label="Usos"
                 value={
@@ -1223,7 +1223,7 @@ export function ResidentAuthorizationNewPage() {
             </label>
             <p className="text-xs text-muted-foreground">
               {entryOnly
-                ? 'El pase se consume al entrar; no hace falta registrar el egreso.'
+                ? 'El pase se consume al entrar; no hace falta registrar la salida.'
                 : 'Permite entrada y salida. Un uso es un par de entrada y salida.'}
             </p>
           </div>

@@ -54,8 +54,8 @@ function formatElapsed(seconds: number): string {
 }
 
 function actionLabel(action: string | null): string {
-  if (action === 'entry') return 'Ingreso';
-  if (action === 'exit') return 'Egreso';
+  if (action === 'entry') return 'Ingresó';
+  if (action === 'exit') return 'Salió';
   return 'Acción';
 }
 

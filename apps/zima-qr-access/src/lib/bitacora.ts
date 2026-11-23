@@ -73,9 +73,9 @@ function companionsField(value: unknown): Array<{ name: string; document: string
 function movementFor(type: string): { movement: string; tone: ActivityTone } {
   switch (type) {
     case 'pass_entry':
-      return { movement: 'Ingreso', tone: 'success' };
+      return { movement: 'Ingresó', tone: 'success' };
     case 'pass_exit':
-      return { movement: 'Egreso', tone: 'info' };
+      return { movement: 'Salió', tone: 'info' };
     case 'pass_rejected':
       return { movement: 'Rechazado', tone: 'danger' };
     case 'scan_denied':
