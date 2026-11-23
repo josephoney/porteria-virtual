@@ -53,9 +53,11 @@ function formatElapsed(seconds: number): string {
   return `${total} s`;
 }
 
+// La previsualización describe lo que el pase hará ahora, así que va en
+// presente. El pasado queda para la bitácora y el historial.
 function actionLabel(action: string | null): string {
-  if (action === 'entry') return 'Ingresó';
-  if (action === 'exit') return 'Salió';
+  if (action === 'entry') return 'Ingreso';
+  if (action === 'exit') return 'Salida';
   return 'Acción';
 }
 

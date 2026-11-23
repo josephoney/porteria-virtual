@@ -1,5 +1,5 @@
 import type { PassQrResponse, PassStatus, PassTicketTone } from '@porteria/shared';
-import { passTicketState } from '@porteria/shared';
+import { PASS_ACTION_LABEL, passAction, passTicketState } from '@porteria/shared';
 import * as Clipboard from 'expo-clipboard';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -15,8 +15,10 @@ import { errorMessage } from '@/lib/errors';
 import { formatDateTime, formatValidity } from '@/lib/format';
 import { colors, radius, spacing } from '@/theme';
 
-/** Segundos antes del vencimiento en los que se pide un token nuevo. */
-const QR_REFRESH_BEFORE_SECONDS = 5;
+// El token se renueva al llegar a cero. El servidor acepta unos segundos de
+// desfase, así que el QR que quedó en pantalla sigue sirviendo mientras llega
+// el siguiente.
+const QR_REFRESH_AT_SECONDS = 0;
 
 function finalMessage(status: PassStatus): string {
   switch (status) {
@@ -123,7 +125,7 @@ export default function PassDetailScreen() {
     const timer = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((qrDeadlineRef.current - Date.now()) / 1000));
       setSeconds(remaining);
-      if (qrDeadlineRef.current > 0 && remaining <= QR_REFRESH_BEFORE_SECONDS) {
+      if (qrDeadlineRef.current > 0 && remaining <= QR_REFRESH_AT_SECONDS) {
         qrDeadlineRef.current = 0;
         void loadQr();
       }
@@ -260,6 +262,8 @@ export default function PassDetailScreen() {
   };
 
   const ticket = passTicketState(pass);
+  // Lo que hará este QR ahora: dejar entrar o dejar salir.
+  const action = passAction({ type: pass.type, presenceState: pass.presenceState });
 
   return (
     <Screen>
@@ -317,6 +321,7 @@ export default function PassDetailScreen() {
         <Card>
           {qr ? (
             <>
+              <Text style={styles.qrAction}>{PASS_ACTION_LABEL[action]}</Text>
               <View style={styles.qrBox}>
                 <QRCode
                   value={qr.token}
@@ -413,6 +418,15 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     borderRadius: 16,
     marginVertical: spacing.sm,
+  },
+  qrAction: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    marginBottom: spacing.xs,
   },
   qrHint: {
     color: colors.text,

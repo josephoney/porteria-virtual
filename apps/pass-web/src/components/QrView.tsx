@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   isPermanentPass,
+  passAction,
+  PASS_ACTION_LABEL,
   passTicketState,
   type PassQrResponse,
   type PassTicketTone,
@@ -30,8 +32,10 @@ const TICKET_TONE_TEXT: Record<PassTicketTone, string> = {
   neutral: '#0B1220',
 };
 
-/** Segundos antes del vencimiento en los que se pide un token nuevo. */
-const QR_REFRESH_BEFORE_SECONDS = 5;
+// El token se renueva al llegar a cero. El servidor acepta unos segundos de
+// desfase, así que el QR que quedó en pantalla sigue sirviendo mientras llega
+// el siguiente.
+const QR_REFRESH_AT_SECONDS = 0;
 
 export function QrView({ token, preview, onExit }: QrViewProps) {
   const [qr, setQr] = useState<PassQrResponse | null>(null);
@@ -89,9 +93,8 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
     const timer = window.setInterval(() => {
       const remaining = Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000));
       setSeconds(remaining);
-      // Se pide uno nuevo antes de vencer: escanear un token que expira
-      // mientras el guardia lo apunta es el peor caso posible.
-      if (deadlineRef.current > 0 && remaining <= QR_REFRESH_BEFORE_SECONDS) {
+      // Se renueva al vencer, para que el conteo llegue a cero de verdad.
+      if (deadlineRef.current > 0 && remaining <= QR_REFRESH_AT_SECONDS) {
         deadlineRef.current = 0;
         void refreshQr();
       }
@@ -109,6 +112,9 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
     validUntil: preview.validUntil,
     rule: { remainingUses },
   });
+
+  // Lo que hará este QR ahora: dejar entrar o dejar salir.
+  const action = passAction({ type: preview.type, presenceState: presence });
 
   return (
     <main className="page">
@@ -148,6 +154,19 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
             </p>
           </div>
         </div>
+
+        <p
+          style={{
+            margin: '0 0 10px',
+            textAlign: 'center',
+            fontSize: 20,
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {PASS_ACTION_LABEL[action]}
+        </p>
 
         <div className="qr-box">
           {qr ? (
@@ -206,7 +225,8 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
         </dl>
 
         <p className="hint">
-          Muestra este QR en la portería. Se renueva automáticamente cada 24 segundos.
+          Muestra este QR en la portería. Se renueva automáticamente cada{' '}
+          {qr?.expiresInSeconds ?? 24} segundos.
         </p>
       </section>
     </main>

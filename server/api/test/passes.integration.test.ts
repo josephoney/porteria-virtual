@@ -1611,7 +1611,7 @@ describe('dynamic pass integration', () => {
     const insideTicket = passTicketState(insideBody);
     assert.equal(insideTicket.kind, 'inside');
     assert.equal(insideTicket.tone, 'warning');
-    assert.equal(insideTicket.label, 'Ingresó · esperando salida');
+    assert.equal(insideTicket.label, 'Adentro · esperando salida');
 
     const recurring = await createPass({ type: 'entry_exit', recurrence: 'range', maxUses: 2 });
     const recurringToken = linkToken(recurring);

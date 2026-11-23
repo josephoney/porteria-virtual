@@ -33,11 +33,22 @@ describe('pass QR tokens', () => {
     assert.throws(() => verifyPassQrToken(`${token.slice(0, -1)}x`));
   });
 
+  it('accepts a token that expired within the grace window', () => {
+    // El cliente renueva el QR al vencer; la tolerancia cubre esa fracción.
+    const justExpired = jwt.sign({ v: 1, passId: 'pass-1' }, config.passes.qrSecret, {
+      algorithm: 'HS256',
+      jwtid: 'grace-jti',
+      expiresIn: -1,
+    });
+
+    assert.equal(verifyPassQrToken(justExpired).passId, 'pass-1');
+  });
+
   it('rejects an expired token', () => {
     const expired = jwt.sign({ v: 1, passId: 'pass-1' }, config.passes.qrSecret, {
       algorithm: 'HS256',
       jwtid: 'expired-jti',
-      expiresIn: -1,
+      expiresIn: -10,
     });
 
     assert.throws(() => verifyPassQrToken(expired));

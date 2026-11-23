@@ -37,6 +37,10 @@ export function signPassQrToken(passId: string): SignedPassQrToken {
 export function verifyPassQrToken(token: string): PassQrPayload {
   const decoded = jwt.verify(token, config.passes.qrSecret, {
     algorithms: [ALGORITHM],
+    // El cliente renueva el QR justo al vencer. Cinco segundos de tolerancia
+    // cubren la ventana entre el vencimiento y la llegada del token nuevo,
+    // así el guardia nunca escanea un código muerto por una fracción de tiempo.
+    clockTolerance: 5,
   });
 
   if (

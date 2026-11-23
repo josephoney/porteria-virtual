@@ -33,6 +33,23 @@ export interface PassTicketPass {
   rule?: Pick<PassRuleSummary, 'remainingUses'> | null;
 }
 
+/** What the current QR token does: it lets the holder in, or lets them out. */
+export type PassAction = 'entry' | 'exit';
+
+/**
+ * A holder who is inside leaves, so the same pass flips from entry to exit
+ * without issuing a new one.
+ */
+export function passAction(pass: Pick<PassTicketPass, 'type' | 'presenceState'>): PassAction {
+  if (pass.presenceState === 'inside' && pass.type !== 'entry_only') return 'exit';
+  return 'entry';
+}
+
+export const PASS_ACTION_LABEL: Record<PassAction, string> = {
+  entry: 'Ingreso',
+  exit: 'Salida',
+};
+
 function formatDate(value: Date | string) {
   const date = value instanceof Date ? value : new Date(value);
   return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
@@ -87,7 +104,7 @@ export function passTicketState(pass: PassTicketPass, now = new Date()): PassTic
     return {
       kind: 'inside',
       tone: 'warning',
-      label: 'Ingresó · esperando salida',
+      label: 'Adentro · esperando salida',
       detail: 'El guardia debe registrar la salida para cerrar el uso.',
       icon: '•',
     };
@@ -130,7 +147,7 @@ export function passTicketState(pass: PassTicketPass, now = new Date()): PassTic
       kind: 'reentry',
       tone: 'success',
       label: 'Puede volver a entrar',
-      detail: `Salió. ${remaining === 1 ? 'Queda 1 uso' : `Quedan ${remaining} usos`} hoy.`,
+      detail: `${remaining === 1 ? 'Queda 1 uso' : `Quedan ${remaining} usos`} hoy.`,
       icon: '↩',
     };
   }

@@ -25,7 +25,7 @@ The ticket SHALL show the green state «Pendiente de ingreso» when an entry/exi
 
 ### Requirement: Inside
 
-The ticket SHALL show the orange state «Ingresó · esperando salida» while an entry/exit pass has a confirmed entry and no confirmed exit.
+The ticket SHALL show the orange state «Adentro · esperando salida» while an entry/exit pass has a confirmed entry and no confirmed exit.
 
 #### Scenario: Entry confirmed
 
@@ -103,5 +103,5 @@ The ticket state SHALL NOT change the scan or confirmation rules; the server rem
 
 #### Scenario: Guard scans an inside pass
 
-- **WHEN** the guard scans a pass whose ticket shows «Ingresó · esperando salida»
+- **WHEN** the guard scans a pass whose ticket shows «Adentro · esperando salida»
 - **THEN** the scan and confirmation flow behaves exactly as before

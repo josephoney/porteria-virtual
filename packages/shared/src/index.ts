@@ -154,9 +154,10 @@ export { createEventEnvelope } from './utils/event-envelope.js';
 export type { CreateEventEnvelopeInput } from './utils/event-envelope.js';
 export { PERMANENT_PASS_UNTIL, isPermanentPass } from './utils/pass-validity.js';
 export type {
+  PassAction,
   PassTicketKind,
   PassTicketPass,
   PassTicketState,
   PassTicketTone,
 } from './utils/pass-ticket-state.js';
-export { passTicketState } from './utils/pass-ticket-state.js';
+export { PASS_ACTION_LABEL, passAction, passTicketState } from './utils/pass-ticket-state.js';

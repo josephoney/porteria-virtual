@@ -8,7 +8,7 @@ The guard already sees the rule and the remaining uses when validating a documen
 
 - Add a visible ticket state derived from the pass, never from the QR token or its countdown:
   - **Pendiente de ingreso** (green): active, outside, with uses available.
-  - **Ingresó · esperando salida** (orange): the visitor is inside on an entry/exit pass.
+  - **Adentro · esperando salida** (orange): the visitor is inside on an entry/exit pass.
   - **Puede volver a entrar** (green, with the remaining counter): after an exit on a multi-use pass that still has uses.
   - **Usado / Vencido / Revocado** (red or gray, final): the pass no longer authorizes.
 - Render the state with color **and** icon **and** text, so it does not depend on color alone.
