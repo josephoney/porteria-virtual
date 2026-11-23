@@ -42,11 +42,29 @@ that device.
 The system SHALL expose the passes bound to the current device, so the holder
 can reach each one without keeping several tabs open.
 
+The index SHALL be resolved from the bindings the device presents with the
+request. It SHALL NOT depend on a stored device identifier, because the server
+only keeps a hash of each pass's device key and cannot look a device up.
+
+The index SHALL be a list, not a mosaic: each pass opens its own QR screen, one
+at a time, so the code keeps its full size for the guard to scan.
+
 #### Scenario: Listing the passes of a device
 - **WHEN** a bound device requests its pass index
 - **THEN** the response lists each pass with its public link, its holder name, its
   destination and its current ticket state
 - **AND** the response never includes another device's passes
+
+#### Scenario: The index uses the presented bindings
+- **WHEN** a device requests its pass index
+- **THEN** the server resolves the list from the per-pass bindings present in the
+  request
+- **AND** it returns nothing for a pass whose binding the device does not present
+
+#### Scenario: Each pass opens on its own screen
+- **WHEN** the holder picks a pass from the index
+- **THEN** the app shows that pass's QR at full size
+- **AND** the index remains one tap away to return to the other passes
 
 #### Scenario: Passes that no longer authorize are hidden
 - **WHEN** a pass in the index is revoked, expired or used up
