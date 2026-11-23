@@ -62,6 +62,39 @@ ENV_FILE=.env.otro bash deploy/update.sh
 El servicio `migrate` corre las migraciones pendientes antes de que el API
 arranque, así que no hay pasos manuales sobre la base.
 
+## Dónde correr cada comando
+
+El servidor sólo hospeda la aplicación. Lo que verifica código va en la máquina
+de desarrollo; lo que verifica el despliegue, en el servidor.
+
+| Comando                                          | Dónde                            | Motivo                                    |
+| ------------------------------------------------ | -------------------------------- | ----------------------------------------- |
+| `pnpm --filter @porteria/api test`               | Cualquier máquina                | Sólo lógica, no abre la base              |
+| `pnpm --filter @porteria/api test:integration`   | **Sólo desarrollo**              | Crea y vacía filas en la base configurada |
+| `pnpm --filter @porteria/database db:migrate`    | Desarrollo local, o el servidor  | Escribe el esquema                        |
+| `bash deploy/update.sh`                          | Servidor                         | Reconstruye y recrea los contenedores     |
+| Smoke manual                                     | Navegador y celular, contra staging | La app móvil no tiene base propia      |
+
+### Nunca correr las pruebas de integración en el servidor
+
+`test:integration` siembra organizaciones, personas, cuentas y pases, y después
+los limpia. En el servidor `DATABASE_URL` apunta a la base de staging: correrlo
+ahí es apuntar un proceso de pruebas a los datos reales.
+
+Las unitarias (`test`) no tienen ese problema: no importan la base ni leen
+`DATABASE_URL`, así que son inofensivas en cualquier lado. Igual no aportan nada
+en el servidor, porque prueban el código y no el entorno.
+
+### Verificar el código deployado
+
+```bash
+cd ~/porteria
+git rev-parse --short HEAD
+```
+
+Los tests no dicen nada sobre el despliegue. El estado real se ve en `/health`,
+en `docker compose ps` y en la aplicación.
+
 ## Rutas
 
 | Ruta         | Qué sirve                             |
