@@ -78,12 +78,18 @@ de desarrollo; lo que verifica el despliegue, en el servidor.
 ### Nunca correr las pruebas de integración en el servidor
 
 `test:integration` siembra organizaciones, personas, cuentas y pases, y después
-los limpia. En el servidor `DATABASE_URL` apunta a la base de staging: correrlo
-ahí es apuntar un proceso de pruebas a los datos reales.
+los limpia. La conexión sale de `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`,
+`POSTGRES_USER` y `POSTGRES_PASSWORD`; los valores por defecto son
+`localhost:5432` con la base `porteria`.
 
-Las unitarias (`test`) no tienen ese problema: no importan la base ni leen
-`DATABASE_URL`, así que son inofensivas en cualquier lado. Igual no aportan nada
-en el servidor, porque prueban el código y no el entorno.
+- **En el servidor, fuera de Docker**: la base no publica el puerto 5432, así que
+  la conexión se rechaza y no se toca nada.
+- **Dentro del contenedor `api`**: `POSTGRES_HOST=db` y la contraseña real, así
+  que corre contra la base de staging de verdad. Ese es el caso peligroso.
+
+Las unitarias (`test`) no tienen ese problema: no importan la base, así que son
+inofensivas en cualquier lado. Igual no aportan nada en el servidor, porque
+prueban el código y no el entorno.
 
 ### Verificar el código deployado
 
