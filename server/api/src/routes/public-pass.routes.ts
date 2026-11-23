@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import config from '../config.js';
-import { readPassDeviceCookie, serializePassDeviceCookie } from '../lib/device-cookie.js';
+import {
+  passDeviceCookieName,
+  readPassDeviceBindings,
+  serializePassDeviceCookie,
+} from '../lib/device-cookie.js';
 import { sendPassError } from '../lib/pass-error-status.js';
 import { signDeviceKey } from '../lib/pass-tokens.js';
 import { isRateLimited, rateLimitKey } from '../lib/rate-limit.js';
@@ -28,7 +32,7 @@ export async function publicPassRoutes(app: FastifyInstance) {
     if (isLimited(request, reply, 'pass-preview', config.passes.rateLimits.previewPerMinute))
       return;
     const { token } = request.params as { token: string };
-    const result = await publicPassService.previewPass(token, readPassDeviceCookie(request));
+    const result = await publicPassService.previewPass(token, readPassDeviceBindings(request));
     if (!result.ok) return sendPassError(reply, result.code);
     return reply.send(result.data);
   });
@@ -37,7 +41,7 @@ export async function publicPassRoutes(app: FastifyInstance) {
     if (isLimited(request, reply, 'pass-bind', config.passes.rateLimits.bindPerMinute)) return;
     const { token } = request.params as { token: string };
     const body = bindPassSchema.parse(request.body ?? {});
-    const result = await publicPassService.bindPass(token, body, readPassDeviceCookie(request));
+    const result = await publicPassService.bindPass(token, body, readPassDeviceBindings(request));
     if (!result.ok) return sendPassError(reply, result.code);
 
     if (result.data.deviceKey) {
@@ -50,14 +54,19 @@ export async function publicPassRoutes(app: FastifyInstance) {
         0,
         Math.floor((result.data.linkExpiresAt.getTime() - Date.now()) / 1000),
       );
+      const secure = config.security.cookieSecure || request.protocol === 'https';
       reply.header(
         'Set-Cookie',
         serializePassDeviceCookie(
           cookieValue,
           maxAge,
-          config.security.cookieSecure || request.protocol === 'https',
+          secure,
+          passDeviceCookieName(result.data.passId),
         ),
       );
+      // Legacy cookie during the transition; remove once all clients hold the
+      // pass-scoped binding.
+      reply.header('Set-Cookie', serializePassDeviceCookie(cookieValue, maxAge, secure));
     }
 
     return reply.send({
@@ -69,7 +78,7 @@ export async function publicPassRoutes(app: FastifyInstance) {
   app.get('/:token/qr', async (request, reply) => {
     if (isLimited(request, reply, 'pass-qr', config.passes.rateLimits.qrPerMinute)) return;
     const { token } = request.params as { token: string };
-    const result = await publicPassService.getPublicQr(token, readPassDeviceCookie(request));
+    const result = await publicPassService.getPublicQr(token, readPassDeviceBindings(request));
     if (!result.ok) return sendPassError(reply, result.code);
     return reply.send(result.data);
   });
@@ -77,7 +86,7 @@ export async function publicPassRoutes(app: FastifyInstance) {
   app.get('/:token/status', async (request, reply) => {
     if (isLimited(request, reply, 'pass-status', config.passes.rateLimits.statusPerMinute)) return;
     const { token } = request.params as { token: string };
-    const result = await publicPassService.getPublicStatus(token, readPassDeviceCookie(request));
+    const result = await publicPassService.getPublicStatus(token, readPassDeviceBindings(request));
     if (!result.ok) return sendPassError(reply, result.code);
     return reply.send(result.data);
   });

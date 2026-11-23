@@ -91,6 +91,28 @@ function extractCookie(response: { headers: Record<string, string | string[] | u
   return value.split(';')[0]!;
 }
 
+function extractCookies(response: {
+  headers: Record<string, string | string[] | undefined>;
+}): Record<string, string> {
+  const raw = response.headers['set-cookie'];
+  const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  assert.ok(values.length > 0, 'expected Set-Cookie headers');
+
+  const cookies: Record<string, string> = {};
+  for (const value of values) {
+    const pair = value.split(';')[0]!;
+    const index = pair.indexOf('=');
+    cookies[pair.slice(0, index)] = pair.slice(index + 1);
+  }
+  return cookies;
+}
+
+function cookieHeader(cookies: Record<string, string>): string {
+  return Object.entries(cookies)
+    .map(([name, value]) => `${name}=${value}`)
+    .join('; ');
+}
+
 async function postPass(overrides: Json = {}, token = residentToken) {
   const now = Date.now();
   return request(
@@ -130,6 +152,12 @@ async function bind(token: string) {
   const response = await request('POST', `/api/public/passes/${token}/bind`, {});
   assert.equal(response.statusCode, 200, response.body);
   return { cookie: extractCookie(response), body: parse(response) };
+}
+
+async function bindCookies(token: string) {
+  const response = await request('POST', `/api/public/passes/${token}/bind`, {});
+  assert.equal(response.statusCode, 200, response.body);
+  return { cookies: extractCookies(response), body: parse(response) };
 }
 
 async function publicQr(token: string, cookie?: string) {
@@ -917,6 +945,110 @@ describe('dynamic pass integration', () => {
     assert.equal(firstPayload.v, 1);
     assert.ok(firstPayload.jti);
     assert.equal(firstPayload.exp - firstPayload.iat, 24);
+  });
+
+  it('keeps two passes authorized when the same client opens both', async () => {
+    const first = await createPass();
+    const second = await createPass();
+    const firstToken = linkToken(first);
+    const secondToken = linkToken(second);
+
+    const firstBind = await bindCookies(firstToken);
+    const secondBind = await bindCookies(secondToken);
+
+    // The same client now holds one binding per pass plus the last legacy value.
+    const client = cookieHeader({ ...firstBind.cookies, ...secondBind.cookies });
+
+    const firstQr = await app.inject({
+      method: 'GET',
+      url: `/api/public/passes/${firstToken}/qr`,
+      headers: { cookie: client },
+    });
+    const secondQr = await app.inject({
+      method: 'GET',
+      url: `/api/public/passes/${secondToken}/qr`,
+      headers: { cookie: client },
+    });
+
+    assert.equal(firstQr.statusCode, 200, firstQr.body);
+    assert.equal(secondQr.statusCode, 200, secondQr.body);
+    assert.notEqual(parse(firstQr).message, 'not_bound');
+    assert.notEqual(parse(secondQr).message, 'not_bound');
+    assert.ok(parse(firstQr).token);
+    assert.ok(parse(secondQr).token);
+  });
+
+  it('still rejects a third device on an already bound pass', async () => {
+    const created = await createPass();
+    const token = linkToken(created);
+    const bound = await bindCookies(token);
+
+    assert.ok(bound.cookies[`pass_device_${created.pass.id}`], 'expected the pass-scoped cookie');
+
+    const thirdDevice = await request('POST', `/api/public/passes/${token}/bind`, {});
+    assert.equal(thirdDevice.statusCode, 403);
+    assert.equal(parse(thirdDevice).message, 'device_already_bound');
+
+    const original = await app.inject({
+      method: 'GET',
+      url: `/api/public/passes/${token}/qr`,
+      headers: { cookie: cookieHeader(bound.cookies) },
+    });
+    assert.equal(original.statusCode, 200, original.body);
+  });
+
+  it('keeps access for a client that only presents the legacy cookie', async () => {
+    const created = await createPass();
+    const token = linkToken(created);
+    const bound = await bindCookies(token);
+
+    const legacy = bound.cookies.pass_device;
+    assert.ok(legacy, 'expected the legacy cookie during the transition');
+
+    const qr = await app.inject({
+      method: 'GET',
+      url: `/api/public/passes/${token}/qr`,
+      headers: { cookie: `pass_device=${legacy}` },
+    });
+    assert.equal(qr.statusCode, 200, qr.body);
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/public/passes/${token}/status`,
+      headers: { cookie: `pass_device=${legacy}` },
+    });
+    assert.equal(status.statusCode, 200, status.body);
+  });
+
+  it('reopens the first pass after opening a second one', async () => {
+    const first = await createPass();
+    const second = await createPass();
+    const firstToken = linkToken(first);
+    const secondToken = linkToken(second);
+
+    const firstBind = await bindCookies(firstToken);
+    const secondBind = await bindCookies(secondToken);
+    const client = cookieHeader({ ...firstBind.cookies, ...secondBind.cookies });
+
+    const preview = await app.inject({
+      method: 'GET',
+      url: `/api/public/passes/${firstToken}`,
+      headers: { cookie: client },
+    });
+    assert.equal(preview.statusCode, 200, preview.body);
+
+    const qr = await app.inject({
+      method: 'GET',
+      url: `/api/public/passes/${firstToken}/qr`,
+      headers: { cookie: client },
+    });
+    assert.equal(qr.statusCode, 200, qr.body);
+    assert.ok(parse(qr).token);
+
+    // Reopening does not hand the pass to another device.
+    const thirdDevice = await request('POST', `/api/public/passes/${firstToken}/bind`, {});
+    assert.equal(thirdDevice.statusCode, 403);
+    assert.equal(parse(thirdDevice).message, 'device_already_bound');
   });
 
   it('revokes a pass and rejects a second revocation', async () => {

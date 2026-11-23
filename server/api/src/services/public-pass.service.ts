@@ -10,6 +10,7 @@ import {
   type PublicPassPreview,
 } from '@porteria/shared';
 import config from '../config.js';
+import type { PassDeviceBinding } from '../lib/device-cookie.js';
 import { randomToken, sha256Hex, verifyDeviceCookie } from '../lib/pass-tokens.js';
 import { buildLocationPath } from './location-path.service.js';
 import { buildPassRule } from './pass-schedule.service.js';
@@ -36,11 +37,15 @@ async function findPassByToken(token: string): Promise<FoundPass | null> {
   return row ?? null;
 }
 
-function isBound(found: FoundPass, cookie: string | null): boolean {
-  return Boolean(
-    found.pass.deviceKeyHash &&
-    verifyDeviceCookie(cookie, found.pass.id, found.pass.deviceKeyHash, config.passes.qrSecret),
-  );
+function isBound(found: FoundPass, bindings: PassDeviceBinding[]): boolean {
+  const deviceKeyHash = found.pass.deviceKeyHash;
+  if (!deviceKeyHash) return false;
+
+  return bindings
+    .filter((binding) => binding.passId === found.pass.id)
+    .some((binding) =>
+      verifyDeviceCookie(binding.value, found.pass.id, deviceKeyHash, config.passes.qrSecret),
+    );
 }
 
 function isInsideSchedule(pass: AccessPassRow, timezone: string): boolean {
@@ -85,7 +90,7 @@ function checkActive(found: FoundPass): PassResult<null> {
 
 export async function previewPass(
   token: string,
-  cookie: string | null,
+  bindings: PassDeviceBinding[],
 ): Promise<PassResult<PublicPassPreview>> {
   if (!config.features.dynamicQrEnabled) return { ok: false, code: 'dynamic_qr_disabled' };
 
@@ -97,7 +102,7 @@ export async function previewPass(
   const active = checkActive(found);
   if (!active.ok) return active;
 
-  if (found.pass.deviceKeyHash && !isBound(found, cookie)) {
+  if (found.pass.deviceKeyHash && !isBound(found, bindings)) {
     return { ok: false, code: 'device_already_bound' };
   }
 
@@ -129,7 +134,7 @@ export async function previewPass(
 export async function bindPass(
   token: string,
   input: BindPassDto,
-  cookie: string | null,
+  bindings: PassDeviceBinding[],
 ): Promise<PassResult<{ passId: string; deviceKey: string | null; linkExpiresAt: Date }>> {
   if (!config.features.dynamicQrEnabled) return { ok: false, code: 'dynamic_qr_disabled' };
 
@@ -142,7 +147,7 @@ export async function bindPass(
   if (!active.ok) return active;
 
   if (found.pass.deviceKeyHash) {
-    if (isBound(found, cookie)) {
+    if (isBound(found, bindings)) {
       return {
         ok: true,
         data: { passId: found.pass.id, deviceKey: null, linkExpiresAt: found.pass.linkExpiresAt },
@@ -202,7 +207,7 @@ export async function bindPass(
 
 export async function getPublicQr(
   token: string,
-  cookie: string | null,
+  bindings: PassDeviceBinding[],
 ): Promise<PassResult<PassQrResponse>> {
   if (!config.features.dynamicQrEnabled) return { ok: false, code: 'dynamic_qr_disabled' };
 
@@ -213,7 +218,7 @@ export async function getPublicQr(
   if (!link.ok) return link;
   const active = checkActive(found);
   if (!active.ok) return active;
-  if (!isBound(found, cookie)) return { ok: false, code: 'not_bound' };
+  if (!isBound(found, bindings)) return { ok: false, code: 'not_bound' };
 
   const inside = isInsideSchedule(found.pass, found.timezone);
   if (found.pass.presenceState === 'outside' && !inside) {
@@ -233,7 +238,7 @@ export async function getPublicQr(
 
 export async function getPublicStatus(
   token: string,
-  cookie: string | null,
+  bindings: PassDeviceBinding[],
 ): Promise<PassResult<PassStatusResponse>> {
   if (!config.features.dynamicQrEnabled) return { ok: false, code: 'dynamic_qr_disabled' };
 
@@ -242,7 +247,7 @@ export async function getPublicStatus(
 
   const link = checkLink(found);
   if (!link.ok) return link;
-  if (!isBound(found, cookie)) return { ok: false, code: 'not_bound' };
+  if (!isBound(found, bindings)) return { ok: false, code: 'not_bound' };
 
   return {
     ok: true,
