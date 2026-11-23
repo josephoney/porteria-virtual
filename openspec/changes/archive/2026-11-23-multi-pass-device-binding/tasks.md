@@ -26,6 +26,6 @@
 ## 3. Verificación
 
 - [x] 3.1 Suites unitarias e integración en verde (41/41 y 194/194).
-- [ ] 3.2 Smoke manual: dos links de unidades distintas en el mismo teléfono,
+- [x] 3.2 Smoke manual: dos links de unidades distintas en el mismo teléfono,
       ambos accesibles desde el índice, cada uno con su QR a tamaño completo.
-- [ ] 3.3 Confirmar que el escaneo de un pase no altera el estado del otro.
+- [x] 3.3 Confirmar que el escaneo de un pase no altera el estado del otro.
