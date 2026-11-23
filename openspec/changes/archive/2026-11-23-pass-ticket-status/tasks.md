@@ -30,4 +30,4 @@
 - [x] 5.1 `pnpm --filter @porteria/shared build`.
 - [x] 5.2 API y móvil: `tsc --noEmit` limpios. `pass-web`: `vite build` pasa; `tsc -b` queda bloqueado por el TS2786 preexistente de `QRCodeSVG` (React 18 vs `@types/react@19`).
 - [x] 5.3 Prettier y `openspec validate pass-ticket-status --strict`.
-- [ ] 5.4 Smoke test manual: crear pases de cada modalidad, entrar y salir, y verificar los estados en móvil y web.
+- [x] 5.4 Smoke test manual: crear pases de cada modalidad, entrar y salir, y verificar los estados en móvil y web.
