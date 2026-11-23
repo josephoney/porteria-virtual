@@ -13,7 +13,7 @@ El sistema SHALL almacenar la contraseña de una persona únicamente en `account
 #### Scenario: No legacy write
 
 - **WHEN** cualquier flujo intenta escribir credenciales en la tabla legada `users`
-- **THEN** la escritura falla
+- **THEN** la escritura falla porque la tabla ya no existe
 - **THEN** el sistema registra el intento como error
 
 ### Requirement: Centralized credential operations
@@ -63,14 +63,21 @@ Los refresh tokens SHALL identificarse por cuenta.
 
 La tabla `users` SHALL dejar de existir como fuente de identidad o credencial.
 
-#### Scenario: Read compatibility
+#### Scenario: Historical values preserved
 
-- **WHEN** el retiro está en curso
-- **THEN** `users` expone una vista de solo lectura equivalente
-- **THEN** las consultas existentes siguen respondiendo
+- **WHEN** la tabla `users` se elimina
+- **THEN** los identificadores históricos ya se resolvieron a `people` y `accounts`
+- **THEN** ningún dato queda dependiendo de la tabla retirada
 
 #### Scenario: Final removal
 
 - **WHEN** el cambio se completa
-- **THEN** la vista `users` se elimina
+- **THEN** la tabla `users` no existe
 - **THEN** todas las consultas operan sobre `people` y `accounts`
+- **THEN** cualquier referencia residual falla de forma explícita
+
+#### Scenario: Unmapped row aborts the migration
+
+- **WHEN** una fila de `users` no tiene una cuenta correspondiente
+- **THEN** la migración aborta antes de cualquier cambio destructivo
+- **THEN** la base queda intacta
