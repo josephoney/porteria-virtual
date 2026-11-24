@@ -14,7 +14,7 @@ Lista de go/no-go para la primera puesta en producción. Cada ítem debe tener e
 - [ ] Rate limit de login activo (`AUTH_LOGIN_RATE_LIMIT=10`).
 - [ ] Rate limits de pases activos (preview/bind/QR/status).
 - [ ] `/metrics` restringido por red/firewall.
-- [ ] Revisión de PII: documento enmascarado en listados, tokens crudos fuera de logs.
+- [ ] Revisión de PII: documento enmascarado en listados, tokens crudos fuera de logs, y ventana de retención configurada por organización (ver `docs/runbook-produccion.md`).
 - [ ] Plan de rotación de secretos y revocación de refresh tokens probado.
 - [ ] Dependencias auditadas (`pnpm audit`) y sin vulnerabilidades críticas abiertas.
 - **Pendiente**: Sentry/error tracking no está cableado; `SENTRY_DSN` es reservado.
@@ -43,6 +43,7 @@ Lista de go/no-go para la primera puesta en producción. Cada ítem debe tener e
 - [ ] Alertas: API caída, DB no ready, 5xx > 1%, p95 > 1s, outbox backlog, picos de `invalid_or_expired_token`.
 - [ ] Logs JSON con `reqId`, sin tokens ni documentos completos.
 - [ ] Retención de logs definida (mínimo 30 días).
+- [ ] Ventana de retención de la identidad del visitante definida por organización (12 meses por defecto) y verificada en simulación antes de habilitar la escritura.
 - [ ] Uptime monitor externo para `/health` y `/ready`.
 - [ ] Runbook de incidentes accesible al equipo.
 - **Pendiente**: Sentry/GlitchTip para excepciones; el DSN está reservado pero el SDK no está integrado.
@@ -60,7 +61,7 @@ Lista de go/no-go para la primera puesta en producción. Cada ítem debe tener e
 - [ ] Cámara probada en development build; Expo Go no alcanza para el escaneo.
 - [ ] Deep link `zima-qr-access://` probado.
 - [ ] Crash reporting configurado (Sentry/Expo) o aceptado como pendiente.
-- [ ] Política de privacidad y términos publicados.
+- [ ] Política de privacidad y términos publicados, con el plazo de conservación de la identidad del visitante que define cada organización.
 - [ ] Ficha de tienda: nombre, descripción, capturas, clasificación, permisos.
 - **Pendiente**: cuentas Expo/EAS, Play Console y Apple Developer.
 - **Pendiente**: ícono/splash definitivos (hoy no están versionados).
@@ -75,7 +76,7 @@ Lista de go/no-go para la primera puesta en producción. Cada ítem debe tener e
 - [ ] Community admin capacitado: accesos, usuarios, bitácora, force-close.
 - [ ] Canal de soporte y escalamiento definidos.
 - [ ] Procedimiento de alta de comunidad probado de punta a punta.
-- [ ] Retención de datos y PII acordada con la comunidad.
+- [ ] Retención de datos y PII acordada con la comunidad: la plataforma anonimiza la identidad pasado el plazo que la organización define (12 meses por defecto, entre 1 y 60).
 - [ ] Plan de comunicación para incidentes.
 
 ## 6. Contrato de API v1

@@ -159,7 +159,46 @@ docker compose ... exec -T db pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" -
 5. Levantar API/web y verificar `/ready`, login y un pase de prueba.
 6. Registrar el incidente y el RPO/RTO real.
 
-## 11. Comandos útiles
+## 11. Retención de datos
+
+La identidad del visitante no se borra: pasado el plazo se **anonimiza**. La fila
+queda con fecha, portería, resultado, motivo y turno; desaparecen el nombre, el
+documento, la placa, los acompañantes y el nombre del autorizador. Los reportes
+no cambian, porque leen el evento y nunca la identidad.
+
+El plazo lo define cada organización en **Mi organización → Retención de datos**
+(1 a 60 meses, 12 por defecto). La organización es la responsable del dato.
+
+1. El barrido corre cada `RETENTION_INTERVAL_MINUTES` (1440 por defecto) y, si
+   `RETENTION_WRITE_ENABLED` no es `true`, **sólo simula**: cuenta lo que haría y
+   registra la corrida sin escribir. Es el estado por defecto.
+2. Para ver qué haría hoy, esperar una corrida de simulación y leer el historial
+   en la misma pantalla. También queda en los logs del API:
+   `Retention: org=<id> months=<n> dryRun=<bool> passes=<n> scans=<n> entries=<n>`.
+3. Para habilitar la escritura: `RETENTION_WRITE_ENABLED=true` y reiniciar el
+   API. La primera corrida real ocurre recién al cumplirse el intervalo, no al
+   arrancar.
+4. Apagar el worker: `RETENTION_WORKER_ENABLED=false`.
+5. Idempotencia: una segunda corrida sobre la misma ventana informa cero filas.
+   La marca de anonimizado (`visitor_document = 'ANONIMIZADO'`) evita reprocesar.
+
+**Si se anonimizó por error**: no hay rollback. La identidad se sobrescribió en
+`access_passes`, `pass_scans` y `bitacora_entries`; sólo el backup la recupera,
+y restaurarlo devuelve también el resto de los datos a ese momento — evaluar el
+costo antes. Si el plazo estaba mal, corregirlo en la organización **antes** de
+la siguiente corrida.
+
+**Excepción conocida**: `bitacora_entries` es inmutable por trigger
+(`prevent_bitacora_update`, migración 0034). El único `UPDATE` permitido es el
+que quita identidad y nada más; cualquier otro cambio sigue fallando con
+`bitacora rows are immutable`.
+
+**Fuera de alcance**: el directorio `people`/`accounts` (residentes y personal)
+y la tabla legacy `visitors` no entran en esta ventana. Los textos libres que
+escribe el guardia en el resumen de la bitácora tampoco se anonimizan: si alguien
+escribió un documento en el resumen, ese texto permanece.
+
+## 12. Comandos útiles
 
 ```bash
 # Estado y logs
@@ -175,7 +214,7 @@ docker compose ... --profile bootstrap run --rm bootstrap
 docker compose ... exec -T db pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > backup-$(date +%F).dump
 ```
 
-## 12. Post-incidente
+## 13. Post-incidente
 
 - Registrar: hora de detección, impacto, causa, mitigación, tiempo de recuperación.
 - Crear una tarea con la causa raíz y una prueba que evite la regresión.

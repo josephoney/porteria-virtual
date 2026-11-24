@@ -1,11 +1,4 @@
-import {
-  pgTable,
-  uuid,
-  varchar,
-  timestamp,
-  text,
-  uniqueIndex,
-} from 'drizzle-orm/pg-core';
+import { integer, pgTable, uuid, varchar, timestamp, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { people } from './people';
 
 export const organizations = pgTable(
@@ -26,6 +19,12 @@ export const organizations = pgTable(
     ),
     logoAssetId: uuid('logo_asset_id'),
     welcomeMessage: text('welcome_message'),
+    /**
+     * Meses que se conserva la identidad del visitante en el registro de acceso.
+     * La organización es la responsable del dato: la plataforma sólo ejecuta la
+     * ventana que ella define.
+     */
+    retentionMonths: integer('retention_months').notNull().default(12),
     profileCompletedAt: timestamp('profile_completed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

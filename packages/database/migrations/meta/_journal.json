@@ -232,6 +232,20 @@
       "when": 1795547336189,
       "tag": "0032_icy_photon",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795550831744,
+      "tag": "0033_mean_purple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795556400000,
+      "tag": "0034_bitacora_redaction",
+      "breakpoints": true
     }
   ]
 }

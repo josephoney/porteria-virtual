@@ -6,6 +6,7 @@ import multipart from '@fastify/multipart';
 import { registerMembershipGuard } from './plugins/auth.js';
 import { startOutboxWorker, stopOutboxWorker } from './workers/outbox.worker.js';
 import { startPassAlertsWorker, stopPassAlertsWorker } from './workers/pass-alerts.worker.js';
+import { startRetentionWorker, stopRetentionWorker } from './workers/retention.worker.js';
 import config, { validateConfig } from './config.js';
 import { errorHandler } from './plugins/error-handler.js';
 import { createDb } from '@porteria/database';
@@ -243,9 +244,11 @@ export async function buildApp() {
 
   await startOutboxWorker(app.log);
   startPassAlertsWorker();
+  startRetentionWorker();
   app.addHook('onClose', async () => {
     stopOutboxWorker();
     stopPassAlertsWorker();
+    stopRetentionWorker();
   });
 
   return { app, authenticate };

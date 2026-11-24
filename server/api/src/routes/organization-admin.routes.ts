@@ -8,6 +8,11 @@ import { auditCommunityEvent } from '../services/audit.service.js';
 import { insertEvent } from '../services/events.service.js';
 import { can } from '../services/admin-permissions.service.js';
 import { parseGeographyCreate, parseGeographyPatch } from '../lib/geography.js';
+import {
+  RETENTION_MAX_MONTHS,
+  RETENTION_MIN_MONTHS,
+  listRetentionRuns,
+} from '../services/retention.service.js';
 
 const db = createDb();
 
@@ -118,6 +123,24 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
     },
   );
 
+  app.get(
+    '/me/retention-runs',
+    { preHandler: [requireRole('org_admin')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (rejectPlatform(request, reply)) return;
+      const user = getUser(request);
+      if (!can(user, 'organization.read', { organizationId: user.orgId })) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: 'Forbidden',
+          message: 'Insufficient permissions',
+        });
+      }
+      const runs = await listRetentionRuns(user.orgId);
+      return { data: runs };
+    },
+  );
+
   app.patch(
     '/me',
     { preHandler: [requireRole('org_admin')] },
@@ -141,6 +164,7 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         legalRepresentativePersonId?: string | null;
         logoAssetId?: string | null;
         welcomeMessage?: string | null;
+        retentionMonths?: number;
       };
 
       const geography = parseGeographyPatch(body);
@@ -149,6 +173,19 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
           statusCode: 400,
           error: 'Bad Request',
           message: 'Invalid geography fields',
+        });
+      }
+
+      if (
+        body.retentionMonths !== undefined &&
+        (!Number.isInteger(body.retentionMonths) ||
+          body.retentionMonths < RETENTION_MIN_MONTHS ||
+          body.retentionMonths > RETENTION_MAX_MONTHS)
+      ) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: `Retention must be between ${RETENTION_MIN_MONTHS} and ${RETENTION_MAX_MONTHS} months`,
         });
       }
 
@@ -199,6 +236,9 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
             ...(body.logoAssetId !== undefined ? { logoAssetId: body.logoAssetId || null } : {}),
             ...(body.welcomeMessage !== undefined
               ? { welcomeMessage: body.welcomeMessage?.trim() || null }
+              : {}),
+            ...(body.retentionMonths !== undefined
+              ? { retentionMonths: body.retentionMonths }
               : {}),
             profileCompletedAt: profileComplete
               ? (existingOrganization?.profileCompletedAt ?? new Date())

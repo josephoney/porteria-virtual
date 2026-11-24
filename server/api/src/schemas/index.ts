@@ -133,6 +133,8 @@ export const geographySchema = z.object({
 export const createOrganizationSchema = z.object({
   name: z.string().min(1).max(255),
   slug: z.string().min(3).max(60).optional(),
+  /** Meses de retención de la identidad del visitante; la organización los ajusta después. */
+  retentionMonths: z.number().int().min(1).max(60).optional(),
   ...geographySchema.shape,
 });
 

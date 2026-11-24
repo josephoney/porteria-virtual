@@ -510,6 +510,7 @@ export async function platformRoutes(app: FastifyInstance) {
           municipality: body.municipality?.trim() || null,
           department: body.department?.trim() || null,
           country: body.country?.trim() || null,
+          ...(body.retentionMonths !== undefined ? { retentionMonths: body.retentionMonths } : {}),
         })
         .returning();
       audit(request, 'organization.created', created.id, null, { slug: created.slug });

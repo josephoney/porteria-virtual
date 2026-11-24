@@ -21,9 +21,21 @@ interface OrganizationProfile {
   department: string | null;
   country: string | null;
   welcomeMessage: string | null;
+  /** Months the organization keeps visitor identity in the access record. */
+  retentionMonths: number;
   legalRepresentativePersonId: string | null;
   logoAssetId: string | null;
   profileCompletedAt: string | null;
+}
+
+interface RetentionRun {
+  id: string;
+  ranAt: string;
+  retentionMonths: number;
+  dryRun: boolean;
+  anonymizedPasses: number;
+  anonymizedScans: number;
+  anonymizedEntries: number;
 }
 
 interface PersonOption {
@@ -37,6 +49,7 @@ interface PersonOption {
 export function MyOrganizationPage() {
   const [organization, setOrganization] = useState<OrganizationProfile | null>(null);
   const [people, setPeople] = useState<PersonOption[]>([]);
+  const [runs, setRuns] = useState<RetentionRun[]>([]);
   const [form, setForm] = useState({
     nit: '',
     phone: '',
@@ -45,6 +58,7 @@ export function MyOrganizationPage() {
     department: '',
     country: '',
     welcomeMessage: '',
+    retentionMonths: '12',
     legalRepresentativePersonId: '',
   });
   const [loading, setLoading] = useState(true);
@@ -84,12 +98,14 @@ export function MyOrganizationPage() {
     setLoading(true);
     setError('');
     try {
-      const [result, peopleResult] = await Promise.all([
+      const [result, peopleResult, runsResult] = await Promise.all([
         get<OrganizationProfile>('/api/organizations/me'),
         get<PersonOption[]>('/api/people?pageSize=100'),
+        get<RetentionRun[]>('/api/organizations/me/retention-runs'),
       ]);
       setOrganization(result.data);
       setPeople(peopleResult.data);
+      setRuns(runsResult.data);
       setForm({
         nit: result.data.nit ?? '',
         phone: result.data.phone ?? '',
@@ -98,6 +114,7 @@ export function MyOrganizationPage() {
         department: result.data.department ?? '',
         country: result.data.country ?? '',
         welcomeMessage: result.data.welcomeMessage ?? '',
+        retentionMonths: String(result.data.retentionMonths ?? 12),
         legalRepresentativePersonId: result.data.legalRepresentativePersonId ?? '',
       });
     } catch (err) {
@@ -145,6 +162,7 @@ export function MyOrganizationPage() {
         country: form.country || null,
         legalRepresentativePersonId: form.legalRepresentativePersonId || null,
         welcomeMessage: form.welcomeMessage || null,
+        retentionMonths: Number(form.retentionMonths) || 12,
       });
       setOrganization(result.data);
       setSaved(true);
@@ -312,12 +330,66 @@ export function MyOrganizationPage() {
               placeholder="Opcional"
             />
           </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="org-retention">Retención de datos</Label>
+            <Input
+              id="org-retention"
+              type="number"
+              min={1}
+              max={60}
+              value={form.retentionMonths}
+              onChange={(event) => setForm({ ...form, retentionMonths: event.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Meses que se conserva la identidad del visitante. Después de ese plazo el registro
+              permanece —fecha, portería, resultado y turno— pero el nombre, el documento, la placa
+              y los acompañantes se reemplazan por un valor anónimo. Entre 1 y 60 meses.
+            </p>
+          </div>
           <div className="sm:col-span-2">
             <Button type="submit" disabled={saving}>
               {saving ? 'Guardando…' : 'Guardar cambios'}
             </Button>
           </div>
         </form>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-bold">Corridas de retención</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Cada corrida registra cuántos registros salieron de la ventana. Mientras la escritura esté
+          desactivada, la corrida simula y no modifica datos.
+        </p>
+        {runs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Todavía no hay corridas registradas.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="pb-2 text-left font-medium">Fecha</th>
+                  <th className="pb-2 text-right font-medium">Meses</th>
+                  <th className="pb-2 text-left font-medium">Modo</th>
+                  <th className="pb-2 text-right font-medium">Pases</th>
+                  <th className="pb-2 text-right font-medium">Escaneos</th>
+                  <th className="pb-2 text-right font-medium">Bitácora</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map((run) => (
+                  <tr key={run.id} className="border-t border-border">
+                    <td className="py-2">{new Date(run.ranAt).toLocaleString('es-CO')}</td>
+                    <td className="py-2 text-right font-mono">{run.retentionMonths}</td>
+                    <td className="py-2">{run.dryRun ? 'Simulación' : 'Aplicada'}</td>
+                    <td className="py-2 text-right font-mono">{run.anonymizedPasses}</td>
+                    <td className="py-2 text-right font-mono">{run.anonymizedScans}</td>
+                    <td className="py-2 text-right font-mono">{run.anonymizedEntries}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

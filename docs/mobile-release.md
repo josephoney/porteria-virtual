@@ -80,7 +80,7 @@ eas submit --platform android --profile production
 - [ ] `eas.json` con `production` y `autoIncrement`.
 - [ ] Icono, adaptive icon y splash definitivos.
 - [ ] Nombre visible “Zima QR Access” y descripción de tienda.
-- [ ] Política de privacidad publicada (cámara, documento de visitante, retención).
+- [ ] Política de privacidad publicada (cámara, documento de visitante, retención): declarar que la identidad se conserva durante la ventana que define la organización (12 meses por defecto) y se anonimiza después.
 - [ ] Permiso de cámara explicado en la ficha de tienda.
 - [ ] Deep link `zima-qr-access://` probado.
 - [ ] Login residente/guardia, turno, escaneo, confirmación y rechazo probados en dispositivo real.
