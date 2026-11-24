@@ -141,7 +141,9 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         });
       }
       const runs = await listRetentionRuns(user.orgId);
-      return { data: runs };
+      // Array directo: el cliente ya envuelve la respuesta en `{ data }`, y una
+      // segunda envoltura deja `runs` como objeto y rompe la pantalla.
+      return runs;
     },
   );
 
@@ -159,7 +161,7 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         });
       }
       const holds = await listRetentionHolds(user.orgId);
-      return { data: holds };
+      return holds;
     },
   );
 

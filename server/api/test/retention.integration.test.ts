@@ -682,7 +682,7 @@ describe('retención de datos de acceso', () => {
   it('lista las corridas de la más reciente a la más antigua', async () => {
     const response = await request('GET', '/api/organizations/me/retention-runs', adminToken);
     assert.equal(response.statusCode, 200);
-    const runs = JSON.parse(response.body).data as { ranAt: string; dryRun: boolean }[];
+    const runs = JSON.parse(response.body) as { ranAt: string; dryRun: boolean }[];
     assert.ok(runs.length >= 3);
     const timestamps = runs.map((run) => new Date(run.ranAt).getTime());
     const sorted = [...timestamps].sort((a, b) => b - a);
