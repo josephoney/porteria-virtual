@@ -48,6 +48,13 @@ export const communities = pgTable('communities', {
    */
   passDailyLimitEnabled: boolean('pass_daily_limit_enabled').notNull().default(true),
   passDailyLimit: integer('pass_daily_limit').notNull().default(50),
+  /**
+   * Dynamic QR access is also a rule of each community: one administration wants
+   * passes with a rotating QR, another keeps working with the document at the gate.
+   * `DYNAMIC_QR_ENABLED=false` remains as the emergency switch that turns the
+   * feature off everywhere without touching what each community decided.
+   */
+  dynamicQrEnabled: boolean('dynamic_qr_enabled').notNull().default(true),
   status: communityStatusEnum('status').notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

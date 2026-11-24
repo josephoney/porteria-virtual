@@ -22,7 +22,12 @@ import type { PassGrant, PassResult } from './pass-errors.js';
 const db = createDb();
 
 type AccessPassRow = typeof accessPasses.$inferSelect;
-type FoundPass = { pass: AccessPassRow; communityName: string; timezone: string };
+type FoundPass = {
+  pass: AccessPassRow;
+  communityName: string;
+  timezone: string;
+  dynamicQrEnabled: boolean;
+};
 
 async function findPassByToken(token: string): Promise<FoundPass | null> {
   const [row] = await db
@@ -30,6 +35,7 @@ async function findPassByToken(token: string): Promise<FoundPass | null> {
       pass: accessPasses,
       communityName: communities.name,
       timezone: communities.timezone,
+      dynamicQrEnabled: communities.dynamicQrEnabled,
     })
     .from(accessPasses)
     .innerJoin(communities, eq(accessPasses.communityId, communities.id))
@@ -114,6 +120,19 @@ function checkActive(found: FoundPass): PassResult<null> {
   return { ok: true, data: null };
 }
 
+/**
+ * The dynamic QR is a rule of the community: a pass issued by a community that
+ * turned it off stops resolving its link and its code. The environment switch is
+ * checked first, without touching the database, because it turns the feature off
+ * for every community at once.
+ */
+function checkDynamicQr(found: FoundPass): PassResult<null> {
+  if (!config.features.dynamicQrEnabled || !found.dynamicQrEnabled) {
+    return { ok: false, code: 'dynamic_qr_disabled' };
+  }
+  return { ok: true, data: null };
+}
+
 export async function previewPass(
   token: string,
   bindings: PassDeviceBinding[],
@@ -122,6 +141,9 @@ export async function previewPass(
 
   const found = await findPassByToken(token);
   if (!found) return { ok: false, code: 'not_found' };
+
+  const qrGate = checkDynamicQr(found);
+  if (!qrGate.ok) return qrGate;
 
   const link = checkLink(found);
   if (!link.ok) return link;
@@ -167,6 +189,9 @@ export async function bindPass(
 
   const found = await findPassByToken(token);
   if (!found) return { ok: false, code: 'not_found' };
+
+  const qrGate = checkDynamicQr(found);
+  if (!qrGate.ok) return qrGate;
 
   const link = checkLink(found);
   if (!link.ok) return link;
@@ -243,6 +268,9 @@ export async function getPublicQr(
   const found = await findPassByToken(token);
   if (!found) return { ok: false, code: 'not_found' };
 
+  const qrGate = checkDynamicQr(found);
+  if (!qrGate.ok) return qrGate;
+
   const link = checkLink(found);
   if (!link.ok) return link;
   const active = checkActive(found);
@@ -274,6 +302,9 @@ export async function getPublicStatus(
 
   const found = await findPassByToken(token);
   if (!found) return { ok: false, code: 'not_found' };
+
+  const qrGate = checkDynamicQr(found);
+  if (!qrGate.ok) return qrGate;
 
   const link = checkLink(found);
   if (!link.ok) return link;
@@ -324,6 +355,7 @@ export async function listDevicePasses(
       pass: accessPasses,
       communityName: communities.name,
       timezone: communities.timezone,
+      dynamicQrEnabled: communities.dynamicQrEnabled,
     })
     .from(accessPasses)
     .innerJoin(communities, eq(accessPasses.communityId, communities.id))
@@ -335,6 +367,8 @@ export async function listDevicePasses(
 
   for (const row of rows) {
     const found: FoundPass = row;
+    // A community that turned the dynamic QR off does not show its passes here.
+    if (!found.dynamicQrEnabled) continue;
     // The binding must be proven by this very request, not remembered by the server.
     if (!isBound(found, bindings)) continue;
 

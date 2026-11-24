@@ -136,6 +136,7 @@ export async function communityRoutes(app: FastifyInstance) {
           welcomeMessage: communities.welcomeMessage,
           passDailyLimitEnabled: communities.passDailyLimitEnabled,
           passDailyLimit: communities.passDailyLimit,
+          dynamicQrEnabled: communities.dynamicQrEnabled,
           logoAssetId: communities.logoAssetId,
           status: communities.status,
         })
@@ -429,6 +430,7 @@ export async function communityRoutes(app: FastifyInstance) {
         welcomeMessage?: string | null;
         passDailyLimitEnabled?: boolean;
         passDailyLimit?: number;
+        dynamicQrEnabled?: boolean;
         status?: 'active' | 'inactive';
       };
 
@@ -492,6 +494,9 @@ export async function communityRoutes(app: FastifyInstance) {
             ? { passDailyLimitEnabled: body.passDailyLimitEnabled }
             : {}),
           ...(body.passDailyLimit !== undefined ? { passDailyLimit: body.passDailyLimit } : {}),
+          ...(body.dynamicQrEnabled !== undefined
+            ? { dynamicQrEnabled: body.dynamicQrEnabled }
+            : {}),
           ...(body.status !== undefined ? { status: body.status } : {}),
           updatedAt: new Date(),
         })

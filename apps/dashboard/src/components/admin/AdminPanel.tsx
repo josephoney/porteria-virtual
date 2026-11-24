@@ -46,6 +46,8 @@ interface Community {
   welcomeMessage: string | null;
   passDailyLimitEnabled: boolean;
   passDailyLimit: number;
+  /** Whether this community issues dynamic QR passes. */
+  dynamicQrEnabled: boolean;
   logoAssetId: string | null;
   administratorEmail: string | null;
   status: string;
@@ -245,6 +247,7 @@ const emptyCommunityForm = {
   /** The daily rule the administration sets for this community. */
   passDailyLimitEnabled: true,
   passDailyLimit: '50',
+  dynamicQrEnabled: true,
   timezone: 'America/Bogota',
   slug: '',
 };
@@ -259,6 +262,7 @@ function mergeCommunity(
     welcomeMessage: string | null;
     passDailyLimitEnabled: boolean;
     passDailyLimit: number;
+    dynamicQrEnabled: boolean;
   },
   saved: Partial<Community> & { id?: string },
 ): Community | null {
@@ -273,6 +277,7 @@ function mergeCommunity(
     welcomeMessage: saved.welcomeMessage ?? (payload.welcomeMessage || null),
     passDailyLimitEnabled: saved.passDailyLimitEnabled ?? payload.passDailyLimitEnabled,
     passDailyLimit: saved.passDailyLimit ?? payload.passDailyLimit,
+    dynamicQrEnabled: saved.dynamicQrEnabled ?? payload.dynamicQrEnabled,
     logoAssetId: saved.logoAssetId ?? null,
     administratorEmail: saved.administratorEmail ?? null,
     status: saved.status ?? 'active',
@@ -610,6 +615,7 @@ export function AdminPanel() {
       welcomeMessage: community.welcomeMessage ?? '',
       passDailyLimitEnabled: community.passDailyLimitEnabled ?? true,
       passDailyLimit: String(community.passDailyLimit ?? 50),
+      dynamicQrEnabled: community.dynamicQrEnabled ?? true,
       timezone: '',
       slug: '',
     });
@@ -654,6 +660,7 @@ export function AdminPanel() {
       welcomeMessage: communityForm.welcomeMessage || null,
       passDailyLimitEnabled: communityForm.passDailyLimitEnabled,
       passDailyLimit: Number(communityForm.passDailyLimit) || 50,
+      dynamicQrEnabled: communityForm.dynamicQrEnabled,
       ...(communityForm.timezone ? { timezone: communityForm.timezone } : {}),
       ...(communityForm.slug ? { slug: communityForm.slug } : {}),
     };
@@ -981,7 +988,7 @@ export function AdminPanel() {
                     <div className="space-y-0.5">
                       <p className="text-sm font-medium">Reglas</p>
                       <p className="text-xs text-muted-foreground">
-                        Cuántas autorizaciones puede crear cada unidad por día.
+                        Cómo se emiten y cuántas autorizaciones puede crear cada unidad por día.
                       </p>
                     </div>
                     <label className="flex items-center gap-2 text-sm">
@@ -1017,6 +1024,27 @@ export function AdminPanel() {
                       />
                       <p className="text-xs text-muted-foreground">
                         Entre 1 y 500. Desactiva el límite para no restringir.
+                      </p>
+                    </div>
+                    <div className="space-y-1 border-t border-border pt-3">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          id="admin-community-dynamic-qr"
+                          type="checkbox"
+                          checked={communityForm.dynamicQrEnabled}
+                          onChange={(event) =>
+                            setCommunityForm({
+                              ...communityForm,
+                              dynamicQrEnabled: event.target.checked,
+                            })
+                          }
+                          className="size-4 accent-foreground"
+                        />
+                        Pases con QR dinámico
+                      </label>
+                      <p className="text-xs text-muted-foreground">
+                        Con el QR dinámico la persona muestra un código que cambia cada pocos
+                        segundos en lugar de un enlace fijo.
                       </p>
                     </div>
                   </div>
@@ -1203,6 +1231,12 @@ export function AdminPanel() {
                                         community.passDailyLimitEnabled
                                           ? `${community.passDailyLimit} por unidad`
                                           : 'Sin límite'
+                                      }
+                                    />
+                                    <DetailField
+                                      label="QR dinámico"
+                                      value={
+                                        community.dynamicQrEnabled ? 'Habilitado' : 'Deshabilitado'
                                       }
                                     />
                                   </DetailGrid>

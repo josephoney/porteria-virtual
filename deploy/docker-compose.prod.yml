@@ -65,6 +65,8 @@ services:
       TRUST_PROXY: 'true'
       COOKIE_SECURE: 'true'
       SEED_DEMO_DATA: 'false'
+      # Interruptor de emergencia global: cada comunidad habilita o apaga el QR
+      # dinámico desde su configuración. En false, ninguna comunidad lo emite.
       DYNAMIC_QR_ENABLED: 'true'
       CORS_ORIGINS: https://${DASHBOARD_HOST},https://${PASS_WEB_HOST}
       PUBLIC_APP_URL: https://${DASHBOARD_HOST}

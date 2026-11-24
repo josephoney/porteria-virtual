@@ -265,6 +265,7 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
           welcomeMessage: communities.welcomeMessage,
           passDailyLimitEnabled: communities.passDailyLimitEnabled,
           passDailyLimit: communities.passDailyLimit,
+          dynamicQrEnabled: communities.dynamicQrEnabled,
         })
         .from(communities)
         .where(eq(communities.organizationId, user.orgId))
@@ -301,6 +302,7 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         welcomeMessage?: string | null;
         passDailyLimitEnabled?: boolean;
         passDailyLimit?: number;
+        dynamicQrEnabled?: boolean;
       };
       if (!body.name?.trim() || !body.address?.trim() || !body.timezone?.trim()) {
         return reply.status(400).send({
@@ -362,6 +364,7 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
             welcomeMessage: body.welcomeMessage?.trim() || null,
             passDailyLimitEnabled: body.passDailyLimitEnabled ?? true,
             passDailyLimit: body.passDailyLimit ?? 50,
+            dynamicQrEnabled: body.dynamicQrEnabled ?? true,
             status: 'active',
           })
           .returning();

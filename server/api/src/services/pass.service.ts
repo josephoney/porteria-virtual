@@ -133,6 +133,30 @@ export async function createPass(
     return { ok: false, code: 'recurring_not_available' };
   }
 
+  /**
+   * The dynamic QR is a rule of the community, not a global setting: each
+   * administration decides if its residents can issue passes.
+   * `DYNAMIC_QR_ENABLED=false` stays as an emergency switch that turns the
+   * feature off everywhere, without touching the stored values.
+   *
+   * The daily limit is a rule of the community as well, so both are read in the
+   * same query: `PASS_DAILY_LIMIT_PER_UNIT=0` is its own emergency switch.
+   */
+  const [communityRule] = await db
+    .select({
+      timezone: communities.timezone,
+      limitEnabled: communities.passDailyLimitEnabled,
+      limit: communities.passDailyLimit,
+      qrEnabled: communities.dynamicQrEnabled,
+    })
+    .from(communities)
+    .where(eq(communities.id, requester.communityId))
+    .limit(1);
+
+  if (!(communityRule?.qrEnabled ?? true)) {
+    return { ok: false, code: 'dynamic_qr_disabled' };
+  }
+
   const personId = await resolvePersonId(requester);
   if (!personId) return { ok: false, code: 'forbidden' };
 
@@ -171,22 +195,6 @@ export async function createPass(
   if (input.pin && !/^\d{4}$/.test(input.pin)) {
     return { ok: false, code: 'invalid' };
   }
-
-  /**
-   * The daily limit is a rule of the community, not a global setting: each
-   * administration decides if it exists and how high it is.
-   * `PASS_DAILY_LIMIT_PER_UNIT=0` stays as an emergency switch that turns the rule
-   * off everywhere, without touching the stored numbers.
-   */
-  const [communityRule] = await db
-    .select({
-      timezone: communities.timezone,
-      limitEnabled: communities.passDailyLimitEnabled,
-      limit: communities.passDailyLimit,
-    })
-    .from(communities)
-    .where(eq(communities.id, requester.communityId))
-    .limit(1);
 
   const limitEnabled = config.passes.dailyLimitPerUnit > 0 && (communityRule?.limitEnabled ?? true);
 
@@ -421,6 +429,21 @@ async function prepareBatch(
   }
   if (input.visitors.length > PASS_BATCH_MAX_VISITORS) {
     return { ok: false, code: 'batch_too_large' };
+  }
+
+  /**
+   * The batch creates passes, so it obeys the same community rule as
+   * `createPass`: one community can keep the dynamic QR off while the rest keep
+   * issuing passes.
+   */
+  const [communityQr] = await db
+    .select({ qrEnabled: communities.dynamicQrEnabled })
+    .from(communities)
+    .where(eq(communities.id, requester.communityId))
+    .limit(1);
+
+  if (!(communityQr?.qrEnabled ?? true)) {
+    return { ok: false, code: 'dynamic_qr_disabled' };
   }
 
   const personId = await resolvePersonId(requester);

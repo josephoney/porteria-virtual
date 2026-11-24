@@ -10,7 +10,8 @@ o rechazar el ingreso y consultar el historial de turnos.
 - Node 20+
 - pnpm
 - Expo Go o un development build para probar en un dispositivo
-- API de PorteriaVirtual corriendo con `DYNAMIC_QR_ENABLED=true`
+- API de PorteriaVirtual corriendo con `DYNAMIC_QR_ENABLED=true` (interruptor
+  global de emergencia; la comunidad debe tener habilitado su QR dinámico)
 
 ## Configuración
 

@@ -55,6 +55,8 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?falta JWT_REFRESH_SECRET}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?falta INTERNAL_API_KEY}
       PASS_QR_SECRET: ${PASS_QR_SECRET:?falta PASS_QR_SECRET}
+      # Interruptor de emergencia global: cada comunidad habilita o apaga el QR
+      # dinámico desde su configuración. En false, ninguna comunidad lo emite.
       DYNAMIC_QR_ENABLED: ${DYNAMIC_QR_ENABLED:-true}
       COOKIE_SECURE: 'true'
       PUBLIC_APP_URL: https://${STAGING_DOMAIN}

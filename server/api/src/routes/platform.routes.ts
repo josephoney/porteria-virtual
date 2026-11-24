@@ -634,6 +634,7 @@ export async function platformRoutes(app: FastifyInstance) {
           address: body.address,
           timezone: body.timezone,
           organizationId: body.organizationId,
+          dynamicQrEnabled: body.dynamicQrEnabled ?? true,
         })
         .returning();
       audit(request, 'community.created', created.organizationId, created.id, {
@@ -663,6 +664,7 @@ export async function platformRoutes(app: FastifyInstance) {
           address: body.address ?? existing.address,
           timezone: body.timezone ?? existing.timezone,
           status: body.status ?? existing.status,
+          dynamicQrEnabled: body.dynamicQrEnabled ?? existing.dynamicQrEnabled,
           slug,
           updatedAt: new Date(),
         })

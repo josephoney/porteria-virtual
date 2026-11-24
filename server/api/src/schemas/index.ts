@@ -143,10 +143,11 @@ export const updateOrganizationSchema = z.object({
   ...geographySchema.shape,
 });
 
-/** The daily authorization rule the administration sets per community. */
+/** The authorization rules the administration sets per community. */
 const passRuleShape = {
   passDailyLimitEnabled: z.boolean().optional(),
   passDailyLimit: z.coerce.number().int().min(1).max(500).optional(),
+  dynamicQrEnabled: z.boolean().optional(),
 };
 
 export const createCommunitySchema = z.object({

@@ -13,6 +13,10 @@ Public visitor page for the dynamic QR access flow. It is served at `/p/:token` 
    pnpm --filter @porteria/api dev
    ```
 
+   `DYNAMIC_QR_ENABLED` is the global emergency switch. Each community also has
+   its own *Pases con QR dinámico* rule (on by default) in its configuration, so
+   a community can stop issuing dynamic QR passes without touching the API.
+
 2. Start the page:
 
    ```powershell

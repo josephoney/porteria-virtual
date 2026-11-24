@@ -2123,4 +2123,43 @@ describe('dynamic pass integration', () => {
       assert.equal(serialized.includes('qrToken'), false, event.eventType);
     }
   });
+
+  it('aplica la regla de QR dinámico de la comunidad', async () => {
+    const created = await createPass();
+    const token = linkToken(created);
+
+    // La administración apaga la regla para esta comunidad.
+    const off = await request(
+      'PATCH',
+      `/api/communities/${communityId}`,
+      { dynamicQrEnabled: false },
+      orgAdminToken,
+    );
+    assert.equal(off.statusCode, 200, off.body);
+    assert.equal(parse(off).dynamicQrEnabled, false);
+
+    try {
+      // Un pase nuevo se rechaza aunque la función esté encendida en el entorno.
+      const blocked = await postPass();
+      assert.equal(blocked.statusCode, 404, blocked.body);
+      assert.equal(parse(blocked).message, 'dynamic_qr_disabled');
+
+      // Un enlace ya emitido tampoco abre.
+      const preview = await request('GET', `/api/public/passes/${token}`);
+      assert.equal(preview.statusCode, 404, preview.body);
+      assert.equal(parse(preview).message, 'dynamic_qr_disabled');
+    } finally {
+      const on = await request(
+        'PATCH',
+        `/api/communities/${communityId}`,
+        { dynamicQrEnabled: true },
+        orgAdminToken,
+      );
+      assert.equal(on.statusCode, 200, on.body);
+    }
+
+    // Al volver a habilitarla, la comunidad emite pases otra vez.
+    const allowed = await createPass();
+    assert.ok(allowed.qrToken);
+  });
 });

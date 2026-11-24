@@ -200,8 +200,10 @@
 
 - [x] 17.1 Moved to `add-guard-shifts-and-access-bitacora` (Bitácora de accesos over
       `bitacora_entries`), archivado el 2026-11-12.
-- [ ] 17.2 Move `DYNAMIC_QR_ENABLED` to per-community configuration. Sigue siendo
-      global en `config.ts` y en los compose de staging y producción.
+- [x] 17.2 Move `DYNAMIC_QR_ENABLED` to per-community configuration. Ahora es
+      `communities.dynamic_qr_enabled` (default `true`, migración 0032), editable
+      en la tarjeta «Reglas» de la comunidad. La env queda como interruptor de
+      emergencia global: el QR se emite sólo si la env y la comunidad lo permiten.
 - [ ] 17.3 Define PII retention for passes and scans. Abierto en
       `docs/produccion-checklist.md`.
 - [x] 17.4 Persist denied scan attempts. Viven en `bitacora_entries` como

@@ -35,6 +35,10 @@ function getRequester(request: FastifyRequest): PassRequester {
   };
 }
 
+/**
+ * Emergency switch: `DYNAMIC_QR_ENABLED=false` turns the feature off for every
+ * community at once. The rule of each community is applied by the service.
+ */
 async function dynamicQrGuard(_request: FastifyRequest, reply: FastifyReply) {
   if (!config.features.dynamicQrEnabled) {
     return reply
