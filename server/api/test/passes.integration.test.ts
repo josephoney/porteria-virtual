@@ -151,13 +151,28 @@ function linkToken(pass: { shareUrl: string }) {
 async function bind(token: string) {
   const response = await request('POST', `/api/public/passes/${token}/bind`, {});
   assert.equal(response.statusCode, 200, response.body);
-  return { cookie: extractCookie(response), body: parse(response) };
+  const cookie = extractCookie(response);
+  // El pase no entrega su QR hasta que el visitante acepta el aviso.
+  const consent = await app.inject({
+    method: 'POST',
+    url: `/api/public/passes/${token}/consent`,
+    headers: { cookie },
+  });
+  assert.equal(consent.statusCode, 200, consent.body);
+  return { cookie, body: parse(response) };
 }
 
 async function bindCookies(token: string) {
   const response = await request('POST', `/api/public/passes/${token}/bind`, {});
   assert.equal(response.statusCode, 200, response.body);
-  return { cookies: extractCookies(response), body: parse(response) };
+  const cookies = extractCookies(response);
+  const consent = await app.inject({
+    method: 'POST',
+    url: `/api/public/passes/${token}/consent`,
+    headers: { cookie: cookieHeader(cookies) },
+  });
+  assert.equal(consent.statusCode, 200, consent.body);
+  return { cookies, body: parse(response) };
 }
 
 async function publicQr(token: string, cookie?: string) {

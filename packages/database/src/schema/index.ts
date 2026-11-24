@@ -46,6 +46,7 @@ export { guardShiftSegments } from './guard-shift-segments';
 export { bitacoraEntries, bitacoraEntryTypeEnum, bitacoraSourceEnum } from './bitacora-entries';
 export { bitacoraComments } from './bitacora-comments';
 export { retentionRuns } from './retention-runs';
+export { retentionHolds } from './retention-holds';
 
 export {
   peopleRelations,

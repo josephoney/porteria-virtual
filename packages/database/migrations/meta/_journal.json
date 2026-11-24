@@ -246,6 +246,13 @@
       "when": 1795556400000,
       "tag": "0034_bitacora_redaction",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795562400000,
+      "tag": "0035_visitor_privacy",
+      "breakpoints": true
     }
   ]
 }

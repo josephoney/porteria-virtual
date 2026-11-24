@@ -25,15 +25,17 @@ export async function sweepRetention() {
       passes: acc.passes + outcome.passes,
       scans: acc.scans + outcome.scans,
       entries: acc.entries + outcome.entries,
+      preserved: acc.preserved + outcome.preserved,
     }),
-    { passes: 0, scans: 0, entries: 0 },
+    { passes: 0, scans: 0, entries: 0, preserved: 0 },
   );
 
   // The per-organization rows are already stored; this is the operator's line.
   console.log(
     `[retention] ${dryRun ? 'dry run' : 'applied'}: ` +
       `${outcomes.length} organization(s), ${totals.passes} pass(es), ` +
-      `${totals.scans} scan(s), ${totals.entries} bitacora entry(ies)`,
+      `${totals.scans} scan(s), ${totals.entries} bitacora entry(ies), ` +
+      `${totals.preserved} row(s) kept by an active hold`,
   );
 }
 

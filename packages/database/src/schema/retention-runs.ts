@@ -16,8 +16,8 @@ export const retentionRuns = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
     ranAt: timestamp('ran_at', { withTimezone: true }).defaultNow().notNull(),
-    /** Ventana aplicada, en meses, al momento de la corrida. */
-    retentionMonths: integer('retention_months').notNull(),
+    /** Ventana aplicada, en días, al momento de la corrida. */
+    retentionDays: integer('retention_days').notNull(),
     dryRun: boolean('dry_run').notNull(),
     anonymizedPasses: integer('anonymized_passes').notNull().default(0),
     anonymizedScans: integer('anonymized_scans').notNull().default(0),

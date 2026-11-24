@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { assetObjectUrl, get, patch, upload } from '../lib/apiClient';
+import { assetObjectUrl, get, patch, post, upload } from '../lib/apiClient';
 import { COUNTRIES } from '../lib/countries';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/ui/button';
@@ -21,8 +21,8 @@ interface OrganizationProfile {
   department: string | null;
   country: string | null;
   welcomeMessage: string | null;
-  /** Months the organization keeps visitor identity in the access record. */
-  retentionMonths: number;
+  /** Days the organization keeps visitor identity in the access record. */
+  retentionDays: number;
   legalRepresentativePersonId: string | null;
   logoAssetId: string | null;
   profileCompletedAt: string | null;
@@ -31,12 +31,26 @@ interface OrganizationProfile {
 interface RetentionRun {
   id: string;
   ranAt: string;
-  retentionMonths: number;
+  retentionDays: number;
   dryRun: boolean;
   anonymizedPasses: number;
   anonymizedScans: number;
   anonymizedEntries: number;
 }
+
+interface RetentionHold {
+  id: string;
+  communityId: string | null;
+  fromDate: string;
+  toDate: string;
+  reason: string;
+  createdAt: string;
+  expiresAt: string;
+  releasedAt: string | null;
+}
+
+/** Windows the platform accepts; the API rejects anything else. */
+const RETENTION_WINDOWS = [30, 60, 90] as const;
 
 interface PersonOption {
   id: string;
@@ -50,6 +64,10 @@ export function MyOrganizationPage() {
   const [organization, setOrganization] = useState<OrganizationProfile | null>(null);
   const [people, setPeople] = useState<PersonOption[]>([]);
   const [runs, setRuns] = useState<RetentionRun[]>([]);
+  const [holds, setHolds] = useState<RetentionHold[]>([]);
+  const [holdForm, setHoldForm] = useState({ fromDate: '', toDate: '', reason: '', expiresAt: '' });
+  const [creatingHold, setCreatingHold] = useState(false);
+  const [holdError, setHoldError] = useState('');
   const [form, setForm] = useState({
     nit: '',
     phone: '',
@@ -58,7 +76,7 @@ export function MyOrganizationPage() {
     department: '',
     country: '',
     welcomeMessage: '',
-    retentionMonths: '12',
+    retentionDays: '30',
     legalRepresentativePersonId: '',
   });
   const [loading, setLoading] = useState(true);
@@ -98,14 +116,16 @@ export function MyOrganizationPage() {
     setLoading(true);
     setError('');
     try {
-      const [result, peopleResult, runsResult] = await Promise.all([
+      const [result, peopleResult, runsResult, holdsResult] = await Promise.all([
         get<OrganizationProfile>('/api/organizations/me'),
         get<PersonOption[]>('/api/people?pageSize=100'),
         get<RetentionRun[]>('/api/organizations/me/retention-runs'),
+        get<RetentionHold[]>('/api/organizations/me/retention-holds'),
       ]);
       setOrganization(result.data);
       setPeople(peopleResult.data);
       setRuns(runsResult.data);
+      setHolds(holdsResult.data);
       setForm({
         nit: result.data.nit ?? '',
         phone: result.data.phone ?? '',
@@ -114,7 +134,7 @@ export function MyOrganizationPage() {
         department: result.data.department ?? '',
         country: result.data.country ?? '',
         welcomeMessage: result.data.welcomeMessage ?? '',
-        retentionMonths: String(result.data.retentionMonths ?? 12),
+        retentionDays: String(result.data.retentionDays ?? 30),
         legalRepresentativePersonId: result.data.legalRepresentativePersonId ?? '',
       });
     } catch (err) {
@@ -162,7 +182,7 @@ export function MyOrganizationPage() {
         country: form.country || null,
         legalRepresentativePersonId: form.legalRepresentativePersonId || null,
         welcomeMessage: form.welcomeMessage || null,
-        retentionMonths: Number(form.retentionMonths) || 12,
+        retentionDays: Number(form.retentionDays) || 30,
       });
       setOrganization(result.data);
       setSaved(true);
@@ -172,6 +192,41 @@ export function MyOrganizationPage() {
       setSaving(false);
     }
   }
+
+  async function createHold(event: React.FormEvent) {
+    event.preventDefault();
+    setCreatingHold(true);
+    setHoldError('');
+    try {
+      await post('/api/organizations/me/retention-holds', {
+        fromDate: holdForm.fromDate,
+        toDate: holdForm.toDate,
+        reason: holdForm.reason,
+        expiresAt: holdForm.expiresAt,
+      });
+      setHoldForm({ fromDate: '', toDate: '', reason: '', expiresAt: '' });
+      await load();
+    } catch (err) {
+      setHoldError(err instanceof Error ? err.message : 'No se pudo crear la preservación.');
+    } finally {
+      setCreatingHold(false);
+    }
+  }
+
+  async function releaseHold(id: string) {
+    setHoldError('');
+    try {
+      await post(`/api/organizations/me/retention-holds/${id}/release`, {});
+      await load();
+    } catch (err) {
+      setHoldError(err instanceof Error ? err.message : 'No se pudo liberar la preservación.');
+    }
+  }
+
+  const currentWindow = Number(form.retentionDays);
+  const windowOptions = (RETENTION_WINDOWS as readonly number[]).includes(currentWindow)
+    ? [...RETENTION_WINDOWS]
+    : [currentWindow, ...RETENTION_WINDOWS];
 
   if (loading) {
     return (
@@ -332,18 +387,24 @@ export function MyOrganizationPage() {
           </div>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="org-retention">Retención de datos</Label>
-            <Input
+            <select
               id="org-retention"
-              type="number"
-              min={1}
-              max={60}
-              value={form.retentionMonths}
-              onChange={(event) => setForm({ ...form, retentionMonths: event.target.value })}
-            />
+              className="h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 py-1 text-base outline-none focus-visible:border-ring md:text-sm"
+              value={form.retentionDays}
+              onChange={(event) => setForm({ ...form, retentionDays: event.target.value })}
+            >
+              {windowOptions.map((days) => (
+                <option key={days} value={String(days)}>
+                  {days} días
+                </option>
+              ))}
+            </select>
             <p className="text-xs text-muted-foreground">
-              Meses que se conserva la identidad del visitante. Después de ese plazo el registro
-              permanece —fecha, portería, resultado y turno— pero el nombre, el documento, la placa
-              y los acompañantes se reemplazan por un valor anónimo. Entre 1 y 60 meses.
+              Días que se conserva la identidad del visitante con nombre y documento legibles.
+              Después de ese plazo el registro permanece —fecha, portería, resultado y turno— pero
+              el nombre, el documento, la placa y los acompañantes se reemplazan por un valor
+              anónimo. El mínimo es 30 días porque una investigación de seguridad suele abrirse
+              semanas después del hecho.
             </p>
           </div>
           <div className="sm:col-span-2">
@@ -352,6 +413,114 @@ export function MyOrganizationPage() {
             </Button>
           </div>
         </form>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-1 text-sm font-bold">Preservaciones</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Si ocurrió un incidente, preserva el rango de fechas que lo cubre antes de que la
+          retención lo anonimice. La preservación no impide la anonimización de otros días y vence
+          sola en la fecha que indiques.
+        </p>
+
+        {holds.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No hay preservaciones registradas.</p>
+        ) : (
+          <div className="mb-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="pb-2 text-left font-medium">Desde</th>
+                  <th className="pb-2 text-left font-medium">Hasta</th>
+                  <th className="pb-2 text-left font-medium">Motivo</th>
+                  <th className="pb-2 text-left font-medium">Vence</th>
+                  <th className="pb-2 text-left font-medium">Estado</th>
+                  <th className="pb-2 text-right font-medium" />
+                </tr>
+              </thead>
+              <tbody>
+                {holds.map((hold) => {
+                  const released = hold.releasedAt != null;
+                  return (
+                    <tr key={hold.id} className="border-t border-border">
+                      <td className="py-2">{formatDay(hold.fromDate)}</td>
+                      <td className="py-2">{formatDay(hold.toDate)}</td>
+                      <td className="py-2">{hold.reason}</td>
+                      <td className="py-2">{formatDay(hold.expiresAt.slice(0, 10))}</td>
+                      <td className="py-2">
+                        {released ? 'Liberada' : 'Activa'}
+                        {hold.communityId == null && !released ? ' · Toda la organización' : ''}
+                      </td>
+                      <td className="py-2 text-right">
+                        {released ? null : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="xs"
+                            onClick={() => releaseHold(hold.id)}
+                          >
+                            Liberar
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <form className="grid gap-3 sm:grid-cols-2" onSubmit={createHold}>
+          <div className="space-y-1">
+            <Label htmlFor="hold-from">Desde</Label>
+            <Input
+              id="hold-from"
+              type="date"
+              required
+              value={holdForm.fromDate}
+              onChange={(event) => setHoldForm({ ...holdForm, fromDate: event.target.value })}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="hold-to">Hasta</Label>
+            <Input
+              id="hold-to"
+              type="date"
+              required
+              value={holdForm.toDate}
+              onChange={(event) => setHoldForm({ ...holdForm, toDate: event.target.value })}
+            />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="hold-reason">Motivo</Label>
+            <Input
+              id="hold-reason"
+              required
+              minLength={5}
+              value={holdForm.reason}
+              onChange={(event) => setHoldForm({ ...holdForm, reason: event.target.value })}
+              placeholder="Por ejemplo: incidente del 18 de noviembre, caso 2026-114"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="hold-expires">Vence</Label>
+            <Input
+              id="hold-expires"
+              type="date"
+              required
+              value={holdForm.expiresAt}
+              onChange={(event) => setHoldForm({ ...holdForm, expiresAt: event.target.value })}
+            />
+          </div>
+          <div className="flex items-end">
+            <Button type="submit" variant="outline" disabled={creatingHold}>
+              {creatingHold ? 'Creando…' : 'Preservar rango'}
+            </Button>
+          </div>
+        </form>
+
+        {holdError && <p className="mt-2 text-sm text-destructive">{holdError}</p>}
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
@@ -368,7 +537,7 @@ export function MyOrganizationPage() {
               <thead className="text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="pb-2 text-left font-medium">Fecha</th>
-                  <th className="pb-2 text-right font-medium">Meses</th>
+                  <th className="pb-2 text-right font-medium">Días</th>
                   <th className="pb-2 text-left font-medium">Modo</th>
                   <th className="pb-2 text-right font-medium">Pases</th>
                   <th className="pb-2 text-right font-medium">Escaneos</th>
@@ -379,7 +548,7 @@ export function MyOrganizationPage() {
                 {runs.map((run) => (
                   <tr key={run.id} className="border-t border-border">
                     <td className="py-2">{new Date(run.ranAt).toLocaleString('es-CO')}</td>
-                    <td className="py-2 text-right font-mono">{run.retentionMonths}</td>
+                    <td className="py-2 text-right font-mono">{run.retentionDays}</td>
                     <td className="py-2">{run.dryRun ? 'Simulación' : 'Aplicada'}</td>
                     <td className="py-2 text-right font-mono">{run.anonymizedPasses}</td>
                     <td className="py-2 text-right font-mono">{run.anonymizedScans}</td>
@@ -393,4 +562,10 @@ export function MyOrganizationPage() {
       </div>
     </div>
   );
+}
+
+/** `YYYY-MM-DD` (or an ISO timestamp) to a local day, without shifting the date. */
+function formatDay(value: string): string {
+  const [year, month, day] = value.slice(0, 10).split('-');
+  return `${day}/${month}/${year}`;
 }

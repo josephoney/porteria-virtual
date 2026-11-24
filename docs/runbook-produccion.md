@@ -159,22 +159,25 @@ docker compose ... exec -T db pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" -
 5. Levantar API/web y verificar `/ready`, login y un pase de prueba.
 6. Registrar el incidente y el RPO/RTO real.
 
-## 11. Retención de datos
+## 11. Retención y privacidad de datos
 
-La identidad del visitante no se borra: pasado el plazo se **anonimiza**. La fila
-queda con fecha, portería, resultado, motivo y turno; desaparecen el nombre, el
-documento, la placa, los acompañantes y el nombre del autorizador. Los reportes
-no cambian, porque leen el evento y nunca la identidad.
+La identidad del visitante no se borra: pasada la ventana se **anonimiza**. La
+fila queda con fecha, portería, resultado, motivo y turno; desaparecen el nombre,
+el documento, la placa y los acompañantes, y el resumen de la bitácora pasa a
+«Acceso anonimizado». El **nombre de quien autorizó se conserva**: no es el dato
+del visitante y es lo que responde quién dejó entrar. Los reportes no cambian,
+porque leen el evento y nunca la identidad.
 
-El plazo lo define cada organización en **Mi organización → Retención de datos**
-(1 a 60 meses, 12 por defecto). La organización es la responsable del dato.
+La ventana la define cada organización en **Mi organización → Retención de
+datos**: 30, 60 o 90 días (30 por defecto). La organización es la responsable del
+dato. El detalle del tratamiento está en `docs/tratamiento-datos-personales.md`.
 
 1. El barrido corre cada `RETENTION_INTERVAL_MINUTES` (1440 por defecto) y, si
    `RETENTION_WRITE_ENABLED` no es `true`, **sólo simula**: cuenta lo que haría y
    registra la corrida sin escribir. Es el estado por defecto.
 2. Para ver qué haría hoy, esperar una corrida de simulación y leer el historial
    en la misma pantalla. También queda en los logs del API:
-   `Retention: org=<id> months=<n> dryRun=<bool> passes=<n> scans=<n> entries=<n>`.
+   `[retention] <dry run|applied>: N organization(s), N pass(es), N scan(s), N bitacora entry(ies), N row(s) kept by an active hold`.
 3. Para habilitar la escritura: `RETENTION_WRITE_ENABLED=true` y reiniciar el
    API. La primera corrida real ocurre recién al cumplirse el intervalo, no al
    arrancar.
@@ -182,16 +185,34 @@ El plazo lo define cada organización en **Mi organización → Retención de da
 5. Idempotencia: una segunda corrida sobre la misma ventana informa cero filas.
    La marca de anonimizado (`visitor_document = 'ANONIMIZADO'`) evita reprocesar.
 
+### Preservación por incidente
+
+Cuando ocurre un incidente, la organización preserva un rango de fechas antes de
+que la ventana lo alcance, desde **Mi organización → Preservaciones**. Tiene
+motivo, autor y **vencimiento obligatorio**; mientras esté vigente el barrido no
+toca ese rango y lo informa como `preserved`. Al liberarla, el rango vuelve a
+quedar sujeto a la ventana.
+
+Preservar no copia datos: sólo impide su anonimización durante el plazo.
+
 **Si se anonimizó por error**: no hay rollback. La identidad se sobrescribió en
 `access_passes`, `pass_scans` y `bitacora_entries`; sólo el backup la recupera,
 y restaurarlo devuelve también el resto de los datos a ese momento — evaluar el
 costo antes. Si el plazo estaba mal, corregirlo en la organización **antes** de
 la siguiente corrida.
 
+### Consentimiento
+
+El pase no entrega su QR hasta que la persona acepte el aviso: la casilla no
+viene premarcada y el sistema registra fecha, IP, agente y versión de la política.
+Si el guardia registra la entrada sin que la persona haya abierto el enlace, el
+consentimiento queda marcado como `at_gate`. Cambiar `PRIVACY_POLICY_VERSION`
+(`server/api/src/lib/privacy-policy.ts`) obliga a aceptar de nuevo.
+
 **Excepción conocida**: `bitacora_entries` es inmutable por trigger
-(`prevent_bitacora_update`, migración 0034). El único `UPDATE` permitido es el
-que quita identidad y nada más; cualquier otro cambio sigue fallando con
-`bitacora rows are immutable`.
+(`prevent_bitacora_update`, migraciones 0034 y 0035). El único `UPDATE` permitido
+es el que quita identidad y nada más —la función compara la forma de la fila—;
+cualquier otro cambio sigue fallando con `bitacora rows are immutable`.
 
 **Fuera de alcance**: el directorio `people`/`accounts` (residentes y personal)
 y la tabla legacy `visitors` no entran en esta ventana. Los textos libres que

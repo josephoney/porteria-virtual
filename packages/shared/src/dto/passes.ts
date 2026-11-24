@@ -74,6 +74,16 @@ export interface PublicPassPreview {
   status: PassStatus;
   presenceState: PresenceState;
   pinRequired: boolean;
+  /**
+   * Estado del aviso de privacidad. Sin aceptación no se emite el QR: la
+   * autorización para tratar el documento tiene que quedar registrada antes de
+   * que la persona muestre el código en la portería.
+   */
+  consent: {
+    accepted: boolean;
+    /** Versión del aviso que hay que aceptar hoy. */
+    policyVersion: string;
+  };
 }
 
 export interface PassStatusResponse {

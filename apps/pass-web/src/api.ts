@@ -55,6 +55,16 @@ export function getQr(token: string): Promise<PassQrResponse> {
   return request<PassQrResponse>(`/${encodeURIComponent(token)}/qr`);
 }
 
+/**
+ * Registra que la persona leyó el aviso y autorizó el tratamiento. Sin esto el
+ * QR no se genera: la autorización tiene que poder demostrarse después.
+ */
+export function acceptConsent(
+  token: string,
+): Promise<{ acceptedAt: string; policyVersion: string }> {
+  return request(`/${encodeURIComponent(token)}/consent`, { method: 'POST' });
+}
+
 export function getStatus(token: string): Promise<PassStatusResponse> {
   return request<PassStatusResponse>(`/${encodeURIComponent(token)}/status`);
 }

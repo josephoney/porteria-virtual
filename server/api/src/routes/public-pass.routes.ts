@@ -150,6 +150,22 @@ export async function publicPassRoutes(app: FastifyInstance) {
     });
   });
 
+  app.post('/:token/consent', async (request, reply) => {
+    if (isLimited(request, reply, 'pass-consent', config.passes.rateLimits.bindPerMinute)) return;
+    const { token } = request.params as { token: string };
+    const result = await publicPassService.acceptConsent(
+      token,
+      {
+        ip: request.ip ?? null,
+        userAgent: request.headers['user-agent'] ?? null,
+      },
+      readPassDeviceBindings(request),
+    );
+    if (!result.ok) return sendPassError(reply, result.code);
+    writePassCookies(request, reply, result.grant, token);
+    return reply.send(result.data);
+  });
+
   app.get('/:token/qr', async (request, reply) => {
     if (isLimited(request, reply, 'pass-qr', config.passes.rateLimits.qrPerMinute)) return;
     const { token } = request.params as { token: string };

@@ -13,6 +13,7 @@ import {
 } from '@porteria/shared';
 import config from '../config.js';
 import type { PassDeviceBinding, PassLinkBinding } from '../lib/device-cookie.js';
+import { PRIVACY_POLICY_VERSION } from '../lib/privacy-policy.js';
 import { randomToken, sha256Hex, verifyDeviceCookie } from '../lib/pass-tokens.js';
 import { buildLocationPath } from './location-path.service.js';
 import { buildPassRule } from './pass-schedule.service.js';
@@ -175,6 +176,10 @@ export async function previewPass(
       maxUses: found.pass.maxUses,
       exitCount: found.pass.exitCount,
       remainingUses: (await buildPassRule(found.pass, found.timezone, new Date())).remainingUses,
+      consent: {
+        accepted: found.pass.consentAcceptedAt != null,
+        policyVersion: PRIVACY_POLICY_VERSION,
+      },
     },
     grant: grantFor(found, bindings),
   };
@@ -259,6 +264,53 @@ export async function bindPass(
   };
 }
 
+export interface ConsentInput {
+  ip: string | null;
+  userAgent: string | null;
+}
+
+/**
+ * Registra la aceptación del aviso de privacidad antes de emitir el QR.
+ *
+ * Es idempotente a propósito: si la persona vuelve a tocar el botón no se
+ * mueve la fecha original. La evidencia es la primera aceptación, con la IP y
+ * el navegador que la dieron.
+ */
+export async function acceptConsent(
+  token: string,
+  input: ConsentInput,
+  bindings: PassDeviceBinding[],
+): Promise<PassResult<{ acceptedAt: string; policyVersion: string }>> {
+  const found = await findPassByToken(token);
+  if (!found) return { ok: false, code: 'not_found' };
+
+  const link = checkLink(found);
+  if (!link.ok) return link;
+  const active = checkActive(found);
+  if (!active.ok) return active;
+
+  const acceptedAt = found.pass.consentAcceptedAt ?? new Date();
+
+  if (found.pass.consentAcceptedAt == null) {
+    await db
+      .update(accessPasses)
+      .set({
+        consentAcceptedAt: acceptedAt,
+        consentIp: input.ip ? input.ip.slice(0, 64) : null,
+        consentUserAgent: input.userAgent ? input.userAgent.slice(0, 255) : null,
+        consentPolicyVersion: PRIVACY_POLICY_VERSION,
+        consentMode: 'link',
+      })
+      .where(and(eq(accessPasses.id, found.pass.id), isNull(accessPasses.consentAcceptedAt)));
+  }
+
+  return {
+    ok: true,
+    data: { acceptedAt: acceptedAt.toISOString(), policyVersion: PRIVACY_POLICY_VERSION },
+    grant: grantFor(found, bindings),
+  };
+}
+
 export async function getPublicQr(
   token: string,
   bindings: PassDeviceBinding[],
@@ -276,6 +328,12 @@ export async function getPublicQr(
   const active = checkActive(found);
   if (!active.ok) return active;
   if (!isBound(found, bindings)) return { ok: false, code: 'not_bound' };
+
+  // El QR es lo que la persona muestra en la portería; sin aceptación registrada
+  // no hay autorización para tratar su documento y el código no se emite.
+  if (found.pass.consentAcceptedAt == null) {
+    return { ok: false, code: 'consent_required' };
+  }
 
   const inside = isInsideSchedule(found.pass, found.timezone);
   if (found.pass.presenceState === 'outside' && !inside) {

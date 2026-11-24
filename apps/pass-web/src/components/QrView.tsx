@@ -8,7 +8,7 @@ import {
   type PassQrResponse,
   type PublicPassPreview,
 } from '@porteria/shared';
-import { ApiError, getQr, getStatus } from '../api';
+import { ApiError, acceptConsent, getQr, getStatus } from '../api';
 import { formatDateTime, formatRemaining, formatTime } from '../lib/format';
 import { TICKET_TONE_BACKGROUNDS, TICKET_TONE_TEXT } from '../lib/ticket-tone';
 
@@ -30,6 +30,13 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
   const [status, setStatus] = useState(preview.status);
   const [exitCount, setExitCount] = useState(preview.exitCount);
   const [remainingUses, setRemainingUses] = useState(preview.remainingUses);
+  // El aviso se acepta una vez por pase. Mientras no esté aceptado no se pide
+  // el QR: mostrar el código sin la autorización registrada dejaría el acceso
+  // sin prueba de consentimiento.
+  const [consentAccepted, setConsentAccepted] = useState(preview.consent.accepted);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState(false);
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
   // Momento de vencimiento medido con el reloj del dispositivo. Se recalcula
@@ -43,12 +50,32 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
       setSeconds(next.expiresInSeconds);
       setQr(next);
     } catch (error) {
-      if (error instanceof ApiError) onExitRef.current(error.code);
-      else onExitRef.current('request_failed');
+      if (error instanceof ApiError) {
+        // El servidor es la autoridad: si el consentimiento falta, se pide acá
+        // aunque la vista previa lo diera por aceptado.
+        if (error.code === 'consent_required') setConsentAccepted(false);
+        else onExitRef.current(error.code);
+      } else {
+        onExitRef.current('request_failed');
+      }
+    }
+  }, [token]);
+
+  const handleAcceptConsent = useCallback(async () => {
+    setAccepting(true);
+    setConsentError(null);
+    try {
+      await acceptConsent(token);
+      setConsentAccepted(true);
+    } catch {
+      setConsentError('No se pudo registrar la autorización. Intenta de nuevo.');
+    } finally {
+      setAccepting(false);
     }
   }, [token]);
 
   useEffect(() => {
+    if (!consentAccepted) return;
     void refreshQr();
 
     const statusTimer = window.setInterval(() => {
@@ -73,7 +100,7 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
     return () => {
       window.clearInterval(statusTimer);
     };
-  }, [refreshQr, token]);
+  }, [consentAccepted, refreshQr, token]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -154,26 +181,59 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
           {PASS_ACTION_LABEL[action]}
         </p>
 
-        <div className="qr-box">
-          {qr ? (
-            <>
-              <QRCodeSVG
-                value={qr.token}
-                size={280}
-                level="M"
-                marginSize={2}
-                bgColor="#ffffff"
-                fgColor="#0b1220"
+        {consentAccepted ? (
+          <div className="qr-box">
+            {qr ? (
+              <>
+                <QRCodeSVG
+                  value={qr.token}
+                  size={280}
+                  level="M"
+                  marginSize={2}
+                  bgColor="#ffffff"
+                  fgColor="#0b1220"
+                />
+                <p className="hint">Se actualiza solo · {formatRemaining(seconds)}</p>
+              </>
+            ) : (
+              <div className="qr-placeholder">
+                <span className="spinner" aria-hidden="true" />
+                <span>Generando QR…</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="consent">
+            <h2 style={{ margin: '0 0 6px', fontSize: 18 }}>Antes de mostrar el QR</h2>
+            <p className="lead" style={{ marginTop: 0 }}>
+              Para controlar el acceso, la portería registra tu nombre y tu documento. La comunidad
+              conserva esos datos durante el plazo de su política y después reemplaza la identidad
+              por un valor anónimo: el registro del ingreso permanece, tus datos personales no.
+            </p>
+            <label className="consent-check">
+              <input
+                type="checkbox"
+                checked={consentChecked}
+                onChange={(event) => setConsentChecked(event.target.checked)}
               />
-              <p className="hint">Se actualiza solo · {formatRemaining(seconds)}</p>
-            </>
-          ) : (
-            <div className="qr-placeholder">
-              <span className="spinner" aria-hidden="true" />
-              <span>Generando QR…</span>
-            </div>
-          )}
-        </div>
+              <span>
+                He leído el aviso y autorizo el tratamiento de mis datos para controlar el acceso.
+              </span>
+            </label>
+            {consentError && <p className="error">{consentError}</p>}
+            <button
+              className="primary"
+              type="button"
+              disabled={!consentChecked || accepting}
+              onClick={() => void handleAcceptConsent()}
+            >
+              {accepting ? 'Registrando…' : 'Aceptar y mostrar el QR'}
+            </button>
+            <p className="hint">
+              Puedes pedir el aviso completo en la portería o a quien autorizó tu visita.
+            </p>
+          </div>
+        )}
 
         <dl className="details">
           <div>
@@ -210,10 +270,12 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
           )}
         </dl>
 
-        <p className="hint">
-          Muestra este QR en la portería. Se renueva automáticamente cada{' '}
-          {qr?.expiresInSeconds ?? 24} segundos.
-        </p>
+        {consentAccepted && (
+          <p className="hint">
+            Muestra este QR en la portería. Se renueva automáticamente cada{' '}
+            {qr?.expiresInSeconds ?? 24} segundos.
+          </p>
+        )}
         <a className="secondary-link" href="/p/mis-pases">
           Mis pases
         </a>

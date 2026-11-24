@@ -23,6 +23,7 @@ import type {
 import config from '../config.js';
 import { insertBitacoraEntry } from './bitacora.service.js';
 import { publishPassEvent } from '../lib/pass-bus.js';
+import { PRIVACY_POLICY_VERSION } from '../lib/privacy-policy.js';
 import { buildLocationPath } from './location-path.service.js';
 import { resolveDestinationById } from './pass-destination.service.js';
 import { enqueueEvent } from './outbox.service.js';
@@ -887,6 +888,16 @@ export async function confirmIdentityEntry(
           ? { entryAt: now, entryCount: sql`${accessPasses.entryCount} + 1` }
           : { exitAt: now, exitCount: sql`${accessPasses.exitCount} + 1` }),
         status: nextStatus,
+        // La persona no abrió el enlace: la autorización se captura en la
+        // portería, con el guardia delante. Si ya había aceptado por el enlace,
+        // esa aceptación manda y no se reescribe.
+        ...(pass.consentAcceptedAt == null
+          ? {
+              consentAcceptedAt: now,
+              consentPolicyVersion: PRIVACY_POLICY_VERSION,
+              consentMode: 'at_gate',
+            }
+          : {}),
         updatedAt: now,
       })
       .where(eq(accessPasses.id, pass.id));

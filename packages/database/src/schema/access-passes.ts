@@ -91,6 +91,17 @@ export const accessPasses = pgTable(
     exitCount: integer('exit_count').notNull().default(0),
     batchId: uuid('batch_id'),
     batchLabel: varchar('batch_label', { length: 80 }),
+    /**
+     * Autorización del visitante para tratar sus datos. Se guarda el momento, la
+     * dirección desde la que aceptó y la versión del aviso que leyó: sin eso la
+     * autorización no se puede demostrar.
+     */
+    consentAcceptedAt: timestamp('consent_accepted_at', { withTimezone: true }),
+    consentIp: varchar('consent_ip', { length: 64 }),
+    consentUserAgent: varchar('consent_user_agent', { length: 255 }),
+    consentPolicyVersion: varchar('consent_policy_version', { length: 20 }),
+    /** `link`: aceptó en el pase. `at_gate`: la autorización se registró al escanear. */
+    consentMode: varchar('consent_mode', { length: 20 }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

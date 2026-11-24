@@ -51,6 +51,7 @@ export function passErrorStatus(code: PassErrorCode): number {
       return 403;
     case 'destination_inactive':
     case 'batch_too_large':
+    case 'consent_required':
       return 400;
     default:
       return 400;

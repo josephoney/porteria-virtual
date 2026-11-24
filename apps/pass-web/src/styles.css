@@ -194,6 +194,27 @@ dd {
   font-size: 12px;
 }
 
+.consent {
+  display: grid;
+  gap: 12px;
+  padding: 18px 4px 8px;
+}
+
+.consent-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.consent-check input {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
 .qr-placeholder {
   display: grid;
   place-items: center;

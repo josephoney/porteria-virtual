@@ -28,7 +28,8 @@ export type PassErrorCode =
   | 'not_on_shift_at_access_point'
   | 'foreign_community'
   | 'destination_inactive'
-  | 'batch_too_large';
+  | 'batch_too_large'
+  | 'consent_required';
 
 /**
  * What a route needs to keep the device authorized on the way back: the pass

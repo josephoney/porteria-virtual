@@ -195,6 +195,18 @@ function maskDocument(value: string): string {
   return `***${trimmed.slice(-4)}`;
 }
 
+/**
+ * Whether this requester may read the visitor's document unmasked.
+ *
+ * The full document is what lets an administrator answer "who entered" after an
+ * incident. A guard or an operator gets the record they need to work — name,
+ * time, result, reason — without a document they would otherwise collect.
+ */
+function canReadVisitorDocument(requester: BitacoraRequester): boolean {
+  if (requester.isPlatformAdmin) return true;
+  return requester.role === 'org_admin' || requester.role === 'community_admin';
+}
+
 function maskDetails(details: unknown): Record<string, unknown> {
   const clone =
     typeof details === 'object' && details !== null
@@ -545,7 +557,14 @@ export async function getBitacoraEntry(
   return {
     ok: true,
     data: {
-      ...toEntryDto(entry, author, commentDtos.length, true, false, community?.name ?? null),
+      ...toEntryDto(
+        entry,
+        author,
+        commentDtos.length,
+        canReadVisitorDocument(requester),
+        false,
+        community?.name ?? null,
+      ),
       comments: commentDtos,
     },
   };

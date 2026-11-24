@@ -88,7 +88,15 @@ async function bindPass(token: string): Promise<string> {
   const raw = response.headers['set-cookie'];
   const value = Array.isArray(raw) ? raw[0] : raw;
   assert.ok(value, 'expected a Set-Cookie header');
-  return value.split(';')[0]!;
+  const cookie = value.split(';')[0]!;
+  // El pase no entrega su QR hasta que el visitante acepta el aviso.
+  const consent = await app.inject({
+    method: 'POST',
+    url: `/api/public/passes/${token}/consent`,
+    headers: { cookie },
+  });
+  assert.equal(consent.statusCode, 200, consent.body);
+  return cookie;
 }
 
 async function publicQrToken(token: string, cookie: string): Promise<string> {

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { createDb } from '@porteria/database';
@@ -7,6 +7,7 @@ import {
   bitacoraEntries,
   organizations,
   passScans,
+  retentionHolds,
   retentionRuns,
 } from '@porteria/database/schema';
 
@@ -15,20 +16,30 @@ const db = createDb();
 /** Placeholder that replaces the identity once a record leaves the window. */
 export const ANONYMIZED_NAME = 'Anonimizado';
 export const ANONYMIZED_DOCUMENT = 'ANONIMIZADO';
+/** Generic summary for an entry whose free text carried the visitor's name. */
+export const ANONYMIZED_SUMMARY = 'Acceso anonimizado';
 
-export const RETENTION_MIN_MONTHS = 1;
-export const RETENTION_MAX_MONTHS = 60;
-export const RETENTION_DEFAULT_MONTHS = 12;
+/**
+ * Windows the administration can choose between.
+ *
+ * The window is short on purpose: it has to be long enough to answer "who
+ * entered last month" and short enough to be a retention policy and not an
+ * archive. Thirty days is the default; ninety is the ceiling.
+ */
+export const RETENTION_DAYS_OPTIONS = [30, 60, 90] as const;
+export const RETENTION_DEFAULT_DAYS = 30;
 
 export interface RetentionOutcome {
   organizationId: string;
-  retentionMonths: number;
+  retentionDays: number;
   dryRun: boolean;
   /** Last instant still inside the window; everything older is anonymized. */
   cutoff: string;
   passes: number;
   scans: number;
   entries: number;
+  /** Rows old enough to anonymize but covered by an active legal hold. */
+  preserved: number;
 }
 
 export interface RetentionOptions {
@@ -36,22 +47,13 @@ export interface RetentionOptions {
   dryRun: boolean;
 }
 
-/**
- * Cutoff for a window in months, keeping the day of the month when it exists.
- *
- * `setMonth` alone turns 31 March into 3 March when February is shorter, so the
- * day is clamped to the last valid day of the target month.
- */
-export function retentionCutoff(months: number, now: Date = new Date()): Date {
-  const cutoff = new Date(now.getTime());
-  const day = cutoff.getUTCDate();
-  cutoff.setUTCDate(1);
-  cutoff.setUTCMonth(cutoff.getUTCMonth() - months);
-  const lastDay = new Date(
-    Date.UTC(cutoff.getUTCFullYear(), cutoff.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  cutoff.setUTCDate(Math.min(day, lastDay));
-  return cutoff;
+export function isRetentionWindow(value: number): boolean {
+  return (RETENTION_DAYS_OPTIONS as readonly number[]).includes(value);
+}
+
+/** Cutoff for a window in days. */
+export function retentionCutoff(days: number, now: Date = new Date()): Date {
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
 /** Filter for the rows of an organization, which owns the communities. */
@@ -70,19 +72,50 @@ function stillIdentified(column: AnyPgColumn) {
 }
 
 /**
+ * Rows covered by an active hold of the organization.
+ *
+ * A hold preserves a date range on purpose: an incident, an investigation or a
+ * judicial request. It is a decision of the administration, it has a reason and
+ * an expiration, and while it is active the sweep leaves those rows alone.
+ */
+function notHeld(organizationId: string, communityColumn: AnyPgColumn, atColumn: AnyPgColumn) {
+  return sql`NOT EXISTS (
+    SELECT 1 FROM retention_holds h
+    WHERE h.organization_id = ${organizationId}
+      AND (h.community_id IS NULL OR h.community_id = ${communityColumn})
+      AND ${atColumn} >= h.from_date
+      AND ${atColumn} < (h.to_date + INTERVAL '1 day')
+      AND h.released_at IS NULL
+      AND (h.expires_at IS NULL OR h.expires_at > now())
+  )`;
+}
+
+/** Summary replaced only when it repeats the visitor's first name. */
+const anonymizedSummary = sql`CASE
+  WHEN ${bitacoraEntries.details} -> 'visitor' ->> 'firstName' IS NOT NULL
+   AND summary LIKE '%' || (${bitacoraEntries.details} -> 'visitor' ->> 'firstName') || '%'
+  THEN ${ANONYMIZED_SUMMARY}
+  ELSE summary
+END`;
+
+/**
  * Anonymizes visitor identity older than the organization's window.
  *
  * The record itself stays: type, result, reason, time, access point, shift and
- * pass are what the reports and the readable board read, and none of them is
- * personal data. Deleting the row would erase the operation; replacing the
- * identity preserves the count and removes the person.
+ * the authorizer are what the reports and the readable board read, and none of
+ * them is the visitor's personal data. Deleting the row would erase the
+ * operation; replacing the identity preserves the count and removes the person.
  */
 export async function anonymizeOrganization(
   organizationId: string,
-  months: number,
+  days: number,
   options: RetentionOptions,
 ): Promise<RetentionOutcome> {
-  const cutoff = retentionCutoff(months);
+  if (!isRetentionWindow(days)) {
+    throw new Error(`Retention window must be one of ${RETENTION_DAYS_OPTIONS.join(', ')} days`);
+  }
+
+  const cutoff = retentionCutoff(days);
 
   const outcome = await db.transaction(async (tx) => {
     const passesWhere = and(
@@ -97,36 +130,63 @@ export async function anonymizeOrganization(
       stillIdentified(passScans.visitorDocument),
     );
 
+    // El autorizador no se anonimiza: no es el visitante. La identidad que se
+    // borra vive sólo en el detalle que describe a quien entró.
+    const entriesIdentity = sql`(
+      ${bitacoraEntries.details} ? 'visitor'
+      OR ${bitacoraEntries.details} ? 'companions'
+      OR ${bitacoraEntries.details} ? 'vehiclePlate'
+    )`;
+
     const entriesWhere = and(
       belongsToOrganization(bitacoraEntries.communityId, organizationId),
       lt(bitacoraEntries.createdAt, cutoff),
-      sql`(
-        ${bitacoraEntries.authorizedByName} IS NOT NULL
-        OR ${bitacoraEntries.details} ? 'visitor'
-        OR ${bitacoraEntries.details} ? 'companions'
-        OR ${bitacoraEntries.details} ? 'vehiclePlate'
-        OR ${bitacoraEntries.details} ? 'authorizedByName'
-      )`,
+      entriesIdentity,
+    );
+
+    const passesHeld = notHeld(organizationId, accessPasses.communityId, accessPasses.validUntil);
+    const scansHeld = notHeld(organizationId, passScans.communityId, passScans.scannedAt);
+    const entriesHeld = notHeld(
+      organizationId,
+      bitacoraEntries.communityId,
+      bitacoraEntries.createdAt,
     );
 
     const [passes] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(accessPasses)
-      .where(passesWhere);
+      .where(and(passesWhere, passesHeld));
     const [scans] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(passScans)
-      .where(scansWhere);
+      .where(and(scansWhere, scansHeld));
     const [entries] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(bitacoraEntries)
-      .where(entriesWhere);
+      .where(and(entriesWhere, entriesHeld));
+
+    const [heldPasses] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(accessPasses)
+      .where(and(passesWhere, sql`NOT (${passesHeld})`));
+    const [heldScans] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(passScans)
+      .where(and(scansWhere, sql`NOT (${scansHeld})`));
+    const [heldEntries] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(bitacoraEntries)
+      .where(and(entriesWhere, sql`NOT (${entriesHeld})`));
 
     const counts = {
       passes: Number(passes?.count ?? 0),
       scans: Number(scans?.count ?? 0),
       entries: Number(entries?.count ?? 0),
     };
+    const preserved =
+      Number(heldPasses?.count ?? 0) +
+      Number(heldScans?.count ?? 0) +
+      Number(heldEntries?.count ?? 0);
 
     if (!options.dryRun) {
       if (counts.passes > 0) {
@@ -140,7 +200,7 @@ export async function anonymizeOrganization(
             vehiclePlate: null,
             hasVehicle: false,
           })
-          .where(passesWhere);
+          .where(and(passesWhere, passesHeld));
       }
 
       if (counts.scans > 0) {
@@ -152,29 +212,28 @@ export async function anonymizeOrganization(
             visitorDocument: ANONYMIZED_DOCUMENT,
             vehiclePlate: null,
           })
-          .where(scansWhere);
+          .where(and(scansWhere, scansHeld));
       }
 
       if (counts.entries > 0) {
         await tx
           .update(bitacoraEntries)
           .set({
-            authorizedByName: null,
+            summary: anonymizedSummary,
             details: sql`(
-              ${bitacoraEntries.details}
-              - 'visitor' - 'companions' - 'vehiclePlate' - 'authorizedByName'
+              ${bitacoraEntries.details} - 'visitor' - 'companions' - 'vehiclePlate'
             )`,
           })
-          .where(entriesWhere);
+          .where(and(entriesWhere, entriesHeld));
       }
     }
 
-    return counts;
+    return { ...counts, preserved };
   });
 
   await db.insert(retentionRuns).values({
     organizationId,
-    retentionMonths: months,
+    retentionDays: days,
     dryRun: options.dryRun,
     anonymizedPasses: outcome.passes,
     anonymizedScans: outcome.scans,
@@ -183,7 +242,7 @@ export async function anonymizeOrganization(
 
   return {
     organizationId,
-    retentionMonths: months,
+    retentionDays: days,
     dryRun: options.dryRun,
     cutoff: cutoff.toISOString(),
     ...outcome,
@@ -195,13 +254,17 @@ export async function anonymizeAllOrganizations(
   options: RetentionOptions,
 ): Promise<RetentionOutcome[]> {
   const rows = await db
-    .select({ id: organizations.id, months: organizations.retentionMonths })
+    .select({ id: organizations.id, days: organizations.retentionDays })
     .from(organizations)
     .orderBy(asc(organizations.name));
 
   const outcomes: RetentionOutcome[] = [];
   for (const row of rows) {
-    outcomes.push(await anonymizeOrganization(row.id, row.months, options));
+    try {
+      outcomes.push(await anonymizeOrganization(row.id, row.days, options));
+    } catch (error) {
+      console.error(`Retention: organization ${row.id} failed`, error);
+    }
   }
   return outcomes;
 }
@@ -214,4 +277,77 @@ export async function listRetentionRuns(organizationId: string, limit = 20) {
     .where(eq(retentionRuns.organizationId, organizationId))
     .orderBy(desc(retentionRuns.ranAt))
     .limit(limit);
+}
+
+/** Holds of an organization: the active ones first, then the latest created. */
+export async function listRetentionHolds(organizationId: string, limit = 50) {
+  return db
+    .select()
+    .from(retentionHolds)
+    .where(eq(retentionHolds.organizationId, organizationId))
+    .orderBy(
+      desc(
+        sql`(${retentionHolds.releasedAt} IS NULL AND (${retentionHolds.expiresAt} IS NULL OR ${retentionHolds.expiresAt} > now()))`,
+      ),
+      desc(retentionHolds.createdAt),
+    )
+    .limit(limit);
+}
+
+export interface RetentionHoldInput {
+  organizationId: string;
+  communityId: string | null;
+  fromDate: string;
+  toDate: string;
+  reason: string;
+  createdByPersonId: string | null;
+  /** Obligatorio: una preservación sin fin sería retención indefinida. */
+  expiresAt: Date;
+}
+
+/**
+ * Creates a hold over a date range.
+ *
+ * Without a hold an incident older than the window cannot be investigated: the
+ * identity is already gone. The hold is the documented exception, with an
+ * author, a reason and an expiration.
+ */
+export async function createRetentionHold(input: RetentionHoldInput) {
+  const [hold] = await db.insert(retentionHolds).values(input).returning();
+  return hold;
+}
+
+/** Releases a hold so the sweep can anonymize its range again. */
+export async function releaseRetentionHold(
+  organizationId: string,
+  holdId: string,
+  releasedByPersonId: string | null,
+) {
+  const [hold] = await db
+    .update(retentionHolds)
+    .set({ releasedAt: new Date(), releasedByPersonId })
+    .where(
+      and(
+        eq(retentionHolds.id, holdId),
+        eq(retentionHolds.organizationId, organizationId),
+        isNull(retentionHolds.releasedAt),
+      ),
+    )
+    .returning();
+  return hold ?? null;
+}
+
+/** Active holds of an organization, for display and diagnostics. */
+export async function listActiveRetentionHolds(organizationId: string) {
+  return db
+    .select()
+    .from(retentionHolds)
+    .where(
+      and(
+        eq(retentionHolds.organizationId, organizationId),
+        isNull(retentionHolds.releasedAt),
+        or(isNull(retentionHolds.expiresAt), sql`${retentionHolds.expiresAt} > now()`),
+      ),
+    )
+    .orderBy(asc(retentionHolds.fromDate));
 }

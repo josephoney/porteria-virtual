@@ -21,10 +21,18 @@ import {
   organizations,
   passScans,
   people,
+  retentionHolds,
   retentionRuns,
 } from '@porteria/database/schema';
 
-import { anonymizeOrganization, retentionCutoff } from '../src/services/retention.service.js';
+import { randomToken, sha256Hex } from '../src/lib/pass-tokens.js';
+import { PRIVACY_POLICY_VERSION } from '../src/lib/privacy-policy.js';
+import {
+  anonymizeOrganization,
+  createRetentionHold,
+  releaseRetentionHold,
+  retentionCutoff,
+} from '../src/services/retention.service.js';
 
 const db = createDb();
 
@@ -46,6 +54,11 @@ let adminAccountId: string;
 let adminMembershipId: string;
 let adminToken: string;
 let platformToken: string;
+let operatorToken: string;
+let consentPassId: string;
+let consentLinkToken: string;
+/** Instante fuera de la ventana, compartido con los tests. */
+let oldDateTime: Date;
 let oldPassAId: string;
 let newPassAId: string;
 let oldPassBId: string;
@@ -80,6 +93,39 @@ async function request(
     url,
     headers: { authorization: `Bearer ${token}` },
     ...(payload ? { payload } : {}),
+  });
+}
+
+/** Cookies de una respuesta, listas para acompañar el siguiente pedido. */
+function extractCookies(headers: Record<string, unknown>): Record<string, string> {
+  const raw = headers['set-cookie'];
+  const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
+  const cookies: Record<string, string> = {};
+  for (const item of list) {
+    const pair = item.split(';')[0] ?? '';
+    const index = pair.indexOf('=');
+    if (index <= 0) continue;
+    cookies[pair.slice(0, index)] = pair.slice(index + 1);
+  }
+  return cookies;
+}
+
+/** Pedido al portal público, que se identifica con cookies y no con un token. */
+async function publicRequest(
+  method: 'GET' | 'POST',
+  url: string,
+  options: { cookies?: Record<string, string>; payload?: Record<string, unknown> } = {},
+) {
+  const cookie = options.cookies
+    ? Object.entries(options.cookies)
+        .map(([name, value]) => `${name}=${value}`)
+        .join('; ')
+    : '';
+  return app.inject({
+    method,
+    url,
+    ...(cookie ? { headers: { cookie } } : {}),
+    ...(options.payload ? { payload: options.payload } : {}),
   });
 }
 
@@ -232,10 +278,24 @@ describe('retención de datos de acceso', () => {
       unitId: null,
       isPlatformAdmin: true,
     });
+    // El operador de portería ve el nombre, pero no el documento.
+    operatorToken = app.jwt.sign({
+      sub: adminAccountId,
+      email: `operador-retencion-${suffix}@test.local`,
+      accountId: adminAccountId,
+      personId: adminPersonId,
+      orgId: orgAId,
+      membershipId: adminMembershipId,
+      role: 'operator',
+      communityId: communityAId,
+      unitId: null,
+      isPlatformAdmin: false,
+    });
 
-    // Fuera de la ventana: doce meses hacia atrás, con un día de margen.
-    const cutoff = retentionCutoff(12);
-    const oldValidity = daysBefore(cutoff, 1);
+    // Fuera de la ventana de treinta días: cuarenta y cinco días atrás.
+    const cutoff = retentionCutoff(30);
+    const oldValidity = daysBefore(cutoff, 15);
+    oldDateTime = oldValidity;
 
     const basePass = (linkExpiresAt: Date) => ({
       type: 'entry_exit' as const,
@@ -293,6 +353,29 @@ describe('retención de datos de acceso', () => {
     newPassAId = newPassA.id;
     oldPassBId = oldPassB.id;
 
+    // Pase con token conocido para recorrer el consentimiento público.
+    consentLinkToken = randomToken();
+    const [consentPass] = await db
+      .insert(accessPasses)
+      .values({
+        type: 'entry_exit',
+        maxUses: 10,
+        communityId: communityAId,
+        structureId: structureAId,
+        locationUnitId: unitAId,
+        createdByPersonId: residentPersonId,
+        authorizedByPersonId: residentPersonId,
+        visitorFirstName: 'Visitante',
+        visitorLastName: 'Consentimiento',
+        visitorDocument: 'DOC-CONSENT',
+        validFrom: new Date(),
+        validUntil: new Date(Date.now() + 86_400_000),
+        linkTokenHash: sha256Hex(consentLinkToken),
+        linkExpiresAt: new Date(Date.now() + 86_400_000),
+      })
+      .returning();
+    consentPassId = consentPass.id;
+
     const scanBase = {
       communityId: communityAId,
       locationUnitId: unitAId,
@@ -345,6 +428,7 @@ describe('retención de datos de acceso', () => {
           communityId: communityAId,
           createdAt: oldValidity,
           authorizedByName: 'Guardia Antiguo',
+          summary: 'Ingresó Visitante Antiguo',
           details: {
             action: 'entry',
             visitor: { firstName: 'Visitante', document: 'DOC-ANTIGUO-A' },
@@ -396,13 +480,14 @@ describe('retención de datos de acceso', () => {
   });
 
   after(async () => {
+    await db.delete(retentionHolds).where(inArray(retentionHolds.organizationId, [orgAId, orgBId]));
     const communityIds = [communityAId, communityBId];
     await db.delete(retentionRuns).where(inArray(retentionRuns.organizationId, [orgAId, orgBId]));
     await db.delete(bitacoraEntries).where(inArray(bitacoraEntries.communityId, communityIds));
     await db.delete(passScans).where(inArray(passScans.communityId, communityIds));
     await db
       .delete(accessPasses)
-      .where(inArray(accessPasses.id, [oldPassAId, newPassAId, oldPassBId]));
+      .where(inArray(accessPasses.id, [oldPassAId, newPassAId, oldPassBId, consentPassId]));
     await db.delete(locationUnits).where(inArray(locationUnits.communityId, communityIds));
     await db
       .delete(locationStructures)
@@ -417,7 +502,7 @@ describe('retención de datos de acceso', () => {
   });
 
   it('simula la corrida sin escribir y la registra en el historial', async () => {
-    const outcome = await anonymizeOrganization(orgAId, 12, { dryRun: true });
+    const outcome = await anonymizeOrganization(orgAId, 30, { dryRun: true });
 
     assert.equal(outcome.dryRun, true);
     assert.equal(outcome.passes, 1);
@@ -438,12 +523,42 @@ describe('retención de datos de acceso', () => {
       .where(eq(retentionRuns.organizationId, orgAId));
     assert.equal(runs.length, 1);
     assert.equal(runs[0].dryRun, true);
-    assert.equal(runs[0].retentionMonths, 12);
+    assert.equal(runs[0].retentionDays, 30);
     assert.equal(runs[0].anonymizedPasses, 1);
   });
 
+  it('preserva el rango de una investigación abierta', async () => {
+    const hold = await createRetentionHold({
+      organizationId: orgAId,
+      communityId: null,
+      fromDate: localDateString(daysBefore(oldDateTime, 5)),
+      toDate: localDateString(daysBefore(oldDateTime, -5)),
+      reason: 'Investigación de un incidente en portería',
+      createdByPersonId: adminPersonId,
+      expiresAt: new Date(Date.now() + 7 * 86_400_000),
+    });
+
+    const outcome = await anonymizeOrganization(orgAId, 30, { dryRun: false });
+    assert.equal(outcome.passes, 0);
+    assert.equal(outcome.scans, 0);
+    assert.equal(outcome.entries, 0);
+    assert.ok(outcome.preserved >= 3);
+
+    const [pass] = await db
+      .select()
+      .from(accessPasses)
+      .where(eq(accessPasses.id, oldPassAId))
+      .limit(1);
+    assert.equal(pass.visitorDocument, 'DOC-ANTIGUO-A');
+
+    // Liberar la preservación vuelve a dejar el rango en manos de la ventana:
+    // el test siguiente comprueba que ya se anonimiza.
+    const released = await releaseRetentionHold(orgAId, hold.id, adminPersonId);
+    assert.ok(released?.releasedAt);
+  });
+
   it('anonimiza sólo lo que está fuera de la ventana', async () => {
-    const outcome = await anonymizeOrganization(orgAId, 12, { dryRun: false });
+    const outcome = await anonymizeOrganization(orgAId, 30, { dryRun: false });
     assert.equal(outcome.passes, 1);
     assert.equal(outcome.scans, 1);
     assert.equal(outcome.entries, 1);
@@ -476,9 +591,13 @@ describe('retención de datos de acceso', () => {
     assert.equal(oldDetails.visitor, undefined);
     assert.equal(oldDetails.companions, undefined);
     assert.equal(oldDetails.vehiclePlate, undefined);
-    assert.equal(oldDetails.authorizedByName, undefined);
+    // El autorizador no es el visitante: se conserva para poder responder
+    // quién dejó entrar a esa persona.
+    assert.equal(oldDetails.authorizedByName, 'Guardia Antiguo');
     assert.equal(oldDetails.action, 'entry');
-    assert.equal(oldEntry[0].authorizedByName, null);
+    assert.equal(oldEntry[0].authorizedByName, 'Guardia Antiguo');
+    // El resumen llevaba el nombre en texto libre; pasa al marcador genérico.
+    assert.equal(oldEntry[0].summary, 'Acceso anonimizado');
     assert.equal(newEntry[0].authorizedByName, 'Guardia Reciente');
     assert.notEqual((newEntry[0].details as Record<string, unknown>).visitor, undefined);
   });
@@ -513,6 +632,22 @@ describe('retención de datos de acceso', () => {
     assert.equal(entry.authorizedByName, 'Guardia Vecino');
   });
 
+  it('muestra el documento completo al administrador y lo enmascara al operador', async () => {
+    const asOperator = await request('GET', `/api/bitacora/${newEntryAId}`, operatorToken);
+    assert.equal(asOperator.statusCode, 200);
+    const operatorDetails = JSON.parse(asOperator.body).details as {
+      visitor?: { document?: string };
+    };
+    assert.equal(operatorDetails.visitor?.document, '***TE-A');
+
+    const asAdmin = await request('GET', `/api/bitacora/${newEntryAId}`, adminToken);
+    assert.equal(asAdmin.statusCode, 200);
+    const adminDetails = JSON.parse(asAdmin.body).details as {
+      visitor?: { document?: string };
+    };
+    assert.equal(adminDetails.visitor?.document, 'DOC-RECIENTE-A');
+  });
+
   it('el reporte de accesos conserva sus totales', async () => {
     const report = await request(
       'GET',
@@ -524,25 +659,25 @@ describe('retención de datos de acceso', () => {
   });
 
   it('una segunda corrida no encuentra nada que anonimizar', async () => {
-    const outcome = await anonymizeOrganization(orgAId, 12, { dryRun: false });
+    const outcome = await anonymizeOrganization(orgAId, 30, { dryRun: false });
     assert.equal(outcome.passes, 0);
     assert.equal(outcome.scans, 0);
     assert.equal(outcome.entries, 0);
   });
 
   it('rechaza una ventana fuera de rango y guarda la elegida', async () => {
-    for (const invalid of [0, 61, 2.5]) {
+    for (const invalid of [0, 45, 61, 2.5]) {
       const response = await request('PATCH', '/api/organizations/me', adminToken, {
-        retentionMonths: invalid,
+        retentionDays: invalid,
       });
       assert.equal(response.statusCode, 400);
     }
 
     const accepted = await request('PATCH', '/api/organizations/me', adminToken, {
-      retentionMonths: 18,
+      retentionDays: 90,
     });
     assert.equal(accepted.statusCode, 200);
-    assert.equal(JSON.parse(accepted.body).retentionMonths, 18);
+    assert.equal(JSON.parse(accepted.body).retentionDays, 90);
   });
 
   it('lista las corridas de la más reciente a la más antigua', async () => {
@@ -554,6 +689,50 @@ describe('retención de datos de acceso', () => {
     const sorted = [...timestamps].sort((a, b) => b - a);
     assert.deepEqual(timestamps, sorted);
     assert.equal(runs[0].dryRun, false);
+  });
+
+  it('exige el consentimiento antes de entregar el QR público', async () => {
+    const preview = await publicRequest('GET', `/api/public/passes/${consentLinkToken}`);
+    assert.equal(preview.statusCode, 200);
+    assert.equal(JSON.parse(preview.body).consent.accepted, false);
+
+    const bound = await publicRequest('POST', `/api/public/passes/${consentLinkToken}/bind`, {
+      payload: {},
+    });
+    assert.equal(bound.statusCode, 200);
+    const cookies = extractCookies(bound.headers);
+
+    const blocked = await publicRequest('GET', `/api/public/passes/${consentLinkToken}/qr`, {
+      cookies,
+    });
+    assert.equal(blocked.statusCode, 400);
+    assert.equal(JSON.parse(blocked.body).message, 'consent_required');
+
+    const accepted = await publicRequest('POST', `/api/public/passes/${consentLinkToken}/consent`, {
+      cookies,
+    });
+    assert.equal(accepted.statusCode, 200);
+
+    const [pass] = await db
+      .select()
+      .from(accessPasses)
+      .where(eq(accessPasses.id, consentPassId))
+      .limit(1);
+    assert.ok(pass.consentAcceptedAt);
+    assert.equal(pass.consentPolicyVersion, PRIVACY_POLICY_VERSION);
+    assert.equal(pass.consentMode, 'link');
+    assert.ok(pass.consentIp);
+
+    const qr = await publicRequest('GET', `/api/public/passes/${consentLinkToken}/qr`, { cookies });
+    assert.equal(qr.statusCode, 200);
+    assert.ok(JSON.parse(qr.body).token);
+
+    // Aceptar dos veces no reescribe la fecha: la prueba es la primera.
+    const again = await publicRequest('POST', `/api/public/passes/${consentLinkToken}/consent`, {
+      cookies,
+    });
+    assert.equal(again.statusCode, 200);
+    assert.equal(JSON.parse(again.body).acceptedAt, pass.consentAcceptedAt?.toISOString());
   });
 
   it('la bitácora sigue siendo inmutable fuera de la anonimización', async () => {

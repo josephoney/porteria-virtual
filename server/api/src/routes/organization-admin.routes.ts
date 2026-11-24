@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, and } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import { communities, organizations, people } from '@porteria/database/schema';
 import { requireRole } from '../middlewares/rbac.js';
@@ -9,9 +9,12 @@ import { insertEvent } from '../services/events.service.js';
 import { can } from '../services/admin-permissions.service.js';
 import { parseGeographyCreate, parseGeographyPatch } from '../lib/geography.js';
 import {
-  RETENTION_MAX_MONTHS,
-  RETENTION_MIN_MONTHS,
+  RETENTION_DAYS_OPTIONS,
+  createRetentionHold,
+  isRetentionWindow,
+  listRetentionHolds,
   listRetentionRuns,
+  releaseRetentionHold,
 } from '../services/retention.service.js';
 
 const db = createDb();
@@ -26,6 +29,7 @@ function getUser(request: FastifyRequest) {
     role: u.role,
     orgId: u.orgId,
     sub: u.sub,
+    personId: u.personId ?? null,
     communityId: u.communityId ?? null,
     isPlatformAdmin: Boolean(u.isPlatformAdmin),
   };
@@ -141,6 +145,167 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
     },
   );
 
+  app.get(
+    '/me/retention-holds',
+    { preHandler: [requireRole('org_admin')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (rejectPlatform(request, reply)) return;
+      const user = getUser(request);
+      if (!can(user, 'organization.read', { organizationId: user.orgId })) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: 'Forbidden',
+          message: 'Insufficient permissions',
+        });
+      }
+      const holds = await listRetentionHolds(user.orgId);
+      return { data: holds };
+    },
+  );
+
+  app.post(
+    '/me/retention-holds',
+    { preHandler: [requireRole('org_admin')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (rejectPlatform(request, reply)) return;
+      const user = getUser(request);
+      if (!can(user, 'organization.update', { organizationId: user.orgId })) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: 'Forbidden',
+          message: 'Insufficient permissions',
+        });
+      }
+
+      const body = request.body as {
+        communityId?: string | null;
+        fromDate?: string;
+        toDate?: string;
+        reason?: string;
+        expiresAt?: string;
+      };
+
+      const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+      if (
+        !body.fromDate ||
+        !body.toDate ||
+        !datePattern.test(body.fromDate) ||
+        !datePattern.test(body.toDate)
+      ) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'fromDate and toDate are required in YYYY-MM-DD format',
+        });
+      }
+      if (body.fromDate > body.toDate) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'fromDate must not be after toDate',
+        });
+      }
+      const reason = body.reason?.trim() ?? '';
+      if (reason.length < 5) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'A reason is required to preserve a range',
+        });
+      }
+      const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
+      if (!expiresAt || Number.isNaN(expiresAt.getTime())) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'An expiration date is required: a preservation cannot be open ended',
+        });
+      }
+      if (expiresAt.getTime() <= Date.now()) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'The expiration date must be in the future',
+        });
+      }
+      if (body.communityId) {
+        const [community] = await db
+          .select({ id: communities.id })
+          .from(communities)
+          .where(
+            and(eq(communities.id, body.communityId), eq(communities.organizationId, user.orgId)),
+          )
+          .limit(1);
+        if (!community) {
+          return reply.status(400).send({
+            statusCode: 400,
+            error: 'Bad Request',
+            message: 'Community not found',
+          });
+        }
+      }
+
+      const hold = await createRetentionHold({
+        organizationId: user.orgId,
+        communityId: body.communityId || null,
+        fromDate: body.fromDate,
+        toDate: body.toDate,
+        reason,
+        createdByPersonId: user.personId ?? null,
+        expiresAt,
+      });
+
+      await insertEvent({
+        eventType: 'organization.retention.hold.created',
+        actorId: user.sub,
+        actorPersonId: user.personId ?? null,
+        actorRole: user.role,
+        organizationId: user.orgId,
+        communityId: body.communityId || null,
+        metadata: { holdId: hold?.id, fromDate: body.fromDate, toDate: body.toDate },
+      });
+
+      return reply.status(201).send(hold);
+    },
+  );
+
+  app.post(
+    '/me/retention-holds/:id/release',
+    { preHandler: [requireRole('org_admin')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (rejectPlatform(request, reply)) return;
+      const user = getUser(request);
+      if (!can(user, 'organization.update', { organizationId: user.orgId })) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: 'Forbidden',
+          message: 'Insufficient permissions',
+        });
+      }
+      const { id } = request.params as { id: string };
+      const hold = await releaseRetentionHold(user.orgId, id, user.personId ?? null);
+      if (!hold) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Hold not found or already released',
+        });
+      }
+
+      await insertEvent({
+        eventType: 'organization.retention.hold.released',
+        actorId: user.sub,
+        actorPersonId: user.personId ?? null,
+        actorRole: user.role,
+        organizationId: user.orgId,
+        communityId: hold.communityId,
+        metadata: { holdId: hold.id },
+      });
+
+      return hold;
+    },
+  );
+
   app.patch(
     '/me',
     { preHandler: [requireRole('org_admin')] },
@@ -164,7 +329,7 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         legalRepresentativePersonId?: string | null;
         logoAssetId?: string | null;
         welcomeMessage?: string | null;
-        retentionMonths?: number;
+        retentionDays?: number;
       };
 
       const geography = parseGeographyPatch(body);
@@ -176,16 +341,11 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
         });
       }
 
-      if (
-        body.retentionMonths !== undefined &&
-        (!Number.isInteger(body.retentionMonths) ||
-          body.retentionMonths < RETENTION_MIN_MONTHS ||
-          body.retentionMonths > RETENTION_MAX_MONTHS)
-      ) {
+      if (body.retentionDays !== undefined && !isRetentionWindow(body.retentionDays)) {
         return reply.status(400).send({
           statusCode: 400,
           error: 'Bad Request',
-          message: `Retention must be between ${RETENTION_MIN_MONTHS} and ${RETENTION_MAX_MONTHS} months`,
+          message: `Retention must be one of ${RETENTION_DAYS_OPTIONS.join(', ')} days`,
         });
       }
 
@@ -237,9 +397,7 @@ export async function organizationAdminRoutes(app: FastifyInstance) {
             ...(body.welcomeMessage !== undefined
               ? { welcomeMessage: body.welcomeMessage?.trim() || null }
               : {}),
-            ...(body.retentionMonths !== undefined
-              ? { retentionMonths: body.retentionMonths }
-              : {}),
+            ...(body.retentionDays !== undefined ? { retentionDays: body.retentionDays } : {}),
             profileCompletedAt: profileComplete
               ? (existingOrganization?.profileCompletedAt ?? new Date())
               : null,
