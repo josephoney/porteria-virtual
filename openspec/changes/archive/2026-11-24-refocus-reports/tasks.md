@@ -72,5 +72,5 @@
 ## 6. Verificación
 
 - [x] 6.1 Suites unitarias e integración en verde.
-- [ ] 6.2 Smoke manual en staging: reporte diario contra la bitácora del mismo
+- [x] 6.2 Smoke manual en staging: reporte diario contra la bitácora del mismo
       día, turno abierto visible y exportación en los tres formatos.

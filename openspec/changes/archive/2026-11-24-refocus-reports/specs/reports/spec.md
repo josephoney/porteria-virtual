@@ -2,22 +2,23 @@
 
 ### Requirement: The access report describes access activity
 
-The reports surface SHALL report on access activity recorded by the gate, not on
-the calls module. It SHALL present, for the selected period and scope:
+The reports surface SHALL report on the access activity recorded in the gate log
+(`bitacora_entries`), not on the calls module. It SHALL present, for the selected
+period and scope:
 
-- total accesses by result (authorized, denied, code failure),
+- total accesses by result (authorized, denied, code failure, observation),
 - entries and exits as separate counts,
 - accesses by method (QR or document),
 - accesses by access point,
 - accesses by hour of day,
 - denial reasons ordered by frequency,
-- the average time between a scan and its confirmation,
+- the confirmation latency of QR accesses,
 - the same data as a daily, weekly or monthly series.
 
-#### Scenario: Totals match the recorded scans
+#### Scenario: Totals match the recorded accesses
 - **WHEN** a report is requested for a period
-- **THEN** the authorized count equals the number of scans authorized in that
-  period and scope
+- **THEN** the total equals the number of access records in that period and scope
+- **AND** the four results add up to the total
 - **AND** entries and exits are counted separately and never summed
 
 #### Scenario: Denials show why they happened
@@ -25,29 +26,35 @@ the calls module. It SHALL present, for the selected period and scope:
 - **THEN** the report lists the reasons ordered by frequency
 - **AND** a code failure is not counted as a denial
 
-#### Scenario: Confirmation latency comes from the scan
-- **WHEN** the period contains confirmed scans
-- **THEN** the average latency is computed from the scan time to the
-  confirmation time
-- **AND** scans without a confirmation are excluded instead of counted as zero
+#### Scenario: Confirmation latency states its coverage
+- **WHEN** the period contains accesses with a confirmed scan
+- **THEN** the average latency is computed from the scan time to the confirmation
+  time
+- **AND** accesses without a confirmed scan are excluded instead of counted as
+  zero
+- **AND** the response states how many accesses the average covers, so it is not
+  read as applying to every access
 
-### Requirement: The access method is recorded per scan
+### Requirement: The access method comes from the access record
 
-Every scan SHALL record whether the guard verified a QR pass or a document, so
-the method can be reported without inferring it from other records.
+The method SHALL be derived from the access record itself: an access verified by
+document is recorded as a manual identity entry and reported as document, and
+every other access is reported as QR. A pass scan is always a QR scan, so the
+scan row does not drive the method metric.
 
-#### Scenario: A QR entry records the QR method
+#### Scenario: A QR entry is reported as QR
 - **WHEN** a guard authorizes an access by scanning a pass
-- **THEN** the scan records the QR method
+- **THEN** the access record reports the QR method
 
-#### Scenario: A document entry records the document method
+#### Scenario: A document entry is reported as document
 - **WHEN** a guard authorizes an access by verifying a visitor document
-- **THEN** the scan records the document method
+- **THEN** the access record reports the document method
+- **AND** the access is counted in the report even though it has no pass scan
 
-#### Scenario: Existing scans keep a defined method
-- **WHEN** the method column is introduced
-- **THEN** existing scans keep a value, defaulting to the QR method, and the
-  document entries previously identified in the event payload are corrected
+#### Scenario: Existing records keep a defined method
+- **WHEN** the report reads records created before the method was reported
+- **THEN** every record still resolves to QR or document, never to an unknown
+  method
 
 ### Requirement: The shift report describes guard coverage
 
@@ -62,6 +69,7 @@ scope:
 #### Scenario: Hours are computed from the shift
 - **WHEN** a shift is closed
 - **THEN** its duration is computed from its start to its end
+- **AND** the total hours equal the sum of the hours per guard
 - **AND** an open shift is not counted as zero hours; it is reported as open
 
 #### Scenario: Shifts left open are visible
@@ -69,8 +77,9 @@ scope:
 - **THEN** the report lists it as an open shift with its guard and start time
 
 #### Scenario: Accesses are attributed to the shift
-- **WHEN** a scan is registered during a shift
-- **THEN** the shift report counts that access in that shift
+- **WHEN** an access is recorded during a shift
+- **THEN** the shift report counts that access in that shift, whether it came
+  from a QR pass or a document
 - **AND** an access without a shift is not attributed to any guard's shift
 
 ### Requirement: Reports respect the requester scope
