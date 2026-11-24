@@ -200,6 +200,22 @@ dd {
   padding: 18px 4px 8px;
 }
 
+.consent-notice {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted, #555);
+}
+
+.consent-notice summary {
+  cursor: pointer;
+  color: var(--accent, #1a5fb4);
+  font-size: 13px;
+}
+
+.consent-notice p {
+  margin: 8px 0 0;
+}
+
 .consent-check {
   display: flex;
   gap: 10px;

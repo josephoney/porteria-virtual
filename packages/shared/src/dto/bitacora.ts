@@ -39,6 +39,15 @@ export interface BitacoraCommentDto {
 
 export interface BitacoraEntryDetailDto extends BitacoraEntryDto {
   comments: BitacoraCommentDto[];
+  /**
+   * Consentimiento registrado en el pase de esta entrada. Nulo cuando la
+   * entrada no pertenece a un pase o el pase no lo tiene registrado.
+   */
+  consent?: {
+    acceptedAt: string | null;
+    mode: string | null;
+    policyVersion: string | null;
+  } | null;
 }
 
 export interface CreateBitacoraEntryDto {

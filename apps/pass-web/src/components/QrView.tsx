@@ -220,6 +220,16 @@ export function QrView({ token, preview, onExit }: QrViewProps) {
                 He leído el aviso y autorizo el tratamiento de mis datos para controlar el acceso.
               </span>
             </label>
+            <details className="consent-notice">
+              <summary>Leer el aviso completo</summary>
+              <p>
+                En este acceso se registran tu nombre y tu documento para controlar la entrada y
+                atender incidentes. El documento se anonimiza pasados los días que defina la
+                comunidad y tu nombre queda en la constancia del residente que autorizó la visita.
+                Puedes pedir el aviso completo en la portería o a quien autorizó tu visita, y
+                ejercer tus derechos ante la administración de la comunidad.
+              </p>
+            </details>
             {consentError && <p className="error">{consentError}</p>}
             <button
               className="primary"

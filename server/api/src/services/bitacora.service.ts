@@ -2,6 +2,7 @@ import { and, count, desc, eq, gte, inArray, isNull, lte, notInArray, or, sql } 
 import { publishBitacoraEvent } from '../lib/bitacora-bus.js';
 import { createDb } from '@porteria/database';
 import {
+  accessPasses,
   accessPoints,
   accounts,
   bitacoraComments,
@@ -534,6 +535,24 @@ export async function getBitacoraEntry(
     .limit(1);
 
   const author = await loadAuthor(entry);
+
+  // El consentimiento vive en el pase: la entrada sólo guarda a qué pase
+  // pertenece. Se muestra en el detalle para poder probar cuándo y cómo se
+  // autorizó el tratamiento.
+  const consent = entry.passId
+    ? ((
+        await db
+          .select({
+            acceptedAt: accessPasses.consentAcceptedAt,
+            mode: accessPasses.consentMode,
+            policyVersion: accessPasses.consentPolicyVersion,
+          })
+          .from(accessPasses)
+          .where(eq(accessPasses.id, entry.passId))
+          .limit(1)
+      )[0] ?? null)
+    : null;
+
   const comments = await db
     .select({
       comment: bitacoraComments,
@@ -566,6 +585,13 @@ export async function getBitacoraEntry(
         community?.name ?? null,
       ),
       comments: commentDtos,
+      consent: consent
+        ? {
+            acceptedAt: consent.acceptedAt ? consent.acceptedAt.toISOString() : null,
+            mode: consent.mode,
+            policyVersion: consent.policyVersion,
+          }
+        : null,
     },
   };
 }

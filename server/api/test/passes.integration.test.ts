@@ -1986,6 +1986,17 @@ describe('dynamic pass integration', () => {
     assert.equal(afterExit.exitCount, 1);
     assert.equal(afterExit.entryCount, 1);
     assert.equal(afterExit.rule.remainingUses, 1);
+
+    // El residente conserva la hora de cada ingreso y salida, y la cédula se
+    // oculta apenas el pase se usa.
+    const accesses = afterExit.accesses as { action: string; at: string }[];
+    assert.equal(accesses.length, 2);
+    assert.deepEqual(
+      accesses.map((access) => access.action),
+      ['entry', 'exit'],
+    );
+    assert.ok(Date.parse(accesses[0]!.at) <= Date.parse(accesses[1]!.at));
+    assert.match(String(afterExit.visitorDocument), /^\*\*\*/);
   });
 
   it('rejects a use consumed between the scan and the confirmation', async () => {

@@ -73,6 +73,11 @@ interface BitacoraCommentRow {
 
 interface BitacoraDetail extends BitacoraEntryRow {
   comments: BitacoraCommentRow[];
+  consent?: {
+    acceptedAt: string | null;
+    mode: string | null;
+    policyVersion: string | null;
+  } | null;
 }
 
 /** How often the board asks whether a new movement was recorded. */
@@ -548,6 +553,19 @@ export function AccessBitacoraView({
     : null;
   const selectedRule = readText(selectedDetails?.rule);
   const selectedVehicle = readText(selectedDetails?.vehiclePlate);
+  // El consentimiento se guarda en el pase: la entrada sólo dice a cuál
+  // pertenece. Sin él no se puede probar quién autorizó el tratamiento.
+  const selectedConsent = selected?.consent ?? null;
+  const selectedConsentLabel = selectedConsent?.acceptedAt
+    ? selectedConsent.mode === 'at_gate'
+      ? 'En portería'
+      : 'Por enlace'
+    : selectedConsent
+      ? 'Sin registrar'
+      : 'No aplica (sin pase)';
+  const selectedConsentDetail = selectedConsent?.acceptedAt
+    ? `${selectedConsentLabel} · ${new Date(selectedConsent.acceptedAt).toLocaleString('es-CO')}`
+    : selectedConsentLabel;
 
   async function openDetail(entry: BitacoraEntryRow) {
     setDetailOpen(true);
@@ -943,6 +961,7 @@ export function AccessBitacoraView({
                 <DetailField label="Visitante" value={selectedVisitorName ?? '—'} />
                 <DetailField label="Documento" value={selectedVisitorDocument ?? '—'} />
                 <DetailField label="Vehículo" value={selectedVehicle ?? '—'} />
+                <DetailField label="Consentimiento" value={selectedConsentDetail} />
                 <DetailField label="Acción" value={selectedActionLabel ?? '—'} />
                 <DetailField label="Motivo" value={selectedReasonLabel ?? '—'} />
                 <DetailField label="Regla" value={selectedRule ?? '—'} span="full" />

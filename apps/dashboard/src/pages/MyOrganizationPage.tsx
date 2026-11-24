@@ -401,10 +401,13 @@ export function MyOrganizationPage() {
             </select>
             <p className="text-xs text-muted-foreground">
               Días que se conserva la identidad del visitante con nombre y documento legibles.
-              Después de ese plazo el registro permanece —fecha, portería, resultado y turno— pero
-              el nombre, el documento, la placa y los acompañantes se reemplazan por un valor
-              anónimo. El mínimo es 30 días porque una investigación de seguridad suele abrirse
-              semanas después del hecho.
+              Después de ese plazo la bitácora pierde al visitante completo y el pase conserva el
+              nombre como constancia del residente, pero sin documento. El mínimo es 30 días porque
+              una investigación de seguridad suele abrirse semanas después del hecho.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              El aviso que ve el visitante y la política de tratamiento están en{' '}
+              <span className="font-mono">docs/tratamiento-datos-personales.md</span>.
             </p>
           </div>
           <div className="sm:col-span-2">

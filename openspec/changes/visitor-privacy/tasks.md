@@ -1,4 +1,4 @@
-## 1. Datos
+﻿## 1. Datos
 
 - [x] 1.1 Cambiar la ventana a días: `organizations.retention_days` (30, 60 o 90,
       default 30), migrando el valor existente y retirando `retention_months`.
@@ -7,10 +7,11 @@
       versión de la política y modo (`link` o `at_gate`).
 - [x] 1.3 Tabla `retention_holds`: organización, comunidad opcional, rango de
       fechas, motivo, autor, creación, vencimiento y liberación.
-- [x] 1.4 Reescribir el disparador de la bitácora: acepta únicamente el cambio
-      que reemplaza el documento por `ANONIMIZADO`, conserva al autorizador, el
-      resumen y el resto del detalle, y rechaza cualquier otra escritura
-      (migraciones 0035 y 0036).
+- [x] 1.4 Reescribir el disparador de la bitácora: acepta únicamente la forma que
+      anonimiza, conserva al autorizador y el resto de la fila, y rechaza
+      cualquier otra escritura. Las migraciones 0035, 0036 y 0037 terminan
+      aceptando las dos formas que usa el barrido (identidad completa y sólo
+      documento).
 - [x] 1.5 Tests: la columna nueva queda con 30 por defecto, el consentimiento se
       guarda y se lee, y el disparador sigue rechazando cualquier otra escritura.
 
@@ -29,7 +30,9 @@
       enmascarada en cuanto el pase se usa; sólo el escaneo en vivo la muestra
       completa.
 - [x] 2.7 El detalle del pase devuelve la lista de ingresos y salidas con su
-      hora, para que el residente conserve el registro de sus visitas.
+      hora, para que el residente conserve el registro de sus visitas. Cubierto
+      en `passes.integration.test.ts` (dos accesos, en orden, y documento
+      enmascarado después del uso).
 - [x] 2.4 Tests: 29 días conserva, 31 anonimiza, un rango preservado no se toca,
       la liberación lo vuelve elegible, y el autorizador sigue identificado.
       El caso se cubre con 45 días de antigüedad contra una ventana de 30.
@@ -43,7 +46,7 @@
 - [x] 3.3 Al escanear un pase sin consentimiento, el acceso lo registra como
       dado en portería (`consent_mode = 'at_gate'` en la confirmación por documento).
 - [x] 3.4 Página del pase público: aviso, casilla sin premarcar y botón para
-      aceptar antes de mostrar el QR.
+      aceptar antes de mostrar el QR, con el aviso completo desplegable.
 - [x] 3.5 Tests: sin aceptación no hay QR, con aceptación sí, la aceptación no se
       sobrescribe y el escaneo sin consentimiento queda marcado `at_gate`.
 
@@ -68,9 +71,12 @@
 - [x] 5.1 Selector de ventana con 30, 60 y 90 días.
 - [x] 5.2 Gestión de preservaciones: crear con motivo y vencimiento, listar y
       liberar.
-- [ ] 5.3 Estado del consentimiento y su modo en el detalle del ingreso.
-- [ ] 5.4 Playwright: cambiar la ventana, crear y liberar una preservación, y ver
-      el estado del consentimiento.
+- [x] 5.3 Estado del consentimiento y su modo en el detalle del ingreso: el
+      detalle de la bitácora muestra «Por enlace», «En portería», «Sin registrar»
+      o «No aplica (sin pase)», con la fecha.
+- [x] 5.4 Playwright (`tests/organization-retention.spec.ts`): cambia la ventana y
+      la reporta, crea y libera una preservación, y abre el detalle de la
+      bitácora con el consentimiento. 3/3 en verde.
 
 ## 6. Textos legales
 
@@ -79,7 +85,9 @@
 - [x] 6.2 Aviso de portería para el punto de escaneo (texto en el mismo documento).
 - [x] 6.3 Cláusula de transmisión para la empresa de vigilancia (art. 25 del
       Decreto 1377 de 2013, texto en el mismo documento).
-- [ ] 6.4 Enlazar la política desde el aviso del pase público y desde el panel.
+- [x] 6.4 Enlazar la política desde el aviso del pase público y desde el panel: el
+      pase despliega el aviso completo antes de aceptar, y el panel indica dónde
+      está la política.
 
 ## 7. Verificación
 
