@@ -148,9 +148,7 @@ test.describe('Sidebar active state', () => {
     await expectOnlyActive(page, 'Organizaciones');
   });
 
-  test('prefix collision: /analysis/bitacora-accesos does not highlight Auditoría', async ({
-    page,
-  }) => {
+  test('the retired technical view redirects to the readable Bitácora', async ({ page }) => {
     await loginAs(page, DEMO_USERS.orgAdmin);
     await expect(page).toHaveURL(/\/admin$/);
 
@@ -158,9 +156,15 @@ test.describe('Sidebar active state', () => {
     await expect(page).toHaveURL(/\/analysis\/bitacora-accesos$/);
     await expectOnlyActive(page, 'Bitácora de accesos');
 
+    // Auditoría ya no existe para el tenant: el enlace viejo no puede mostrar
+    // una vista técnica que ahora es solo del superadmin.
+    await expect(page.getByRole('link', { name: 'Auditoría', exact: true })).toHaveCount(0);
     await page.goto('/analysis/bitacora');
-    await expect(page).toHaveURL(/\/analysis\/bitacora$/);
-    await expectOnlyActive(page, 'Auditoría');
+    await expect(page).toHaveURL(/\/analysis\/bitacora-accesos$/);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Bitácora de accesos' }),
+    ).toBeVisible();
+    await expectOnlyActive(page, 'Bitácora de accesos');
   });
 
   test('highlight follows sidebar clicks', async ({ page }) => {

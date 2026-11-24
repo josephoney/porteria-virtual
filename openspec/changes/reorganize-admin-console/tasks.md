@@ -49,10 +49,10 @@
 - [ ] 6.1 Keep Bitácora as the readable per-entrance access log
 - [ ] 6.2 Add fields: date, time, result, person, vehicle, guard, authorizer, destination
   section/unit, community and entrance
-- [ ] 6.3 Keep Historial as the technical event view for superadmin only
-- [ ] 6.4 Add organization/community/code traceability and diagnostic metadata to Historial
+- [x] 6.3 Keep Historial as the technical event view for superadmin only
+- [x] 6.4 Add organization/community/code traceability and diagnostic metadata to Historial
 - [ ] 6.5 Keep Reportes for guard/operator, community_admin, org_admin and superadmin with scope
-- [ ] 6.6 Ensure direct access to Historial for non-superadmin returns 403
+- [x] 6.6 Ensure direct access to Historial for non-superadmin returns 403
 
 ## 7. Permissions and scope
 

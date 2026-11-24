@@ -83,6 +83,8 @@ export function registerMembershipGuard(app: FastifyInstance) {
         path.startsWith('/api/location-structures') ||
         path.startsWith('/api/location-units') ||
         path.startsWith('/api/communities/') ||
+        path === '/api/events' ||
+        path.startsWith('/api/events/') ||
         path.startsWith('/api/platform/');
 
       if (!tenantAllowed) {

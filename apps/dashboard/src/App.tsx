@@ -185,7 +185,7 @@ function DashboardApp() {
               </RequirePlatformAdmin>
             }
           />
-          <Route path="analysis" element={<Navigate to="/analysis/bitacora" replace />} />
+          <Route path="analysis" element={<Navigate to="/analysis/bitacora-accesos" replace />} />
           <Route
             path="analysis/bitacora-accesos"
             element={

@@ -240,13 +240,6 @@ const items: NavItem[] = [
     group: 'analysis',
   },
   {
-    to: '/analysis/bitacora',
-    label: 'Auditoría',
-    icon: RiBookOpenLine,
-    roles: ['org_admin', 'community_admin', 'operator', 'guard'],
-    group: 'analysis',
-  },
-  {
     to: '/analysis/reports',
     label: 'Reportes',
     icon: RiBarChart2Line,

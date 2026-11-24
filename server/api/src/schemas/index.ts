@@ -85,10 +85,14 @@ export const callsQuerySchema = z.object({
 export const eventsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  /** Alcance opcional del superadmin: sin él, el Historial es global. */
+  organizationId: z.string().uuid().optional(),
   eventType: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   actorId: z.string().uuid().optional(),
+  /** Búsqueda por nombre del actor, resuelto desde la persona o la cuenta. */
+  actor: z.string().trim().max(120).optional(),
   accessPointId: z.string().uuid().optional(),
   communityId: z.string().uuid().optional(),
 });

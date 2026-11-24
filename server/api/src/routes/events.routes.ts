@@ -1,29 +1,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { requireRole } from '../middlewares/rbac.js';
+import { requirePlatformAdmin } from '../middlewares/rbac.js';
 import * as eventsService from '../services/events.service.js';
 import { eventsQuerySchema } from '../schemas/index.js';
 import config from '../config.js';
 import type { EventEnvelope } from '@porteria/shared';
-
-function getUser(request: FastifyRequest) {
-  const u = request.user;
-  return {
-    sub: u.sub,
-    role: u.role,
-    orgId: u.orgId,
-    communityId: u.communityId ?? null,
-    isPlatformAdmin: Boolean(u.isPlatformAdmin),
-  };
-}
-
-function effectiveCommunityId(
-  user: { role: string; communityId: string | null; isPlatformAdmin: boolean },
-  requested?: string,
-): string | undefined {
-  if (user.isPlatformAdmin) return requested;
-  if (user.role === 'org_admin') return requested;
-  return user.communityId ?? requested ?? undefined;
-}
 
 export async function eventsRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -33,38 +13,37 @@ export async function eventsRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   });
 
-  app.get(
-    '/',
-    { preHandler: [requireRole('org_admin', 'community_admin', 'operator', 'guard')] },
-    async (request: FastifyRequest) => {
-      const u = getUser(request);
-      const query = eventsQuerySchema.parse(request.query);
-      return eventsService.listEvents(u.orgId, {
-        ...query,
-        communityId: effectiveCommunityId(u, query.communityId),
-      });
-    },
-  );
+  /**
+   * Historial técnico: solo el superadmin. La consulta es global y el
+   * `organizationId` es un filtro opcional, no el alcance obligatorio.
+   */
+  app.get('/', { preHandler: [requirePlatformAdmin()] }, async (request: FastifyRequest) => {
+    const query = eventsQuerySchema.parse(request.query);
+    return eventsService.listEvents(query);
+  });
 
-  app.get(
-    '/stats',
-    { preHandler: [requireRole('org_admin', 'community_admin', 'operator', 'guard')] },
-    async (request: FastifyRequest) => {
-      const u = getUser(request);
-      const query = request.query as { from?: string; to?: string; communityId?: string };
-      return eventsService.getEventStats(
-        u.orgId,
-        query.from,
-        query.to,
-        effectiveCommunityId(u, query.communityId),
-      );
-    },
-  );
+  app.get('/stats', { preHandler: [requirePlatformAdmin()] }, async (request: FastifyRequest) => {
+    const query = request.query as {
+      from?: string;
+      to?: string;
+      communityId?: string;
+      organizationId?: string;
+    };
+    return eventsService.getEventStats(
+      query.organizationId,
+      query.from,
+      query.to,
+      query.communityId,
+    );
+  });
 }
 
 export async function internalEventsRoutes(app: FastifyInstance) {
