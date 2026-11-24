@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   BitacoraEntryTypeValues,
+  BitacoraResultValues,
   MembershipRoleValues,
   PassStatusValues,
   PassTypeValues,
@@ -410,7 +411,11 @@ export const bitacoraQuerySchema = z.object({
   communityId: z.string().uuid().optional(),
   accessPointId: z.string().uuid().optional(),
   shiftId: z.string().uuid().optional(),
+  /** Persona que operó la portería (actor del evento). */
+  guardId: z.string().uuid().optional(),
   type: z.enum(BitacoraEntryTypeValues as [string, ...string[]]).optional(),
+  /** Resultado legible derivado del tipo y del motivo. */
+  result: z.enum(BitacoraResultValues as [string, ...string[]]).optional(),
   /**
    * Comma separated list of entry types. The board groups the access events and
    * asks for them at once, because the guard already has a separate tab for the
@@ -426,6 +431,10 @@ export const bitacoraQuerySchema = z.object({
   to: z.string().datetime().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export const bitacoraGuardsQuerySchema = z.object({
+  communityId: z.string().uuid().optional(),
 });
 
 export const createBitacoraEntrySchema = z.object({

@@ -131,6 +131,7 @@ export { AccessPointDirection, AccessPointDirectionValues } from './enums/index.
 export { GuardShiftStatus, GuardShiftStatusValues } from './enums/index.js';
 export { BitacoraEntryType, BitacoraEntryTypeValues } from './enums/index.js';
 export { BitacoraSource, BitacoraSourceValues } from './enums/index.js';
+export { BitacoraResult, BitacoraResultValues } from './enums/index.js';
 
 export { MembershipRole, MembershipRoleValues } from './enums/index.js';
 export { MembershipStatus, MembershipStatusValues } from './enums/index.js';

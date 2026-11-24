@@ -258,3 +258,18 @@ export const BitacoraSource = {
 export type BitacoraSource = (typeof BitacoraSource)[keyof typeof BitacoraSource];
 
 export const BitacoraSourceValues = Object.values(BitacoraSource) as BitacoraSource[];
+
+/**
+ * Resultado legible de una entrada de la bitácora, derivado del tipo de evento
+ * y del motivo del escaneo. No se persiste: se calcula al leer.
+ */
+export const BitacoraResult = {
+  Authorized: 'authorized',
+  Denied: 'denied',
+  CodeFailure: 'code_failure',
+  Observation: 'observation',
+} as const;
+
+export type BitacoraResult = (typeof BitacoraResult)[keyof typeof BitacoraResult];
+
+export const BitacoraResultValues = Object.values(BitacoraResult) as BitacoraResult[];

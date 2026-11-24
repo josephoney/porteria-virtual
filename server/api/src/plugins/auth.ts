@@ -79,6 +79,7 @@ export function registerMembershipGuard(app: FastifyInstance) {
         path.startsWith('/api/sections') ||
         path.startsWith('/api/units') ||
         path.startsWith('/api/reports') ||
+        path.startsWith('/api/bitacora') ||
         path.startsWith('/api/location-structures') ||
         path.startsWith('/api/location-units') ||
         path.startsWith('/api/communities/') ||

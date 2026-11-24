@@ -30,9 +30,17 @@ interface AccessPointOption {
   active: boolean;
 }
 
+interface GuardOption {
+  id: string;
+  name: string;
+}
+
+type BitacoraResultValue = 'authorized' | 'denied' | 'code_failure' | 'observation';
+
 interface BitacoraEntryRow {
   id: string;
   communityId: string;
+  communityName: string | null;
   accessPointId: string;
   accessPointName: string;
   destinationLocationUnitId: string | null;
@@ -41,7 +49,10 @@ interface BitacoraEntryRow {
   authorizedByName: string | null;
   shiftId: string | null;
   type: string;
+  result: BitacoraResultValue;
   source: string;
+  guardPersonId: string | null;
+  guardName: string | null;
   authorName: string | null;
   passId: string | null;
   passScanId: string | null;
@@ -118,18 +129,115 @@ const selectableTypeLabels = Object.entries(typeLabels).filter(
   ([value]) => !HIDDEN_EVENT_TYPES.includes(value),
 );
 
-const typeVariants: Record<
-  string,
-  'default' | 'secondary' | 'warning' | 'destructive' | 'outline'
+/** Resultado legible: siempre etiqueta + ícono, nunca solo color. */
+const resultConfig: Record<
+  BitacoraResultValue,
+  {
+    label: string;
+    variant: 'default' | 'secondary' | 'warning' | 'destructive' | 'outline';
+  }
 > = {
-  pass_entry: 'default',
-  pass_exit: 'secondary',
-  pass_rejected: 'destructive',
-  scan_denied: 'warning',
-  shift_start: 'outline',
-  shift_end: 'outline',
-  manual: 'secondary',
+  authorized: { label: 'Autorizado', variant: 'default' },
+  denied: { label: 'Denegado', variant: 'destructive' },
+  code_failure: { label: 'Falla de código', variant: 'warning' },
+  observation: { label: 'Observación', variant: 'secondary' },
 };
+
+const resultOptions: Array<{ value: BitacoraResultValue | 'all'; label: string }> = [
+  { value: 'all', label: 'Todos los resultados' },
+  { value: 'authorized', label: 'Autorizado' },
+  { value: 'denied', label: 'Denegado' },
+  { value: 'code_failure', label: 'Falla de código' },
+  { value: 'observation', label: 'Observación' },
+];
+
+function ResultIcon({ result }: { result: BitacoraResultValue }) {
+  if (result === 'authorized') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m5 12 4 4L19 6" />
+      </svg>
+    );
+  }
+  if (result === 'denied') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M18 6 6 18M6 6l12 12" />
+      </svg>
+    );
+  }
+  if (result === 'code_failure') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+        <path d="M12 9v4M12 17h.01" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 4h16v16H4z" />
+      <path d="M8 9h8M8 13h6" />
+    </svg>
+  );
+}
+
+function ResultBadge({ result }: { result: BitacoraResultValue }) {
+  const config = resultConfig[result] ?? resultConfig.observation;
+  return (
+    <Badge variant={config.variant}>
+      <ResultIcon result={result} />
+      {config.label}
+    </Badge>
+  );
+}
+
+function entryVisitorName(entry: BitacoraEntryRow): string | null {
+  const details = asRecord(entry.details);
+  const visitor = asRecord(details?.visitor);
+  return (
+    [readText(visitor?.firstName), readText(visitor?.lastName)].filter(Boolean).join(' ') || null
+  );
+}
+
+function entryVehicle(entry: BitacoraEntryRow): string | null {
+  return readText(asRecord(entry.details)?.vehiclePlate);
+}
+
+/** Valor del selector que representa "todas las comunidades del alcance". */
+const ALL_COMMUNITIES = 'all';
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -147,6 +255,22 @@ function formatDate(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatDay(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function formatTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
 
 /** The `details` payload is free-form JSON: read it defensively. */
@@ -189,15 +313,23 @@ export function AccessBitacoraView({
   refreshToken = 0,
   poll = false,
 }: AccessBitacoraViewProps) {
-  const { activeMembership } = useAuth();
+  const { user, activeMembership } = useAuth();
   const isOrgAdmin = activeMembership?.role === 'org_admin';
+  const isPlatformContext = Boolean(user?.isPlatformAdmin && activeMembership?.id === 'platform');
+  const canPickCommunity = !fixedCommunityId && (isOrgAdmin || isPlatformContext);
+  const canAddManual =
+    !isPlatformContext &&
+    ['org_admin', 'community_admin', 'guard'].includes(activeMembership?.role ?? '');
   const [communities, setCommunities] = useState<CommunityOption[]>([]);
-  const [communityId, setCommunityId] = useState<string | null>(
-    fixedCommunityId ?? activeMembership?.communityId ?? null,
+  const [communityFilter, setCommunityFilter] = useState<string>(
+    fixedCommunityId ?? activeMembership?.communityId ?? ALL_COMMUNITIES,
   );
   const [accessPoints, setAccessPoints] = useState<AccessPointOption[]>([]);
   const [accessPointId, setAccessPointId] = useState<string>(fixedAccessPointId ?? 'all');
   const [type, setType] = useState<string>('all');
+  const [result, setResult] = useState<BitacoraResultValue | 'all'>('all');
+  const [guards, setGuards] = useState<GuardOption[]>([]);
+  const [guardId, setGuardId] = useState<string>('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [items, setItems] = useState<BitacoraEntryRow[]>([]);
@@ -220,8 +352,12 @@ export function AccessBitacoraView({
 
   const [pageSize, setPageSize] = useState(10);
 
+  // `null` means "todas las comunidades del alcance": plataforma ve todas y
+  // org_admin ve las de su organización.
+  const communityId = communityFilter === ALL_COMMUNITIES ? null : communityFilter;
+
   useEffect(() => {
-    setCommunityId(fixedCommunityId ?? activeMembership?.communityId ?? null);
+    setCommunityFilter(fixedCommunityId ?? activeMembership?.communityId ?? ALL_COMMUNITIES);
   }, [fixedCommunityId, activeMembership?.communityId]);
 
   useEffect(() => {
@@ -229,13 +365,16 @@ export function AccessBitacoraView({
   }, [fixedAccessPointId]);
 
   useEffect(() => {
-    if (!isOrgAdmin || fixedCommunityId) return;
+    if (!canPickCommunity) return;
     let cancelled = false;
-    get<CommunityOption[]>('/api/communities')
+    const request = isPlatformContext
+      ? get<{ data: CommunityOption[] }>('/api/platform/communities?pageSize=100').then(
+          (response) => response.data.data,
+        )
+      : get<CommunityOption[]>('/api/communities').then((response) => response.data);
+    request
       .then((result) => {
-        if (cancelled) return;
-        setCommunities(result.data);
-        setCommunityId((current) => current ?? result.data[0]?.id ?? null);
+        if (!cancelled) setCommunities(result);
       })
       .catch((err) => {
         if (!cancelled) setError(errorMessage(err));
@@ -243,7 +382,7 @@ export function AccessBitacoraView({
     return () => {
       cancelled = true;
     };
-  }, [isOrgAdmin, fixedCommunityId]);
+  }, [canPickCommunity, isPlatformContext]);
 
   useEffect(() => {
     if (!communityId) {
@@ -251,8 +390,9 @@ export function AccessBitacoraView({
       return;
     }
     let cancelled = false;
+    const includeInactive = isOrgAdmin || isPlatformContext ? 'true' : 'false';
     get<{ items: AccessPointOption[] }>(
-      `/api/communities/${communityId}/access-points?includeInactive=true`,
+      `/api/communities/${communityId}/access-points?includeInactive=${includeInactive}`,
     )
       .then((result) => {
         if (!cancelled) setAccessPoints(result.data.items);
@@ -263,26 +403,48 @@ export function AccessBitacoraView({
     return () => {
       cancelled = true;
     };
+  }, [communityId, isOrgAdmin, isPlatformContext]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const params = new URLSearchParams();
+    if (communityId) params.set('communityId', communityId);
+    const search = params.toString();
+    get<{ items: GuardOption[] }>(`/api/bitacora/guards${search ? `?${search}` : ''}`)
+      .then((result) => {
+        if (!cancelled) setGuards(result.data.items);
+      })
+      .catch(() => {
+        // The filter is optional: a failure must not block the log.
+        if (!cancelled) setGuards([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [communityId]);
 
+  const buildQueryParams = useCallback(
+    (pageValue: number, pageSizeValue: number) => {
+      const params = new URLSearchParams({
+        page: String(pageValue),
+        pageSize: String(pageSizeValue),
+      });
+      if (communityId) params.set('communityId', communityId);
+      if (accessPointId !== 'all') params.set('accessPointId', accessPointId);
+      if (guardId !== 'all') params.set('guardId', guardId);
+      if (result !== 'all') params.set('result', result);
+      applyTypeFilter(params, type);
+      if (from) params.set('from', new Date(`${from}T00:00:00`).toISOString());
+      if (to) params.set('to', new Date(`${to}T23:59:59`).toISOString());
+      return params;
+    },
+    [communityId, accessPointId, guardId, result, type, from, to],
+  );
+
   const load = useCallback(async () => {
-    if (!communityId) {
-      setItems([]);
-      setTotal(0);
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(pageSize),
-      communityId,
-    });
-    if (accessPointId !== 'all') params.set('accessPointId', accessPointId);
-    applyTypeFilter(params, type);
-    if (from) params.set('from', new Date(`${from}T00:00:00`).toISOString());
-    if (to) params.set('to', new Date(`${to}T23:59:59`).toISOString());
+    const params = buildQueryParams(page, pageSize);
     try {
       const result = await get<{
         items: BitacoraEntryRow[];
@@ -297,7 +459,7 @@ export function AccessBitacoraView({
     } finally {
       setLoading(false);
     }
-  }, [communityId, accessPointId, type, from, to, page, pageSize]);
+  }, [buildQueryParams, page, pageSize]);
 
   useEffect(() => {
     load();
@@ -312,8 +474,7 @@ export function AccessBitacoraView({
    * when the total changed.
    */
   useEffect(() => {
-    if (!poll || !communityId) return;
-    const community = communityId;
+    if (!poll) return;
     let cancelled = false;
     // Changing filters means a different table: start from a clean baseline so
     // the first probe is not mistaken for "something happened".
@@ -321,11 +482,7 @@ export function AccessBitacoraView({
 
     async function check() {
       if (document.visibilityState !== 'visible') return;
-      const params = new URLSearchParams({ page: '1', pageSize: '1', communityId: community });
-      if (accessPointId !== 'all') params.set('accessPointId', accessPointId);
-      applyTypeFilter(params, type);
-      if (from) params.set('from', new Date(`${from}T00:00:00`).toISOString());
-      if (to) params.set('to', new Date(`${to}T23:59:59`).toISOString());
+      const params = buildQueryParams(1, 1);
       try {
         const result = await get<{ total: number }>(`/api/bitacora?${params.toString()}`);
         if (cancelled) return;
@@ -351,7 +508,7 @@ export function AccessBitacoraView({
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', check);
     };
-  }, [poll, communityId, accessPointId, type, from, to, load]);
+  }, [poll, buildQueryParams, load]);
 
   /**
    * Live updates: every new entry of the community reloads the visible page, so
@@ -377,6 +534,9 @@ export function AccessBitacoraView({
     () => accessPoints.filter((item) => item.active),
     [accessPoints],
   );
+  // La columna de comunidad solo aporta cuando la bitácora es global o abarca
+  // más de una comunidad.
+  const showCommunity = communityId === null;
 
   const selectedDetails = asRecord(selected?.details);
   const selectedVisitor = asRecord(selectedDetails?.visitor);
@@ -397,6 +557,7 @@ export function AccessBitacoraView({
       : (reasonLabels[selectedReason] ?? selectedReason)
     : null;
   const selectedRule = readText(selectedDetails?.rule);
+  const selectedVehicle = readText(selectedDetails?.vehiclePlate);
 
   async function openDetail(entry: BitacoraEntryRow) {
     setDetailOpen(true);
@@ -456,6 +617,23 @@ export function AccessBitacoraView({
     }
   }
 
+  function resetFilters() {
+    setType('all');
+    setResult('all');
+    setGuardId('all');
+    setFrom('');
+    setTo('');
+    setAccessPointId(fixedAccessPointId ?? 'all');
+    setPage(1);
+  }
+
+  function changeCommunity(value: string) {
+    setCommunityFilter(value);
+    setAccessPointId(fixedAccessPointId ?? 'all');
+    setGuardId('all');
+    setPage(1);
+  }
+
   return (
     <div className={compact ? 'space-y-4' : 'p-6 space-y-6 overflow-y-auto'}>
       {!compact && (
@@ -474,7 +652,7 @@ export function AccessBitacoraView({
               );
               setManualOpen(true);
             }}
-            disabled={activeAccessPoints.length === 0}
+            disabled={!canAddManual || activeAccessPoints.length === 0}
           >
             Agregar novedad
           </Button>
@@ -482,21 +660,15 @@ export function AccessBitacoraView({
       )}
 
       <div className="flex flex-wrap items-end gap-3">
-        {isOrgAdmin && !fixedCommunityId && (
+        {canPickCommunity && (
           <div className="space-y-1">
             <Label>Comunidad</Label>
-            <Select
-              value={communityId ?? ''}
-              onValueChange={(value) => {
-                setCommunityId(value);
-                setAccessPointId('all');
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-56">
+            <Select value={communityFilter} onValueChange={changeCommunity}>
+              <SelectTrigger className="w-56" aria-label="Filtrar por comunidad">
                 <SelectValue placeholder="Selecciona una comunidad" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={ALL_COMMUNITIES}>Todas las comunidades</SelectItem>
                 {communities.map((community) => (
                   <SelectItem key={community.id} value={community.id}>
                     {community.name}
@@ -506,7 +678,7 @@ export function AccessBitacoraView({
             </Select>
           </div>
         )}
-        {!fixedAccessPointId && (
+        {!fixedAccessPointId && communityId && (
           <div className="space-y-1">
             <Label>Acceso</Label>
             <Select
@@ -516,7 +688,7 @@ export function AccessBitacoraView({
                 setPage(1);
               }}
             >
-              <SelectTrigger className="w-56">
+              <SelectTrigger className="w-56" aria-label="Filtrar por acceso">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -532,6 +704,49 @@ export function AccessBitacoraView({
           </div>
         )}
         <div className="space-y-1">
+          <Label>Resultado</Label>
+          <Select
+            value={result}
+            onValueChange={(value) => {
+              setResult(value as BitacoraResultValue | 'all');
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-44" aria-label="Filtrar por resultado">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {resultOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label>Guardia</Label>
+          <Select
+            value={guardId}
+            onValueChange={(value) => {
+              setGuardId(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-52" aria-label="Filtrar por guardia">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los guardias</SelectItem>
+              {guards.map((guard) => (
+                <SelectItem key={guard.id} value={guard.id}>
+                  {guard.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
           <Label>Tipo</Label>
           <Select
             value={type}
@@ -540,7 +755,7 @@ export function AccessBitacoraView({
               setPage(1);
             }}
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-48" aria-label="Filtrar por tipo">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -555,23 +770,29 @@ export function AccessBitacoraView({
         </div>
         <div className="space-y-1">
           <Label>Desde</Label>
-          <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          <Input
+            type="date"
+            aria-label="Filtrar desde"
+            value={from}
+            onChange={(event) => {
+              setFrom(event.target.value);
+              setPage(1);
+            }}
+          />
         </div>
         <div className="space-y-1">
           <Label>Hasta</Label>
-          <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          <Input
+            type="date"
+            aria-label="Filtrar hasta"
+            value={to}
+            onChange={(event) => {
+              setTo(event.target.value);
+              setPage(1);
+            }}
+          />
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            setType('all');
-            setFrom('');
-            setTo('');
-            setAccessPointId(fixedAccessPointId ?? 'all');
-            setPage(1);
-          }}
-        >
+        <Button type="button" variant="outline" onClick={resetFilters}>
           Limpiar
         </Button>
         {compact && (
@@ -583,7 +804,7 @@ export function AccessBitacoraView({
               );
               setManualOpen(true);
             }}
-            disabled={activeAccessPoints.length === 0}
+            disabled={!canAddManual || activeAccessPoints.length === 0}
           >
             Agregar novedad
           </Button>
@@ -612,12 +833,16 @@ export function AccessBitacoraView({
             <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
               <TableRow>
                 <TableHead>Fecha</TableHead>
-                <TableHead>Acceso</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Detalle</TableHead>
-                <TableHead>Destino</TableHead>
+                <TableHead>Hora</TableHead>
+                <TableHead>Resultado</TableHead>
+                <TableHead>Persona</TableHead>
+                <TableHead>Vehículo</TableHead>
+                <TableHead>Guardia</TableHead>
                 <TableHead>Autorizó</TableHead>
-                <TableHead>Autor</TableHead>
+                <TableHead>Destino</TableHead>
+                <TableHead>Acceso</TableHead>
+                {showCommunity && <TableHead>Comunidad</TableHead>}
+                <TableHead>Observación</TableHead>
                 <TableHead>Comentarios</TableHead>
               </TableRow>
             </TableHeader>
@@ -628,20 +853,24 @@ export function AccessBitacoraView({
                   className="cursor-pointer"
                   onClick={() => openDetail(entry)}
                 >
-                  <TableCell>{formatDate(entry.createdAt)}</TableCell>
-                  <TableCell>{entry.accessPointName}</TableCell>
-                  <TableCell>
-                    <Badge variant={typeVariants[entry.type] ?? 'secondary'}>
-                      {typeLabels[entry.type] ?? entry.type}
-                    </Badge>
-                    {entry.missingExitAlert ? (
-                      <Badge variant="destructive">Sin salida</Badge>
-                    ) : null}
+                  <TableCell className="whitespace-nowrap">{formatDay(entry.createdAt)}</TableCell>
+                  <TableCell className="whitespace-nowrap">{formatTime(entry.createdAt)}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex flex-wrap gap-1">
+                      <ResultBadge result={entry.result} />
+                      {entry.missingExitAlert ? (
+                        <Badge variant="destructive">Sin salida</Badge>
+                      ) : null}
+                    </div>
                   </TableCell>
-                  <TableCell className="max-w-md whitespace-normal">{entry.summary}</TableCell>
-                  <TableCell>{entry.destinationPath ?? '—'}</TableCell>
+                  <TableCell>{entryVisitorName(entry) ?? '—'}</TableCell>
+                  <TableCell>{entryVehicle(entry) ?? '—'}</TableCell>
+                  <TableCell>{entry.guardName ?? '—'}</TableCell>
                   <TableCell>{entry.authorizedByName ?? '—'}</TableCell>
-                  <TableCell>{entry.authorName ?? 'Sistema'}</TableCell>
+                  <TableCell>{entry.destinationPath ?? '—'}</TableCell>
+                  <TableCell>{entry.accessPointName}</TableCell>
+                  {showCommunity && <TableCell>{entry.communityName ?? '—'}</TableCell>}
+                  <TableCell className="max-w-md whitespace-normal">{entry.summary}</TableCell>
                   <TableCell>{entry.commentCount}</TableCell>
                 </TableRow>
               ))}
@@ -708,9 +937,11 @@ export function AccessBitacoraView({
           ) : (
             <div className="space-y-4">
               <DetailGrid>
+                <DetailField label="Resultado" value={<ResultBadge result={selected.result} />} />
+                <DetailField label="Comunidad" value={selected.communityName ?? '—'} />
                 <DetailField label="Acceso" value={selected.accessPointName} />
                 <DetailField label="Tipo" value={typeLabels[selected.type] ?? selected.type} />
-                <DetailField label="Autor" value={selected.authorName ?? 'Sistema'} />
+                <DetailField label="Guardia" value={selected.guardName ?? '—'} />
                 <DetailField label="Autorizó" value={selected.authorizedByName ?? '—'} />
                 <DetailField label="Fecha" value={formatDate(selected.createdAt)} />
                 <DetailField label="Origen" value={selected.source} />
@@ -721,6 +952,7 @@ export function AccessBitacoraView({
                 />
                 <DetailField label="Visitante" value={selectedVisitorName ?? '—'} />
                 <DetailField label="Documento" value={selectedVisitorDocument ?? '—'} />
+                <DetailField label="Vehículo" value={selectedVehicle ?? '—'} />
                 <DetailField label="Acción" value={selectedActionLabel ?? '—'} />
                 <DetailField label="Motivo" value={selectedReasonLabel ?? '—'} />
                 <DetailField label="Regla" value={selectedRule ?? '—'} span="full" />

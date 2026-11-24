@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, isNull, lte, notInArray } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNull, lte, notInArray, or, sql } from 'drizzle-orm';
 import { publishBitacoraEvent } from '../lib/bitacora-bus.js';
 import { createDb } from '@porteria/database';
 import {
@@ -19,6 +19,7 @@ import type {
   BitacoraEntryDto,
   BitacoraEntryType,
   BitacoraListResponse,
+  BitacoraResult as BitacoraEntryResult,
   BitacoraSource,
   CreateBitacoraCommentDto,
   CreateBitacoraEntryDto,
@@ -26,6 +27,65 @@ import type {
 import type { DbExecutor } from './outbox.service.js';
 
 const db = createDb();
+
+/**
+ * Motivos que describen un código que no funciona. El resto de los rechazos
+ * son decisiones (el guardia deniega, el residente revoca) o códigos de otra
+ * comunidad.
+ */
+const CODE_FAILURE_REASONS = [
+  'invalid_or_expired_token',
+  'pass_used',
+  'expired',
+  'not_valid_now',
+  'out_of_days',
+  'out_of_schedule',
+  'daily_uses_exhausted',
+  'wrong_direction',
+  'token_already_used',
+];
+
+/** `details.reason` es texto libre dentro del JSONB; se lee como texto. */
+const detailReason = sql<string | null>`${bitacoraEntries.details} ->> 'reason'`;
+
+/** Deriva el resultado legible de una entrada a partir de su tipo y motivo. */
+function resolveEntryResult(type: string, details: unknown): BitacoraEntryResult {
+  if (type === 'manual') return 'observation';
+  if (type === 'pass_entry' || type === 'pass_exit') return 'authorized';
+  if (type === 'pass_rejected') return 'denied';
+  if (type === 'scan_denied') {
+    const reason =
+      typeof details === 'object' && details !== null
+        ? (details as Record<string, unknown>).reason
+        : null;
+    return typeof reason === 'string' && CODE_FAILURE_REASONS.includes(reason)
+      ? 'code_failure'
+      : 'denied';
+  }
+  return 'observation';
+}
+
+function resultCondition(result: BitacoraEntryResult) {
+  switch (result) {
+    case 'authorized':
+      return inArray(bitacoraEntries.type, ['pass_entry', 'pass_exit']);
+    case 'code_failure':
+      return and(
+        eq(bitacoraEntries.type, 'scan_denied'),
+        inArray(detailReason, CODE_FAILURE_REASONS),
+      );
+    case 'denied':
+      return or(
+        eq(bitacoraEntries.type, 'pass_rejected'),
+        and(
+          eq(bitacoraEntries.type, 'scan_denied'),
+          or(isNull(detailReason), notInArray(detailReason, CODE_FAILURE_REASONS)),
+        ),
+      );
+    case 'observation':
+      return eq(bitacoraEntries.type, 'manual');
+  }
+}
 
 export interface BitacoraRequester {
   sub: string;
@@ -65,7 +125,10 @@ export interface BitacoraQuery {
   communityId?: string;
   accessPointId?: string;
   shiftId?: string;
+  /** Persona que operó la portería; filtra por actor del evento. */
+  guardId?: string;
   type?: BitacoraEntryType;
+  result?: BitacoraEntryResult;
   /** Comma separated list of entry types, used to request the access group at once. */
   types?: string;
   /** Comma separated list of entry types to leave out, used to hide the shift events. */
@@ -164,10 +227,13 @@ function toEntryDto(
   commentCount: number,
   full: boolean,
   missingExitAlert = false,
+  communityName: string | null = null,
 ): BitacoraEntryDto {
+  const authorNameValue = authorName(author.firstName, author.lastName, author.email);
   return {
     id: row.id,
     communityId: row.communityId,
+    communityName,
     accessPointId: row.accessPointId,
     accessPointName: row.accessPointName,
     destinationLocationUnitId: row.destinationLocationUnitId,
@@ -176,8 +242,11 @@ function toEntryDto(
     authorizedByName: row.authorizedByName,
     shiftId: row.shiftId,
     type: row.type,
+    result: resolveEntryResult(row.type, row.details),
     source: row.source,
-    authorName: authorName(author.firstName, author.lastName, author.email),
+    guardPersonId: row.authorPersonId,
+    guardName: authorNameValue,
+    authorName: authorNameValue,
     passId: row.passId,
     passScanId: row.passScanId,
     summary: row.summary,
@@ -202,6 +271,10 @@ async function canReadEntry(requester: BitacoraRequester, entry: EntryRow): Prom
 
   if (requester.role === 'community_admin') {
     return entry.communityId === requester.communityId;
+  }
+
+  if (requester.role === 'operator') {
+    return Boolean(requester.communityId) && entry.communityId === requester.communityId;
   }
 
   if (requester.role === 'guard') {
@@ -282,7 +355,7 @@ export async function listBitacora(
   requester: BitacoraRequester,
   query: BitacoraQuery,
 ): Promise<BitacoraResult<BitacoraListResponse>> {
-  if (requester.role === 'operator' || requester.role === 'resident') {
+  if (requester.role === 'resident') {
     return { ok: false, code: 'forbidden' };
   }
 
@@ -292,7 +365,12 @@ export async function listBitacora(
     conditions.push(eq(bitacoraEntries.accessPointId, query.accessPointId));
   }
   if (query.shiftId) conditions.push(eq(bitacoraEntries.shiftId, query.shiftId));
+  if (query.guardId) conditions.push(eq(bitacoraEntries.authorPersonId, query.guardId));
   if (query.type) conditions.push(eq(bitacoraEntries.type, query.type));
+  if (query.result) {
+    const condition = resultCondition(query.result);
+    if (condition) conditions.push(condition);
+  }
   if (query.types) {
     const allowed = bitacoraEntries.type.enumValues;
     const types = query.types
@@ -317,7 +395,8 @@ export async function listBitacora(
   if (query.to) conditions.push(lte(bitacoraEntries.createdAt, new Date(query.to)));
 
   if (requester.isPlatformAdmin) {
-    if (!query.communityId) return { ok: false, code: 'forbidden' };
+    // Alcance global: sin `communityId` se leen todas las comunidades. Si el
+    // cliente lo envía, la condición de arriba ya lo restringió.
   } else if (requester.role === 'org_admin') {
     const orgCommunities = await db
       .select({ id: communities.id })
@@ -332,6 +411,9 @@ export async function listBitacora(
     }
     conditions.push(inArray(bitacoraEntries.communityId, ids));
   } else if (requester.role === 'community_admin') {
+    if (!requester.communityId) return { ok: false, code: 'forbidden' };
+    conditions.push(eq(bitacoraEntries.communityId, requester.communityId));
+  } else if (requester.role === 'operator') {
     if (!requester.communityId) return { ok: false, code: 'forbidden' };
     conditions.push(eq(bitacoraEntries.communityId, requester.communityId));
   } else if (requester.role === 'guard') {
@@ -363,11 +445,13 @@ export async function listBitacora(
   const rows = await db
     .select({
       entry: bitacoraEntries,
+      communityName: communities.name,
       firstName: people.firstName,
       lastName: people.lastName,
       email: accounts.email,
     })
     .from(bitacoraEntries)
+    .leftJoin(communities, eq(bitacoraEntries.communityId, communities.id))
     .leftJoin(people, eq(bitacoraEntries.authorPersonId, people.id))
     .leftJoin(accounts, eq(bitacoraEntries.authorAccountId, accounts.id))
     .where(where)
@@ -407,6 +491,7 @@ export async function listBitacora(
           commentCounts.get(row.entry.id) ?? 0,
           false,
           alertPassIds.has(row.entry.passId ?? ''),
+          row.communityName ?? null,
         ),
       ),
       page: query.page,
@@ -428,6 +513,12 @@ export async function getBitacoraEntry(
 
   if (!entry) return { ok: false, code: 'not_found' };
   if (!(await canReadEntry(requester, entry))) return { ok: false, code: 'forbidden' };
+
+  const [community] = await db
+    .select({ name: communities.name })
+    .from(communities)
+    .where(eq(communities.id, entry.communityId))
+    .limit(1);
 
   const author = await loadAuthor(entry);
   const comments = await db
@@ -453,7 +544,7 @@ export async function getBitacoraEntry(
   return {
     ok: true,
     data: {
-      ...toEntryDto(entry, author, commentDtos.length, true),
+      ...toEntryDto(entry, author, commentDtos.length, true, false, community?.name ?? null),
       comments: commentDtos,
     },
   };
@@ -528,6 +619,8 @@ export async function addComment(
 
   if (!entry) return { ok: false, code: 'not_found' };
   if (!(await canReadEntry(requester, entry))) return { ok: false, code: 'forbidden' };
+  // La bitácora de plataforma es de solo lectura.
+  if (requester.isPlatformAdmin) return { ok: false, code: 'forbidden' };
 
   if (requester.role === 'guard') {
     if (!(await guardHasOpenSegment(requester, entry.accessPointId))) {
@@ -568,6 +661,50 @@ export async function addComment(
       ),
       body: row.body,
       createdAt: row.createdAt.toISOString(),
+    },
+  };
+}
+
+/** Guardias disponibles para el filtro de la bitácora, dentro del alcance. */
+export async function listBitacoraGuards(
+  requester: BitacoraRequester,
+  communityId?: string,
+): Promise<BitacoraResult<{ items: Array<{ id: string; name: string }> }>> {
+  if (requester.role === 'resident') return { ok: false, code: 'forbidden' };
+
+  const conditions = [
+    eq(memberships.role, 'guard'),
+    eq(memberships.status, 'active'),
+    ...(communityId ? [eq(memberships.communityId, communityId)] : []),
+  ];
+
+  if (requester.isPlatformAdmin) {
+    // Alcance global: todas las guardias activas.
+  } else if (requester.role === 'org_admin') {
+    conditions.push(eq(memberships.organizationId, requester.orgId));
+  } else {
+    if (!requester.communityId) return { ok: false, code: 'forbidden' };
+    conditions.push(eq(memberships.communityId, requester.communityId));
+  }
+
+  const rows = await db
+    .selectDistinct({
+      id: memberships.personId,
+      firstName: people.firstName,
+      lastName: people.lastName,
+    })
+    .from(memberships)
+    .innerJoin(people, eq(memberships.personId, people.id))
+    .where(and(...conditions))
+    .orderBy(people.firstName, people.lastName);
+
+  return {
+    ok: true,
+    data: {
+      items: rows.map((row) => ({
+        id: row.id,
+        name: [row.firstName, row.lastName].filter(Boolean).join(' ') || 'Sin nombre',
+      })),
     },
   };
 }

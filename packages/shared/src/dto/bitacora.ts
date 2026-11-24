@@ -1,8 +1,10 @@
-import type { BitacoraEntryType, BitacoraSource } from '../enums/index.js';
+import type { BitacoraEntryType, BitacoraResult, BitacoraSource } from '../enums/index.js';
 
 export interface BitacoraEntryDto {
   id: string;
   communityId: string;
+  /** Nombre de la comunidad, para mostrar la bitácora global o multi-comunidad. */
+  communityName: string | null;
   accessPointId: string;
   accessPointName: string;
   destinationLocationUnitId: string | null;
@@ -11,7 +13,12 @@ export interface BitacoraEntryDto {
   authorizedByName: string | null;
   shiftId: string | null;
   type: BitacoraEntryType;
+  /** Resultado legible derivado del tipo y del motivo. */
+  result: BitacoraResult;
   source: BitacoraSource;
+  /** Quién operó la portería (actor del evento); ausente en eventos de sistema. */
+  guardPersonId: string | null;
+  guardName: string | null;
   authorName: string | null;
   passId: string | null;
   passScanId: string | null;

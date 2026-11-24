@@ -58,7 +58,7 @@ export async function accessPointRoutes(app: FastifyInstance) {
 
   app.get(
     '/:communityId/access-points',
-    { preHandler: [requireRole('org_admin', 'community_admin', 'guard')] },
+    { preHandler: [requireRole('org_admin', 'community_admin', 'guard', 'operator')] },
     async (request, reply) => {
       const { communityId } = request.params as { communityId: string };
       const query = request.query as { includeInactive?: string };

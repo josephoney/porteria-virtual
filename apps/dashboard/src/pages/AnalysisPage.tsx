@@ -33,12 +33,19 @@ export function AnalysisPage({ scope = 'tenant' }: { scope?: 'tenant' | 'platfor
   }
 
   const section = requested as keyof typeof meta;
-  const page = meta[section];
+  /**
+   * En plataforma la vista técnica vive en Historial, así que la Bitácora es la
+   * vista legible. En tenant la bitácora técnica sigue en `/analysis/bitacora`
+   * hasta que el Historial técnico esté disponible.
+   */
+  const isPlatformBitacora = scope === 'platform' && section === 'bitacora';
+  const page = isPlatformBitacora ? meta['bitacora-accesos'] : meta[section];
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto">
       <PageHeader title={page.title} description={page.description} />
-      {section === 'bitacora' && <BitacoraView />}
+      {section === 'bitacora' &&
+        (isPlatformBitacora ? <AccessBitacoraView compact poll /> : <BitacoraView />)}
       {section === 'bitacora-accesos' && <AccessBitacoraView compact poll />}
       {section === 'reports' && <ReportsPanel />}
       {section === 'history' && scope === 'platform' && <BitacoraView />}

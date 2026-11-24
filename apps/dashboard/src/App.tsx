@@ -189,7 +189,7 @@ function DashboardApp() {
           <Route
             path="analysis/bitacora-accesos"
             element={
-              <RequireRole role={['org_admin', 'community_admin']}>
+              <RequireRole role={['org_admin', 'community_admin', 'operator', 'guard']}>
                 <AnalysisPage />
               </RequireRole>
             }

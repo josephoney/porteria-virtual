@@ -210,7 +210,7 @@ const items: NavItem[] = [
   // Análisis
   {
     to: '/platform/bitacora',
-    label: 'Auditoría',
+    label: 'Bitácora de accesos',
     icon: RiBookOpenLine,
     roles: [],
     platformOnly: true,
@@ -236,7 +236,7 @@ const items: NavItem[] = [
     to: '/analysis/bitacora-accesos',
     label: 'Bitácora de accesos',
     icon: RiBookOpenLine,
-    roles: ['org_admin', 'community_admin'],
+    roles: ['org_admin', 'community_admin', 'operator', 'guard'],
     group: 'analysis',
   },
   {

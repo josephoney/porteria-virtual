@@ -715,7 +715,11 @@ describe('guard shifts and access bitacora integration', () => {
     assert.equal((parse(detailWithComment).comments as Json[]).length, 1);
 
     const operatorList = await request('GET', '/api/bitacora', undefined, operatorToken);
-    assert.equal(operatorList.statusCode, 403, operatorList.body);
+    assert.equal(operatorList.statusCode, 200, operatorList.body);
+    assert.equal(
+      (parse(operatorList).items as Json[]).some((item) => item.id === entryId),
+      true,
+    );
 
     const residentList = await request('GET', '/api/bitacora', undefined, residentToken);
     assert.equal(residentList.statusCode, 403, residentList.body);
