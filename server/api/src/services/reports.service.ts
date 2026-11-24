@@ -8,20 +8,9 @@ import type {
   CallStats,
   EventTimeSeries,
 } from '@porteria/shared';
+import { dayEnd, dayStart, toLocalDateString } from '../lib/report-dates.js';
 
 const db = createDb();
-
-function dayStart(date: string): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function dayEnd(date: string): Date {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
 
 function callCommunityFilter(communityId?: string) {
   return communityId ? sql`AND community_id = ${communityId}::uuid` : sql``;
@@ -36,7 +25,7 @@ export async function getDailyReport(
   date?: string,
   communityId?: string,
 ): Promise<DailyReport> {
-  const targetDate = date || new Date().toISOString().slice(0, 10);
+  const targetDate = date || toLocalDateString(new Date());
   const start = dayStart(targetDate);
   const end = dayEnd(targetDate);
 
@@ -146,7 +135,7 @@ export async function getWeeklyReport(
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(monday);
     dayDate.setDate(monday.getDate() + i);
-    const dateStr = dayDate.toISOString().slice(0, 10);
+    const dateStr = toLocalDateString(dayDate);
     const start = dayStart(dateStr);
     const end = dayEnd(dateStr);
 
@@ -172,7 +161,10 @@ export async function getWeeklyReport(
         .where(and(...callConditions))
         .groupBy(calls.status),
 
-      db.select({ count: count() }).from(events).where(and(...eventConditions)),
+      db
+        .select({ count: count() })
+        .from(events)
+        .where(and(...eventConditions)),
     ]);
 
     const statusMap: Record<string, number> = {};
@@ -198,7 +190,7 @@ export async function getWeeklyReport(
     totals.doors += doors;
   }
 
-  return { weekStart: monday.toISOString().slice(0, 10), days, totals };
+  return { weekStart: toLocalDateString(monday), days, totals };
 }
 
 export async function getMonthlyReport(
@@ -206,7 +198,7 @@ export async function getMonthlyReport(
   month?: string,
   communityId?: string,
 ): Promise<MonthlyReport> {
-  const target = month || new Date().toISOString().slice(0, 7);
+  const target = month || toLocalDateString(new Date()).slice(0, 7);
   const [y, m] = target.split('-').map(Number);
   const monthStart = new Date(y, m - 1, 1);
   const monthEnd = new Date(y, m, 0, 23, 59, 59, 999);
@@ -284,8 +276,8 @@ export async function getCallStats(
   to?: string,
   communityId?: string,
 ): Promise<CallStats> {
-  const defaultFrom = from || new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-  const defaultTo = to || new Date().toISOString().slice(0, 10);
+  const defaultFrom = from || toLocalDateString(new Date(Date.now() - 7 * 86400000));
+  const defaultTo = to || toLocalDateString(new Date());
   const start = dayStart(defaultFrom);
   const end = dayEnd(defaultTo);
 
@@ -297,9 +289,7 @@ export async function getCallStats(
   if (communityId) conditions.push(eq(calls.communityId, communityId));
 
   const filter = callCommunityFilter(communityId);
-  const kioskCommunityFilter = communityId
-    ? sql`AND c.community_id = ${communityId}::uuid`
-    : sql``;
+  const kioskCommunityFilter = communityId ? sql`AND c.community_id = ${communityId}::uuid` : sql``;
 
   const [counts, avgResult, callsByHour, callsByKiosk] = await Promise.all([
     db
@@ -308,7 +298,10 @@ export async function getCallStats(
       .where(and(...conditions))
       .groupBy(calls.status),
 
-    db.select({ avgDuration: sqlAvg(calls.duration) }).from(calls).where(and(...conditions)),
+    db
+      .select({ avgDuration: sqlAvg(calls.duration) })
+      .from(calls)
+      .where(and(...conditions)),
 
     db.execute<{ hour: number; count: number }>(sql`
       SELECT EXTRACT(HOUR FROM started_at)::int AS hour, COUNT(*)::int AS count

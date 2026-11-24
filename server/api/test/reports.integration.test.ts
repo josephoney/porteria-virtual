@@ -121,16 +121,15 @@ function localToday(): string {
 }
 
 /**
- * `reports.service` resolves the date string against server-local midnight.
- * We derive the same range so fixture calls land inside the requested day
- * regardless of the machine timezone.
+ * `reports.service` resuelve la fecha contra la medianoche local del servidor.
+ * Construimos el mediodía local a partir de las partes de la fecha para que las
+ * llamadas de prueba caigan dentro del día pedido en cualquier zona horaria.
+ * No usar `new Date(date)`: eso interpreta la fecha como UTC y al oeste de
+ * Greenwich cae el día anterior.
  */
 function reportTimestamp(date: string): Date {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
-  return new Date((start.getTime() + end.getTime()) / 2);
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
 }
 
 describe('report scoping', () => {
