@@ -6,25 +6,33 @@ Provides the layout shell (TopBar + Sidebar + content area) for the dashboard SP
 ## Requirements
 ### Requirement: Dashboard layout
 The dashboard SHALL have a shell with TopBar, Sidebar, and a main content area using
-React Router.
+React Router, with navigation filtered by role and active scope.
 
 #### Scenario: Layout renders with outlet
-- **WHEN** the dashboard app loads and user is authenticated
-- **THEN** the TopBar is displayed with the brand
-- **THEN** the Sidebar shows navigation items based on the active role
+- **WHEN** the dashboard app loads and the user is authenticated
+- **THEN** the TopBar is displayed with the brand, theme toggle, context selector and
+  logout
+- **THEN** the Sidebar shows the groups and items allowed for the active role/context
 - **THEN** the main content area renders the active route
 
-#### Scenario: Sidebar items by role
-- **WHEN** the active role is `org_admin`
-- **THEN** the sidebar shows Operador, Admin, and Guardia
-- **WHEN** the active role is `community_admin`
-- **THEN** the sidebar shows Operador and Admin
-- **WHEN** the active role is `operator`
-- **THEN** the sidebar shows Operador
-- **WHEN** the active role is `guard`
-- **THEN** the sidebar shows Guardia
-- **WHEN** the active context is platform
-- **THEN** the sidebar shows only Plataforma and hides tenant items
+#### Scenario: Sidebar groups
+- **WHEN** a guard or operator is in a tenant context
+- **THEN** the sidebar shows Operación and Análisis groups
+- **WHEN** an org_admin or community_admin is in a tenant context
+- **THEN** the sidebar shows Operación, Administración and Análisis groups
+- **WHEN** the user is in platform context
+- **THEN** the sidebar shows Administración with the six platform sections and Análisis
+  with Bitácora, Reportes and Historial
+
+#### Scenario: Active route
+- **WHEN** the active route changes
+- **THEN** the matching sidebar item is highlighted
+- **THEN** only allowed items for the role/context are shown
+
+#### Scenario: Mobile
+- **WHEN** the viewport is smaller than the mobile breakpoint
+- **THEN** the sidebar collapses into a sheet
+- **THEN** selecting an item closes the sheet and navigates
 
 ### Requirement: Login page
 The dashboard SHALL have a login page that authenticates against the API and stores the JWT token.
@@ -42,21 +50,33 @@ The dashboard SHALL have a login page that authenticates against the API and sto
 The dashboard SHALL restrict routes based on the active role and context.
 
 #### Scenario: Admin accesses admin page
-- **WHEN** an `org_admin` or `community_admin` navigates to `/admin`
-- **THEN** the admin panel is displayed
+- **WHEN** an `org_admin` or `community_admin` navigates to an allowed `/admin/*` route
+- **THEN** the matching page is displayed
 
-#### Scenario: Operator cannot access admin page
-- **WHEN** an `operator` navigates to `/admin`
+#### Scenario: Operator cannot access admin pages
+- **WHEN** an `operator` or `guard` navigates to an `/admin/*` route that is not an
+  analysis route
 - **THEN** they are redirected to the operator panel at `/`
 
+#### Scenario: Analysis access
+- **WHEN** an `operator`, `guard`, `community_admin` or `org_admin` navigates to
+  `/analysis/bitacora` or `/analysis/reports`
+- **THEN** the allowed analysis view is displayed
+- **WHEN** they navigate to `/platform/history` or `/admin/history`
+- **THEN** they are redirected to their first allowed page
+
 #### Scenario: Resident is redirected
-- **WHEN** a user with an `owner`, `tenant`, or `resident` membership opens `/` or
-  `/admin`
+- **WHEN** a user with an `owner`, `tenant`, or `resident` membership opens `/` or an
+  `/admin/*` route
 - **THEN** they are redirected to `/app-required`
 
 #### Scenario: Platform context is redirected
-- **WHEN** a platform admin without a tenant context opens `/` or a tenant route
+- **WHEN** a platform admin without a tenant context opens `/` or `/admin/*`
 - **THEN** they are redirected to `/platform`
+
+#### Scenario: Unauthorized admin item
+- **WHEN** a community_admin opens `/admin/communities` or `/platform/*`
+- **THEN** they are redirected to their first allowed page
 
 ### Requirement: TopBar with user info
 The TopBar SHALL display total kiosks count, active calls count, and current user name.

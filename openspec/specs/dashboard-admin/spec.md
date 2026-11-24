@@ -5,16 +5,18 @@
 Provides the admin panel within the dashboard: user management with paginated listing, create/edit user forms, role management, and active status toggling. All operations go through the REST API with JWT authentication.
 ## Requirements
 ### Requirement: Users list
-The admin SHALL see a paginated table of all users in their organization.
+The admin SHALL see a paginated table of users in their scope at `/admin/users`.
 
 #### Scenario: Users table rendered
-- **WHEN** the admin navigates to `/admin`
+- **WHEN** the admin navigates to `/admin/users`
 - **THEN** a table displays users with columns: Email, Name, Role, Active, Actions
 - **THEN** pagination controls are shown if total > page size
+- **THEN** the table shows loading, empty and error/retry states
 
 #### Scenario: Role badges
 - **WHEN** users are displayed
-- **THEN** each role has a distinct badge color: admin=dark, operator=blue, guard=amber, resident=green
+- **THEN** each role has a distinct badge color
+- **THEN** platform admins see organization and community columns
 
 ### Requirement: Create user
 The admin SHALL be able to create new users via a form.
@@ -47,20 +49,15 @@ The admin SHALL be able to edit user role and active status.
 - **THEN** the badge updates immediately
 
 ### Requirement: Call history table
-The admin panel SHALL include a paginated call history table with status and date filters.
+The admin panel SHALL expose call history as a dedicated analysis page at
+`/admin/calls`.
 
 #### Scenario: Table renders with call data
-- **WHEN** the admin navigates to `/admin`
-- **THEN** below the users section, a "Historial de Llamadas" section is displayed
-- **THEN** a table shows calls with columns: Status, Kiosk, Operator, Access Point, Started, Duration
+- **WHEN** the admin navigates to `/admin/calls`
+- **THEN** a table shows calls with columns: Status, Kiosk, Operator, Access Point,
+  Started, Duration
 - **THEN** calls are fetched via `GET /api/calls` using the existing `apiClient`
-
-#### Scenario: Status badges
-- **WHEN** calls are displayed
-- **THEN** pending calls show a gray badge ("Pendiente")
-- **THEN** active calls show a green badge ("Activa")
-- **THEN** ended calls show a blue badge ("Finalizada")
-- **THEN** missed calls show an amber badge ("Perdida")
+- **THEN** the page shows loading, empty and error/retry states
 
 #### Scenario: Status filter
 - **WHEN** the admin selects a status from the filter dropdown
@@ -74,17 +71,16 @@ The admin panel SHALL include a paginated call history table with status and dat
 
 #### Scenario: Pagination
 - **WHEN** there are more than 10 calls
-- **THEN** pagination controls (← page / total →) are shown
+- **THEN** pagination controls show page/total
 - **THEN** clicking next/prev fetches the corresponding page
 
 #### Scenario: Empty state
 - **WHEN** there are no calls matching the filters
 - **THEN** a message "No hay llamadas registradas" is displayed
 
-#### Scenario: Operator filter (admin only)
+#### Scenario: Operator filter
 - **WHEN** the admin is viewing the table
-- **THEN** an optional operator filter dropdown is available to filter by specific operator
-- **THEN** selecting an operator adds `?operatorId=<id>` to the API call
+- **THEN** an optional operator filter is available to filter by specific operator
 
 ### Requirement: Call history design consistency
 
