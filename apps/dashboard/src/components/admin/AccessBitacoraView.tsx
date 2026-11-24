@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Skeleton } from '../ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { DetailField, DetailGrid } from '../ui/detail-field';
+import { accessReasonLabels } from '../../lib/access-reasons';
 
 interface CommunityOption {
   id: string;
@@ -292,19 +293,8 @@ function technicalJson(value: unknown): string {
   }
 }
 
-/** Reason codes the scan flow stores in `details.reason`. */
-const reasonLabels: Record<string, string> = {
-  denied_by_guard: 'Denegado por el guardia',
-  pass_used: 'Pase ya utilizado',
-  revoked: 'Pase revocado',
-  expired: 'Pase vencido',
-  not_valid_now: 'Fuera de vigencia',
-  out_of_days: 'Día no autorizado',
-  out_of_schedule: 'Fuera del horario permitido',
-  daily_uses_exhausted: 'Sin usos disponibles hoy',
-  wrong_direction: 'Sentido de acceso incorrecto',
-  token_already_used: 'QR ya utilizado',
-};
+/** Reason codes the scan flow stores in `details.reason`, shared with reports. */
+const reasonLabels = accessReasonLabels;
 
 export function AccessBitacoraView({
   communityId: fixedCommunityId,

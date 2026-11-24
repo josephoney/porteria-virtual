@@ -749,6 +749,13 @@ describe('access and shift reports over the bitacora', () => {
     assert.equal(body.totals.closedShifts, 2);
     assert.equal(body.totals.hours, 6.5);
     assert.equal(body.totals.accesses, 8, 'el acceso sin turno no se atribuye');
+    assert.equal(
+      body.totals.hours,
+      Number(
+        (body.guards as Json[]).reduce((sum, guard) => sum + Number(guard.hours), 0).toFixed(2),
+      ),
+      'las horas del total coinciden con la suma por guardia',
+    );
 
     const shifts = Object.fromEntries((body.shifts as Json[]).map((row) => [row.shiftId, row]));
     assert.equal(shifts[closedShiftAId].hours, 4);

@@ -61,16 +61,16 @@
 
 ## 5. Pantalla de reportes
 
-- [ ] 5.1 Reemplazar el panel actual por las dos familias: Accesos y Turnos.
-- [ ] 5.2 Quitar de la pantalla toda métrica de llamadas; los endpoints de
+- [x] 5.1 Reemplazar el panel actual por las dos familias: Accesos y Turnos.
+- [x] 5.2 Quitar de la pantalla toda métrica de llamadas; los endpoints de
       llamadas quedan en el código sin uso desde la UI.
-- [ ] 5.3 Acciones de exportación a CSV, XLSX y PDF con los filtros vigentes.
-- [ ] 5.4 Estados de carga, vacío y error en cada familia.
-- [ ] 5.5 Playwright: cada rol ve su alcance, las métricas de accesos y turnos
+- [x] 5.3 Acciones de exportación a CSV, XLSX y PDF con los filtros vigentes.
+- [x] 5.4 Estados de carga, vacío y error en cada familia.
+- [x] 5.5 Playwright: cada rol ve su alcance, las métricas de accesos y turnos
       renderizan y la exportación dispara la descarga.
 
 ## 6. Verificación
 
-- [ ] 6.1 Suites unitarias e integración en verde.
+- [x] 6.1 Suites unitarias e integración en verde.
 - [ ] 6.2 Smoke manual en staging: reporte diario contra la bitácora del mismo
       día, turno abierto visible y exportación en los tres formatos.

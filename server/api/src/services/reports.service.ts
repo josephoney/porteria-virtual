@@ -814,6 +814,14 @@ export async function getShiftReport(
     }
   >();
 
+  // Los totales se acumulan en horas crudas y se redondean al final: sumar
+  // horas ya redondeadas por turno desviaba el total respecto de la suma por
+  // guardia y las dos cifras no coincidían en pantalla.
+  let totalClosedShifts = 0;
+  let totalOpenShifts = 0;
+  let totalHours = 0;
+  let totalAccesses = 0;
+
   const shifts = result.rows.map((item) => {
     const guardName =
       [item.guard_first_name, item.guard_last_name].filter(Boolean).join(' ').trim() ||
@@ -845,6 +853,14 @@ export async function getShiftReport(
     }
     guardMap.set(item.guard_person_id, guard);
 
+    totalAccesses += accesses;
+    if (closed) {
+      totalClosedShifts += 1;
+      totalHours += hours!;
+    } else {
+      totalOpenShifts += 1;
+    }
+
     return {
       shiftId: item.id,
       guardPersonId: item.guard_person_id,
@@ -862,7 +878,7 @@ export async function getShiftReport(
     .sort((a, b) => b.hours - a.hours || a.guardName.localeCompare(b.guardName));
 
   const openShifts = shifts
-    .filter((shift) => shift.status === 'open')
+    .filter((shift) => shift.hours === null)
     .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
     .map((shift) => ({
       shiftId: shift.shiftId,
@@ -871,16 +887,13 @@ export async function getShiftReport(
       startedAt: shift.startedAt,
     }));
 
-  const totals = shifts.reduce(
-    (acc, shift) => ({
-      shifts: acc.shifts + 1,
-      openShifts: acc.openShifts + (shift.status === 'open' ? 1 : 0),
-      closedShifts: acc.closedShifts + (shift.status === 'closed' ? 1 : 0),
-      hours: acc.hours + (shift.hours ?? 0),
-      accesses: acc.accesses + shift.accesses,
-    }),
-    { shifts: 0, openShifts: 0, closedShifts: 0, hours: 0, accesses: 0 },
-  );
+  const totals = {
+    shifts: shifts.length,
+    openShifts: totalOpenShifts,
+    closedShifts: totalClosedShifts,
+    hours: roundHours(totalHours),
+    accesses: totalAccesses,
+  };
 
   return {
     from,
@@ -889,7 +902,7 @@ export async function getShiftReport(
       organizationId: scope.organizationId,
       communityId: scope.communityId ?? null,
     },
-    totals: { ...totals, hours: roundHours(totals.hours) },
+    totals,
     guards,
     shifts,
     openShifts,

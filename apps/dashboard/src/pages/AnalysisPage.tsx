@@ -15,7 +15,7 @@ const meta = {
   },
   reports: {
     title: 'Reportes',
-    description: 'Métricas de accesos, llamadas y puertas.',
+    description: 'Accesos por QR o documento y turnos de guardia, exportables a CSV, Excel y PDF.',
   },
   history: {
     title: 'Historial',

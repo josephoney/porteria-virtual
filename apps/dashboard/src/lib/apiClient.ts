@@ -210,6 +210,53 @@ export async function assetObjectUrl(id: string): Promise<string | null> {
   return URL.createObjectURL(blob);
 }
 
+/** Reads the file name the server proposed in `Content-Disposition`. */
+function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (encoded?.[1]) {
+    try {
+      return decodeURIComponent(encoded[1].trim());
+    } catch {
+      return encoded[1].trim();
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  return plain?.[1]?.trim() ?? null;
+}
+
+/**
+ * Downloads a file from the API. A plain `<a href>` cannot authenticate
+ * because the token travels in a header, so the file is fetched as a blob and
+ * handed to the browser with the name the server chose.
+ */
+export async function downloadFile(path: string): Promise<{ blob: Blob; filename: string }> {
+  const requestFile = (token: string | null) =>
+    fetch(`${CONFIG.API_URL}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+  let res = await requestFile(getToken());
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (!newToken) {
+      onLogout();
+      throw new Error('Session expired');
+    }
+    res = await requestFile(newToken);
+  }
+
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    throw new ApiError(errorBody.message || `HTTP ${res.status}`, res.status, errorBody);
+  }
+
+  return {
+    blob: await res.blob(),
+    filename: filenameFromDisposition(res.headers.get('Content-Disposition')) ?? 'reporte',
+  };
+}
+
 export async function upload<T>(path: string, formData: FormData): Promise<ApiResponse<T>> {
   const token = getToken();
   const headers: Record<string, string> = {};

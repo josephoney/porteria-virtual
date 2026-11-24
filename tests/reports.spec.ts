@@ -18,8 +18,19 @@ async function selectOptions(page: Page, label: string): Promise<string[]> {
   return options.filter((option) => option !== 'Todas las comunidades' && option !== '');
 }
 
-async function expectMetrics(page: Page) {
-  await expect(page.getByRole('heading', { level: 4, name: 'Métricas de Llamadas' })).toBeVisible();
+/**
+ * Records a manual observation, which is the only access the tests can create
+ * without a pass: it lands in today's bitácora and therefore in the default
+ * report range. Without it the report can be legitimately empty.
+ */
+async function recordManualAccess(page: Page, summary: string) {
+  await page.goto('/analysis/bitacora-accesos');
+  const addButton = page.getByRole('button', { name: 'Agregar novedad', exact: true });
+  await expect(addButton).toBeEnabled();
+  await addButton.click();
+  await page.locator('#manual-summary').fill(summary);
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await expect(page.getByRole('row', { name: new RegExp(summary) })).toBeVisible();
 }
 
 test.describe('Reportes scope by role', () => {
@@ -37,9 +48,9 @@ test.describe('Reportes scope by role', () => {
     // La comunidad visible es solo la del guardia.
     await expect.poll(() => selectOptions(page, 'Comunidad')).toEqual(['Torre Norte']);
 
-    await page.getByRole('button', { name: 'Cargar' }).click();
-    await expectMetrics(page);
-    await expect.poll(() => requests.length).toBeGreaterThan(0);
+    await expect
+      .poll(() => requests.some((url) => url.includes('/api/reports/access?')))
+      .toBe(true);
     expect(requests.every((url) => !url.includes('organizationId='))).toBe(true);
   });
 
@@ -55,9 +66,9 @@ test.describe('Reportes scope by role', () => {
     await expect(page.getByLabel('Organización')).toHaveCount(0);
     await expect.poll(() => selectOptions(page, 'Comunidad')).toEqual(['Torre Norte']);
 
-    await page.getByRole('button', { name: 'Cargar' }).click();
-    await expectMetrics(page);
-    await expect.poll(() => requests.length).toBeGreaterThan(0);
+    await expect
+      .poll(() => requests.some((url) => url.includes('/api/reports/access?')))
+      .toBe(true);
     expect(requests.every((url) => !url.includes('organizationId='))).toBe(true);
   });
 
@@ -75,9 +86,9 @@ test.describe('Reportes scope by role', () => {
     await expect(page.getByLabel('Organización')).toHaveCount(0);
     await expect.poll(() => selectOptions(page, 'Comunidad')).toEqual(['Torre Norte']);
 
-    await page.getByRole('button', { name: 'Cargar' }).click();
-    await expectMetrics(page);
-    await expect.poll(() => requests.length).toBeGreaterThan(0);
+    await expect
+      .poll(() => requests.some((url) => url.includes('/api/reports/access?')))
+      .toBe(true);
     expect(requests.every((url) => !url.includes('organizationId='))).toBe(true);
 
     // El contexto de plataforma no le pertenece.
@@ -86,7 +97,9 @@ test.describe('Reportes scope by role', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Reportes' })).toHaveCount(0);
   });
 
-  test('org_admin sees the organization scope and updates the period', async ({ page }) => {
+  test('org_admin sees the whole organization and switches between accesses and shifts', async ({
+    page,
+  }) => {
     await loginAs(page, DEMO_USERS.orgAdmin);
     await expect(page).toHaveURL(/\/admin$/);
 
@@ -99,22 +112,27 @@ test.describe('Reportes scope by role', () => {
     await expect(page.getByLabel('Organización')).toHaveCount(0);
 
     // Por defecto el reporte es de toda la organización: sin communityId.
-    await page.getByRole('button', { name: 'Cargar' }).click();
-    await expectMetrics(page);
-    await expect.poll(() => requests.length).toBeGreaterThan(0);
+    await expect
+      .poll(() => requests.some((url) => url.includes('/api/reports/access?')))
+      .toBe(true);
     expect(
       requests.every((url) => !url.includes('organizationId=') && !url.includes('communityId=')),
     ).toBe(true);
 
-    await page.getByRole('tab', { name: 'Semanal' }).click();
-    await page.getByRole('button', { name: 'Cargar' }).click();
-    await expect(page.getByRole('heading', { level: 4, name: 'Tendencia Diaria' })).toBeVisible();
-    await expect.poll(() => requests.some((url) => url.includes('/reports/weekly?'))).toBe(true);
+    // La serie cambia de granularidad sin recargar la página.
+    await page.getByRole('combobox', { name: 'Granularidad de la serie' }).click();
+    await page.getByRole('option', { name: 'Semana', exact: true }).click();
+    await expect.poll(() => requests.some((url) => url.includes('granularity=week'))).toBe(true);
 
-    await page.getByRole('tab', { name: 'Mensual' }).click();
-    await page.getByRole('button', { name: 'Cargar' }).click();
-    await expect(page.getByRole('heading', { level: 4, name: 'Por Semana' })).toBeVisible();
-    await expect.poll(() => requests.some((url) => url.includes('/reports/monthly?'))).toBe(true);
+    // La familia de turnos tiene su propio pedido.
+    await page.getByRole('tab', { name: 'Turnos' }).click();
+    await expect
+      .poll(() => requests.some((url) => url.includes('/api/reports/shifts?')))
+      .toBe(true);
+    await expect(
+      page.getByText(/Turnos sin cerrar|Sin turnos registrados en el período/),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Exportar a Excel' })).toBeEnabled();
   });
 
   test('superadmin filters platform reports by organization and community', async ({ page }) => {
@@ -127,25 +145,21 @@ test.describe('Reportes scope by role', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Reportes' })).toBeVisible();
 
     const orgSelect = page.getByLabel('Organización');
-    const loadButton = page.getByRole('button', { name: 'Cargar' });
 
     // Sin organización no hay reporte de plataforma: no existe el agregado global.
     await expect(orgSelect).toBeVisible();
-    await expect(orgSelect.locator('option')).not.toHaveCount(0);
     await orgSelect.selectOption('');
-    await expect(loadButton).toBeDisabled();
     await expect(
-      page.getByText('Selecciona una organización para ver reportes globales.'),
+      page.getByText('Selecciona una organización para ver los reportes de la plataforma.'),
     ).toBeVisible();
+    await expect(page.getByLabel('Comunidad')).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Exportar a CSV' })).toBeDisabled();
 
     // Una organización habilita el reporte y acota las comunidades.
     await orgSelect.selectOption({ label: 'Administradora Demo' });
-    await expect(loadButton).toBeEnabled();
     await expect.poll(() => selectOptions(page, 'Comunidad')).toEqual(['Torre Norte']);
 
     const adminOrgId = await orgSelect.inputValue();
-    await loadButton.click();
-    await expectMetrics(page);
     await expect
       .poll(() => requests.some((url) => url.includes(`organizationId=${adminOrgId}`)))
       .toBe(true);
@@ -154,7 +168,6 @@ test.describe('Reportes scope by role', () => {
     const communitySelect = page.getByLabel('Comunidad');
     await communitySelect.selectOption({ label: 'Torre Norte' });
     const communityId = await communitySelect.inputValue();
-    await loadButton.click();
     await expect
       .poll(() => requests.some((url) => url.includes(`communityId=${communityId}`)))
       .toBe(true);
@@ -164,10 +177,57 @@ test.describe('Reportes scope by role', () => {
     await expect(page.getByLabel('Comunidad').locator('option', { hasText: /Los/ })).toHaveCount(1);
     const independentOrgId = await orgSelect.inputValue();
     expect(independentOrgId).not.toBe(adminOrgId);
-
-    await loadButton.click();
     await expect
       .poll(() => requests.some((url) => url.includes(`organizationId=${independentOrgId}`)))
       .toBe(true);
+  });
+
+  test('the access report renders the metrics of the recorded bitacora', async ({ page }) => {
+    await loginAs(page, DEMO_USERS.communityAdmin);
+    await expect(page).toHaveURL(/\/admin$/);
+
+    // Una observación de hoy garantiza que el período por defecto tenga datos.
+    await recordManualAccess(page, `Reporte E2E ${Date.now()}`);
+
+    await page.goto('/analysis/reports');
+    await expect(page.getByRole('heading', { level: 1, name: 'Reportes' })).toBeVisible();
+
+    await expect(page.getByText('Método de verificación')).toBeVisible();
+    await expect(page.getByText('Accesos por hora')).toBeVisible();
+    await expect(page.getByText('Accesos por portería')).toBeVisible();
+    await expect(page.getByText('Motivos de denegación')).toBeVisible();
+    await expect(page.getByText('Latencia de confirmación')).toBeVisible();
+    await expect(page.getByText('QR', { exact: true })).toBeVisible();
+  });
+
+  test('every report exports to CSV, Excel and PDF', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    await loginAs(page, DEMO_USERS.communityAdmin);
+    await expect(page).toHaveURL(/\/admin$/);
+    await recordManualAccess(page, `Exportación E2E ${Date.now()}`);
+
+    await page.goto('/analysis/reports');
+    await expect(page.getByRole('button', { name: 'Exportar a CSV' })).toBeEnabled();
+
+    for (const [label, extension] of [
+      ['Exportar a CSV', 'csv'],
+      ['Exportar a Excel', 'xlsx'],
+      ['Exportar a PDF', 'pdf'],
+    ] as const) {
+      const downloadPromise = page.waitForEvent('download');
+      await page.getByRole('button', { name: label }).click();
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toMatch(
+        new RegExp(`^accesos-\\d{4}-\\d{2}-\\d{2}-\\d{4}-\\d{2}-\\d{2}\\.${extension}$`),
+      );
+    }
+
+    // Los turnos usan el mismo mecanismo con su propio nombre de archivo.
+    await page.getByRole('tab', { name: 'Turnos' }).click();
+    await expect(page.getByRole('button', { name: 'Exportar a CSV' })).toBeEnabled();
+    const shiftDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Exportar a CSV' }).click();
+    expect((await shiftDownload).suggestedFilename()).toMatch(/^turnos-\d{4}-\d{2}-\d{2}-/);
   });
 });
