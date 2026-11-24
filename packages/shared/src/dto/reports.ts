@@ -41,6 +41,20 @@ export interface ShiftReportQuery {
   organizationId?: string;
 }
 
+export type ReportExportFamily = 'access' | 'shifts';
+
+export type ReportExportFormat = 'csv' | 'xlsx' | 'pdf';
+
+export interface ReportExportQuery {
+  report: ReportExportFamily;
+  format: ReportExportFormat;
+  from: string;
+  to: string;
+  granularity?: 'day' | 'week' | 'month';
+  communityId?: string;
+  organizationId?: string;
+}
+
 export interface CreateEventDto {
   eventType: string;
   organizationId?: string;

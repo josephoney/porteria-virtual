@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as reportsService from '../services/reports.service.js';
+import * as reportExportService from '../services/report-export.service.js';
 import { can } from '../services/admin-permissions.service.js';
 import { parseLocalDate, toLocalDateString } from '../lib/report-dates.js';
 
@@ -212,5 +213,55 @@ export async function reportsRoutes(app: FastifyInstance) {
     const scope = resolveReportScope(u, query, reply);
     if (!scope) return;
     return reportsService.getShiftReport(scope, period.from, period.to);
+  });
+
+  /**
+   * Exportación de un reporte. Reutiliza los mismos constructores que la
+   * pantalla, así el archivo y lo que se ve en pantalla no pueden diferir.
+   */
+  app.get('/export', async (request: FastifyRequest, reply: FastifyReply) => {
+    const u = getUser(request);
+    const query = request.query as {
+      report?: string;
+      format?: string;
+      from?: string;
+      to?: string;
+      granularity?: string;
+      communityId?: string;
+      organizationId?: string;
+    };
+
+    const report = query.report?.trim();
+    if (!reportExportService.isReportFamily(report)) {
+      return reply.status(400).send({ error: 'El reporte debe ser access o shifts' });
+    }
+
+    const format = query.format?.trim();
+    if (!reportExportService.isExportFormat(format)) {
+      return reply.status(400).send({ error: 'El formato debe ser csv, xlsx o pdf' });
+    }
+
+    const period = parseReportPeriod(query, reply);
+    if (!period) return;
+
+    const granularity = parseGranularity(query.granularity, reply);
+    if (!granularity) return;
+
+    const scope = resolveReportScope(u, query, reply);
+    if (!scope) return;
+
+    const file = await reportExportService.buildExportFile({
+      report,
+      format,
+      scope,
+      from: period.from,
+      to: period.to,
+      granularity,
+    });
+
+    return reply
+      .header('Content-Type', file.contentType)
+      .header('Content-Disposition', `attachment; filename="${file.filename}"`)
+      .send(file.body);
   });
 }

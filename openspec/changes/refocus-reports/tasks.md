@@ -44,14 +44,20 @@
 
 ## 4. Exportación
 
-- [ ] 4.1 Endpoint de exportación que recibe la familia de reporte, el período,
-      el alcance y el formato, y reutiliza el mismo constructor que la pantalla.
-- [ ] 4.2 Exportación CSV con comillas correctas y BOM UTF-8.
-- [ ] 4.3 Exportación XLSX con encabezados, filas y totales.
-- [ ] 4.4 Exportación PDF con título, período, alcance, totales y tablas.
-- [ ] 4.5 Rechazar un formato desconocido sin producir archivo.
-- [ ] 4.6 Tests: cada formato descarga, contiene las mismas métricas que la
-      pantalla y respeta el alcance de un rol acotado.
+- [x] 4.1 Endpoint `GET /api/reports/export?report=access|shifts&format=csv|xlsx|pdf`
+      con el período, la granularidad y el alcance; usa los mismos constructores
+      que la pantalla (`getAccessReport` / `getShiftReport`).
+- [x] 4.2 Exportación CSV con comillas RFC y BOM UTF-8; los números salen con
+      punto decimal para que Excel los lea como números.
+- [x] 4.3 Exportación XLSX real (`exceljs`): una hoja por sección, encabezados en
+      negrita y totales.
+- [x] 4.4 Exportación PDF (`pdfkit`, sin Chromium): título, período, alcance,
+      totales y tablas con encabezado repetido al cortar de página.
+- [x] 4.5 Rechazar un formato o un reporte desconocido con `400` sin producir
+      archivo.
+- [x] 4.6 Tests: cada formato descarga con su tipo de contenido, el CSV contiene
+      las mismas métricas que el endpoint de la pantalla y el rol acotado no
+      filtra otra comunidad.
 
 ## 5. Pantalla de reportes
 

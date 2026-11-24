@@ -67,6 +67,9 @@ export type {
   EventBreakdownQuery,
   AccessReportQuery,
   ShiftReportQuery,
+  ReportExportQuery,
+  ReportExportFamily,
+  ReportExportFormat,
   CreateEventDto,
 } from './dto/reports.js';
 export type {
