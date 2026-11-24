@@ -16,6 +16,8 @@ const db = createDb();
 
 /** Placeholder for the document once a record leaves the window. */
 export const ANONYMIZED_DOCUMENT = 'ANONIMIZADO';
+/** Replaces a summary that repeated the visitor name. */
+export const ANONYMIZED_SUMMARY = 'Acceso anonimizado';
 
 /**
  * Windows the administration can choose between.
@@ -104,50 +106,47 @@ const passActivity = sql`COALESCE(
   ${accessPasses.createdAt}
 )`;
 
-/** Detail rows that still carry a readable document. */
-const entriesIdentity = sql`(
-  (
-    ${bitacoraEntries.details} -> 'visitor' ->> 'document' IS NOT NULL
-    AND ${bitacoraEntries.details} -> 'visitor' ->> 'document' <> ${ANONYMIZED_DOCUMENT}
-  )
-  OR (
-    ${bitacoraEntries.details} ->> 'visitorDocument' IS NOT NULL
-    AND ${bitacoraEntries.details} ->> 'visitorDocument' <> ${ANONYMIZED_DOCUMENT}
-  )
-)`;
-
 /**
- * Replaces the document in the entry payload and leaves everything else.
+ * Detail rows that still describe the visitor.
  *
- * The name, the companions and the plate stay: they are the operational record
- * of who entered, and the administration asked to keep them. The document is
- * the identifier that ages out.
+ * The summary lives in its own column and is handled apart: an entry whose
+ * summary names the visitor is rewritten to the generic marker, so the check
+ * here looks only at the payload.
  */
-const redactedDetails = sql`jsonb_set(
-  CASE
-    WHEN jsonb_typeof(${bitacoraEntries.details} -> 'visitor') = 'object'
-      AND (${bitacoraEntries.details} -> 'visitor') ? 'document'
-    THEN jsonb_set(
-      ${bitacoraEntries.details},
-      '{visitor,document}',
-      to_jsonb(${ANONYMIZED_DOCUMENT}::text),
-      false
-    )
-    ELSE ${bitacoraEntries.details}
-  END,
-  '{visitorDocument}',
-  to_jsonb(${ANONYMIZED_DOCUMENT}::text),
-  false
+const entriesIdentity = sql`(
+  ${bitacoraEntries.details} ? 'visitor'
+  OR ${bitacoraEntries.details} ? 'companions'
+  OR ${bitacoraEntries.details} ? 'vehiclePlate'
 )`;
 
 /**
- * Anonymizes the visitor document older than the organization's window.
+ * Replaces a summary that repeats the visitor name with the generic marker.
  *
- * Only the document leaves. The name, the companions, the plate, the summary
- * and the authorizer stay: they are the record of who entered and who allowed
- * it, and the administration asked to keep them. The document is the identifier
- * that ages out, because it is the one that can be used to impersonate someone.
- * Deleting the row would erase the operation; the visit still counts.
+ * The trigger only accepts the marker, never a free rewrite, so the sweep
+ * cannot use this to change what the guard wrote.
+ */
+const anonymizedSummary = sql`CASE
+  WHEN (${bitacoraEntries.details} -> 'visitor' ->> 'firstName') IS NOT NULL
+    AND ${bitacoraEntries.summary} LIKE
+      '%' || (${bitacoraEntries.details} -> 'visitor' ->> 'firstName') || '%'
+  THEN ${ANONYMIZED_SUMMARY}
+  ELSE ${bitacoraEntries.summary}
+END`;
+
+/**
+ * Applies the organization's retention window.
+ *
+ * Two rules, because the record has two purposes:
+ *
+ * - The access log (bitacora) is the operational record of the community. After
+ *   the window it loses the visitor: name, document, companions and plate leave,
+ *   the summary becomes the generic marker, and the authorizer stays because it
+ *   answers who allowed the entry.
+ * - The pass is the resident's own record of whom they authorized. The name,
+ *   the companions and the plate stay; only the document ages out, because it is
+ *   the identifier that can be used to impersonate someone.
+ *
+ * Nothing is deleted: the visit still counts, and the reports do not change.
  */
 export async function anonymizeOrganization(
   organizationId: string,
@@ -241,7 +240,12 @@ export async function anonymizeOrganization(
       if (counts.entries > 0) {
         await tx
           .update(bitacoraEntries)
-          .set({ details: redactedDetails })
+          .set({
+            summary: anonymizedSummary,
+            details: sql`(
+              ${bitacoraEntries.details} - 'visitor' - 'companions' - 'vehiclePlate'
+            )`,
+          })
           .where(and(entriesWhere, entriesHeld));
       }
     }

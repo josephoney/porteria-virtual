@@ -302,6 +302,16 @@ export default function PassDetailScreen() {
             ))}
           </View>
         ) : null}
+        {pass.accesses && pass.accesses.length > 0 ? (
+          <View style={styles.companions}>
+            <Text style={styles.companionTitle}>Ingresos y salidas</Text>
+            {pass.accesses.map((access, index) => (
+              <Text key={`${access.at}-${index}`} style={ui.muted}>
+                {access.action === 'entry' ? 'Ingreso' : 'Salida'} · {formatDateTime(access.at)}
+              </Text>
+            ))}
+          </View>
+        ) : null}
         <Text style={ui.muted}>Link válido hasta {formatDateTime(pass.linkExpiresAt)}</Text>
       </Card>
 

@@ -19,11 +19,17 @@
 - [x] 2.1 Barrido por días, con la ventana de cada organización.
 - [x] 2.2 Excluir los registros dentro de un rango preservado y vigente. El
       resultado informa `preserved` separado de lo anonimizado.
-- [x] 2.3 Anonimizar **sólo el número de documento**; el nombre, los
-      acompañantes, la placa, el resumen y el nombre del residente que autorizó
-      se conservan como constancia de la visita.
+- [x] 2.3 La bitácora pierde al visitante completo (nombre, documento,
+      acompañantes, placa y resumen) y conserva al residente que autorizó. El
+      pase conserva nombre, acompañantes y placa, y sólo anonimiza el documento:
+      es la constancia del residente sobre a quién dejó entrar.
 - [x] 2.5 La ventana del pase se mide por su último uso (o su creación), no por
       su vencimiento: un pase de larga vigencia no conserva la cédula de más.
+- [x] 2.6 Ocultamiento después del uso: el residente y el guardia ven la cédula
+      enmascarada en cuanto el pase se usa; sólo el escaneo en vivo la muestra
+      completa.
+- [x] 2.7 El detalle del pase devuelve la lista de ingresos y salidas con su
+      hora, para que el residente conserve el registro de sus visitas.
 - [x] 2.4 Tests: 29 días conserva, 31 anonimiza, un rango preservado no se toca,
       la liberación lo vuelve elegible, y el autorizador sigue identificado.
       El caso se cubre con 45 días de antigüedad contra una ventana de 30.

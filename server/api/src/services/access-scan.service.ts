@@ -23,6 +23,7 @@ import type {
 import config from '../config.js';
 import { insertBitacoraEntry } from './bitacora.service.js';
 import { publishPassEvent } from '../lib/pass-bus.js';
+import { maskDocument } from '../lib/mask-document.js';
 import { PRIVACY_POLICY_VERSION } from '../lib/privacy-policy.js';
 import { buildLocationPath } from './location-path.service.js';
 import { resolveDestinationById } from './pass-destination.service.js';
@@ -725,7 +726,13 @@ export async function listScans(
   return {
     ok: true,
     data: {
-      items: rows.map((row) => ({ ...row, locationPath: paths.get(row.locationUnitId) ?? '' })),
+      items: rows.map((row) => ({
+        ...row,
+        // El historial es consulta, no verificación: la cédula ya cumplió su
+        // función en el escaneo y no vuelve a exponerse.
+        visitorDocument: maskDocument(row.visitorDocument),
+        locationPath: paths.get(row.locationUnitId) ?? '',
+      })),
       page: query.page,
       pageSize: query.pageSize,
       total: Number(countRow?.count ?? 0),

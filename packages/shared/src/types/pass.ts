@@ -81,6 +81,11 @@ export interface AccessPass {
   exitAt: Date | null;
   entryCount: number;
   exitCount: number;
+  /**
+   * Ingresos y salidas confirmados, en orden. Sólo viaja en el detalle: es la
+   * constancia del residente de cuándo entró y salió cada persona.
+   */
+  accesses?: { action: string; at: string }[];
   createdAt: Date;
   updatedAt: Date;
 }

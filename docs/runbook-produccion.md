@@ -161,13 +161,19 @@ docker compose ... exec -T db pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" -
 
 ## 11. Retención y privacidad de datos
 
-La **cédula** del visitante no se borra con la fila: se **anonimiza** pasada la
-ventana. El número pasa a `ANONIMIZADO` en el pase, el escaneo y la bitácora; el
-nombre, los acompañantes, la placa, la fecha, la portería, el resultado, el
-motivo, el turno y **quien autorizó se conservan**. Es la decisión de la
-organización: la cédula es el dato que permite suplantar a una persona; el resto
-es la constancia de la visita. Los reportes no cambian, porque leen el evento y
-nunca el documento.
+La retención tiene dos formas, porque el registro tiene dos dueños:
+
+- **La bitácora** (registro operativo de la comunidad) pierde al visitante
+  completo pasada la ventana: nombre, documento, acompañantes y placa; el resumen
+  pasa a «Acceso anonimizado». Conserva la hora, la portería, el resultado, el
+  motivo, el turno y **quien autorizó**, que es la pregunta de una investigación.
+- **El pase** (constancia del residente) conserva nombre, acompañantes y placa, y
+  sólo anonimiza el documento. El residente sigue viendo quién entró a su unidad y
+  a qué hora, aunque ya no pueda recuperar la cédula.
+
+Los escaneos conservan nombre y hora y anonimizan el documento. Mientras el
+documento exista, residente y guardia lo ven enmascarado después del uso; sólo el
+escaneo en vivo lo muestra completo.
 
 La ventana del pase se mide por su **último uso** (o su creación si nunca se usó),
 no por su vencimiento: un pase de larga vigencia no conserva la cédula más tiempo

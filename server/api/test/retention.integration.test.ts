@@ -588,17 +588,15 @@ describe('retención de datos de acceso', () => {
       db.select().from(bitacoraEntries).where(eq(bitacoraEntries.id, newEntryAId)).limit(1),
     ]);
     const oldDetails = oldEntry[0].details as Record<string, unknown>;
-    const oldVisitor = oldDetails.visitor as Record<string, unknown>;
-    assert.equal(oldVisitor.document, 'ANONIMIZADO');
-    // El nombre, los acompañantes y la placa siguen: son el registro de quién
-    // entró, y la administración pidió conservarlos.
-    assert.equal(oldVisitor.firstName, 'Visitante');
-    assert.deepEqual(oldDetails.companions, [{ firstName: 'Acompañante' }]);
-    assert.equal(oldDetails.vehiclePlate, 'ABC123');
+    // La bitácora es el registro operativo de la comunidad: pasada la ventana
+    // pierde al visitante completo, pero conserva a quien lo autorizó.
+    assert.equal(oldDetails.visitor, undefined);
+    assert.equal(oldDetails.companions, undefined);
+    assert.equal(oldDetails.vehiclePlate, undefined);
     assert.equal(oldDetails.action, 'entry');
     assert.equal(oldEntry[0].authorizedByName, 'Guardia Antiguo');
-    // El resumen llevaba el nombre y se conserva: el nombre no se anonimiza.
-    assert.equal(oldEntry[0].summary, 'Ingresó Visitante Antiguo');
+    // El resumen llevaba el nombre y pasa al marcador genérico.
+    assert.equal(oldEntry[0].summary, 'Acceso anonimizado');
     assert.equal(newEntry[0].authorizedByName, 'Guardia Reciente');
     assert.notEqual((newEntry[0].details as Record<string, unknown>).visitor, undefined);
   });

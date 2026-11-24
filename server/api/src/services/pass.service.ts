@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { and, asc, desc, eq, gte, ilike, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { createDb } from '@porteria/database';
-import { accessPasses, communities, memberships } from '@porteria/database/schema';
+import { accessPasses, communities, memberships, passScans } from '@porteria/database/schema';
 import {
   PassStatus,
   PassType,
@@ -22,6 +22,7 @@ import {
   type PassRuleSummary,
 } from '@porteria/shared';
 import config from '../config.js';
+import { maskDocument } from '../lib/mask-document.js';
 import { decryptLinkToken, encryptLinkToken, randomToken, sha256Hex } from '../lib/pass-tokens.js';
 import { buildLocationPath } from './location-path.service.js';
 import {
@@ -650,6 +651,8 @@ export type PassListItem = Omit<AccessPassRow, 'linkTokenEncrypted'> & {
   shareUrl: string | null;
   /** Present on the detail endpoint; list rows omit it. */
   rule?: PassRuleSummary;
+  /** Ingresos y salidas confirmados, en orden. Sólo en el detalle. */
+  accesses?: { action: string; at: string }[];
 };
 
 /** The encrypted copy is for the server only: never send it to a client. */
@@ -798,10 +801,26 @@ export async function getPassById(
   ]);
   const rule = await buildPassRule(owned.data, timezone, new Date());
 
+  // El residente conserva el nombre de a quién autorizó y la hora de cada
+  // entrada y salida; la cédula sale de la respuesta apenas el pase se usa.
+  const accesses = await db
+    .select({ action: passScans.action, scannedAt: passScans.scannedAt })
+    .from(passScans)
+    .where(and(eq(passScans.passId, passId), eq(passScans.status, 'confirmed')))
+    .orderBy(asc(passScans.scannedAt));
+
+  const item = toPassItem(owned.data);
+  const documentVisible = accesses.length === 0 && owned.data.status === PassStatus.Active;
+
   return {
     ok: true,
     data: {
-      ...toPassItem(owned.data),
+      ...item,
+      visitorDocument: documentVisible ? item.visitorDocument : maskDocument(item.visitorDocument),
+      accesses: accesses.map((access) => ({
+        action: access.action,
+        at: access.scannedAt.toISOString(),
+      })),
       locationPath: destination?.path ?? (await buildLocationPath(owned.data.locationUnitId)) ?? '',
       destination: destination
         ? toDestinationSummary(destination)

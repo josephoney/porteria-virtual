@@ -260,6 +260,13 @@
       "when": 1795570000000,
       "tag": "0036_bitacora_document_redaction",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1795573600000,
+      "tag": "0037_bitacora_two_redactions",
+      "breakpoints": true
     }
   ]
 }

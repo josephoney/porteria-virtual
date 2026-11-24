@@ -53,26 +53,28 @@ Si la versión de la política cambia, se exige aceptar de nuevo.
 
 ## Conservación
 
-La identidad del visitante se conserva durante **30, 60 o 90 días**, según lo que
-defina cada organización (30 por defecto). Pasado ese plazo **se anonimiza el
-documento de identidad**: el número se reemplaza por `ANONIMIZADO` en el pase, en
-el escaneo y en la bitácora.
+La ventana es de **30, 60 o 90 días**, según lo que defina cada organización (30
+por defecto). Al cumplirse, el tratamiento depende del registro:
 
-Lo demás **se conserva**: el nombre y apellido del visitante, sus acompañantes,
-la placa del vehículo, la fecha, la portería, el resultado, el motivo, el turno,
-el pase y el nombre de quien autorizó.
-
-Esa es la decisión de la organización: la cédula es el dato que permite suplantar
-a una persona, y es el que deja de existir. El resto es el registro de quién
-entró y quién lo permitió, y es lo que permite responder ante un incidente
-meses después.
+- **La bitácora** es el registro operativo de la comunidad. Pierde al visitante
+  completo: nombre, documento, acompañantes y placa; el resumen pasa a «Acceso
+  anonimizado». Conserva la hora, la portería, el resultado, el motivo, el turno,
+  el pase y **quien autorizó**, que es lo que responde quién dejó entrar.
+- **El pase** es la constancia del residente sobre a quién autorizó. Conserva el
+  nombre, los acompañantes y la placa; **sólo se anonimiza el documento**, porque
+  es el dato que permite suplantar a una persona. Así el residente puede revisar
+  meses después quién entró a su unidad y a qué hora.
+- **Los escaneos** conservan el nombre y la hora, y anonimizan el documento.
 
 La ventana del pase se mide desde su **último uso**, no desde su fecha de
 vencimiento: un pase de larga vigencia no conserva la cédula más tiempo que sus
 visitas.
 
-El **nombre del guardia o residente que autorizó se conserva siempre**: no es el
-dato del visitante y es lo que permite responder quién dejó entrar.
+Mientras la cédula exista, tampoco se muestra de más: el residente y el guardia
+la ven enmascarada una vez que el pase se usó, y el escaneo en vivo es el único
+momento en que el guardia la ve completa.
+
+El **nombre del guardia o residente que autorizó se conserva siempre**.
 
 Las exportaciones de reportes no incluyen identidad: sólo agregados por período,
 portería, método, resultado y turno.
@@ -96,10 +98,10 @@ plazo indicado.
 | Administrador de comunidad u organización | Sí                    | Completo, dentro de la ventana  |
 | Residente                                 | Sus propios invitados | Completo (lo escribió él)       |
 
-Fuera de la ventana, el documento deja de existir para todos los roles: se
-muestra como `ANONIMIZADO`. El nombre del visitante sigue visible en el registro
-—dónde, con qué resultado y quién lo autorizó— porque es la constancia de la
-visita.
+Fuera de la ventana, la bitácora ya no muestra al visitante: aparece como
+«Acceso anonimizado». El residente conserva en su propio historial el nombre y la
+hora de cada ingreso y salida, y en todos lados el documento queda como
+`ANONIMIZADO`.
 
 ## Transmisión a terceros
 
