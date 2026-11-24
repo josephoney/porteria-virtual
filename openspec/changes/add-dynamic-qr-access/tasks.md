@@ -184,16 +184,27 @@
 
 ### 16. Missing-exit alerts
 
-- [ ] 16.1 Enable the missing-exit worker with `PASS_MISSING_EXIT_GRACE_MINUTES`
-- [ ] 16.2 Deduplicate open alerts with the partial unique index
-- [ ] 16.3 Resolve alerts on exit or manual admin action
-- [ ] 16.4 Send notifications to resident, guard, and `community_admin`
+- [x] 16.1 Enable the missing-exit worker with `PASS_MISSING_EXIT_GRACE_MINUTES`.
+      `workers/pass-alerts.worker.ts` barre cada `PASS_ALERT_INTERVAL_MINUTES`
+      (default 5) y se apaga con `PASS_ALERT_WORKER_ENABLED=false`.
+- [x] 16.2 Deduplicate open alerts with the partial unique index.
+      `pass_alert_open_idx` en la migración `0012`; el worker captura la carrera.
+- [x] 16.3 Resolve alerts on exit. `access-scan.service.ts` resuelve la alerta
+      abierta al registrar el egreso, con `resolved_by_person_id` y su motivo.
+- [ ] 16.4 Send notifications to resident, guard, and `community_admin`. Depende
+      de 13.1–13.4.
+- [ ] 16.5 Resolve an open alert by manual admin action. No existe endpoint de
+      alertas; hoy sólo se resuelven solas con el egreso.
 
 ### 17. Dashboard and operations
 
-- [ ] 17.1 Moved to `add-guard-shifts-and-access-bitacora` (Bitácora de accesos over
-      `bitacora_entries`)
-- [ ] 17.2 Move `DYNAMIC_QR_ENABLED` to per-community configuration
-- [ ] 17.3 Define PII retention for passes and scans
-- [ ] 17.4 Persist denied scan attempts
-- [ ] 17.5 Add the operational runbook for link/QR incidents
+- [x] 17.1 Moved to `add-guard-shifts-and-access-bitacora` (Bitácora de accesos over
+      `bitacora_entries`), archivado el 2026-11-12.
+- [ ] 17.2 Move `DYNAMIC_QR_ENABLED` to per-community configuration. Sigue siendo
+      global en `config.ts` y en los compose de staging y producción.
+- [ ] 17.3 Define PII retention for passes and scans. Abierto en
+      `docs/produccion-checklist.md`.
+- [x] 17.4 Persist denied scan attempts. Viven en `bitacora_entries` como
+      `scan_denied` con motivo y acción (`writeDeniedEntry`), no en `pass_scans`.
+- [x] 17.5 Add the operational runbook for link/QR incidents.
+      `docs/runbook-produccion.md`.
