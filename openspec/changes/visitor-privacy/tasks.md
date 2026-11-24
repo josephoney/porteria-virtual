@@ -8,8 +8,9 @@
 - [x] 1.3 Tabla `retention_holds`: organización, comunidad opcional, rango de
       fechas, motivo, autor, creación, vencimiento y liberación.
 - [x] 1.4 Reescribir el disparador de la bitácora: acepta únicamente el cambio
-      que anonimiza, conserva al autorizador y permite reemplazar el resumen por
-      su versión anónima.
+      que reemplaza el documento por `ANONIMIZADO`, conserva al autorizador, el
+      resumen y el resto del detalle, y rechaza cualquier otra escritura
+      (migraciones 0035 y 0036).
 - [x] 1.5 Tests: la columna nueva queda con 30 por defecto, el consentimiento se
       guarda y se lee, y el disparador sigue rechazando cualquier otra escritura.
 
@@ -18,8 +19,11 @@
 - [x] 2.1 Barrido por días, con la ventana de cada organización.
 - [x] 2.2 Excluir los registros dentro de un rango preservado y vigente. El
       resultado informa `preserved` separado de lo anonimizado.
-- [x] 2.3 Anonimizar también el resumen del registro y conservar el nombre del
-      residente que autorizó.
+- [x] 2.3 Anonimizar **sólo el número de documento**; el nombre, los
+      acompañantes, la placa, el resumen y el nombre del residente que autorizó
+      se conservan como constancia de la visita.
+- [x] 2.5 La ventana del pase se mide por su último uso (o su creación), no por
+      su vencimiento: un pase de larga vigencia no conserva la cédula de más.
 - [x] 2.4 Tests: 29 días conserva, 31 anonimiza, un rango preservado no se toca,
       la liberación lo vuelve elegible, y el autorizador sigue identificado.
       El caso se cubre con 45 días de antigüedad contra una ventana de 30.

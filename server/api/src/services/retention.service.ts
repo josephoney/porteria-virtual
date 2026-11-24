@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { createDb } from '@porteria/database';
@@ -13,11 +14,8 @@ import {
 
 const db = createDb();
 
-/** Placeholder that replaces the identity once a record leaves the window. */
-export const ANONYMIZED_NAME = 'Anonimizado';
+/** Placeholder for the document once a record leaves the window. */
 export const ANONYMIZED_DOCUMENT = 'ANONIMIZADO';
-/** Generic summary for an entry whose free text carried the visitor's name. */
-export const ANONYMIZED_SUMMARY = 'Acceso anonimizado';
 
 /**
  * Windows the administration can choose between.
@@ -78,33 +76,78 @@ function stillIdentified(column: AnyPgColumn) {
  * judicial request. It is a decision of the administration, it has a reason and
  * an expiration, and while it is active the sweep leaves those rows alone.
  */
-function notHeld(organizationId: string, communityColumn: AnyPgColumn, atColumn: AnyPgColumn) {
+function notHeld(
+  organizationId: string,
+  communityColumn: AnyPgColumn,
+  atExpression: AnyPgColumn | SQL,
+) {
   return sql`NOT EXISTS (
     SELECT 1 FROM retention_holds h
     WHERE h.organization_id = ${organizationId}
       AND (h.community_id IS NULL OR h.community_id = ${communityColumn})
-      AND ${atColumn} >= h.from_date
-      AND ${atColumn} < (h.to_date + INTERVAL '1 day')
+      AND ${atExpression} >= h.from_date
+      AND ${atExpression} < (h.to_date + INTERVAL '1 day')
       AND h.released_at IS NULL
       AND (h.expires_at IS NULL OR h.expires_at > now())
   )`;
 }
 
-/** Summary replaced only when it repeats the visitor's first name. */
-const anonymizedSummary = sql`CASE
-  WHEN ${bitacoraEntries.details} -> 'visitor' ->> 'firstName' IS NOT NULL
-   AND summary LIKE '%' || (${bitacoraEntries.details} -> 'visitor' ->> 'firstName') || '%'
-  THEN ${ANONYMIZED_SUMMARY}
-  ELSE summary
-END`;
+/**
+ * Date that decides when the pass leaves the window.
+ *
+ * A pass is measured by its last use, not by its expiry: a pass valid until
+ * 2030 would otherwise keep the document readable for years after the last
+ * visit, and the document is exactly what the window protects.
+ */
+const passActivity = sql`COALESCE(
+  (SELECT MAX(s.scanned_at) FROM pass_scans s WHERE s.pass_id = ${accessPasses.id}),
+  ${accessPasses.createdAt}
+)`;
+
+/** Detail rows that still carry a readable document. */
+const entriesIdentity = sql`(
+  (
+    ${bitacoraEntries.details} -> 'visitor' ->> 'document' IS NOT NULL
+    AND ${bitacoraEntries.details} -> 'visitor' ->> 'document' <> ${ANONYMIZED_DOCUMENT}
+  )
+  OR (
+    ${bitacoraEntries.details} ->> 'visitorDocument' IS NOT NULL
+    AND ${bitacoraEntries.details} ->> 'visitorDocument' <> ${ANONYMIZED_DOCUMENT}
+  )
+)`;
 
 /**
- * Anonymizes visitor identity older than the organization's window.
+ * Replaces the document in the entry payload and leaves everything else.
  *
- * The record itself stays: type, result, reason, time, access point, shift and
- * the authorizer are what the reports and the readable board read, and none of
- * them is the visitor's personal data. Deleting the row would erase the
- * operation; replacing the identity preserves the count and removes the person.
+ * The name, the companions and the plate stay: they are the operational record
+ * of who entered, and the administration asked to keep them. The document is
+ * the identifier that ages out.
+ */
+const redactedDetails = sql`jsonb_set(
+  CASE
+    WHEN jsonb_typeof(${bitacoraEntries.details} -> 'visitor') = 'object'
+      AND (${bitacoraEntries.details} -> 'visitor') ? 'document'
+    THEN jsonb_set(
+      ${bitacoraEntries.details},
+      '{visitor,document}',
+      to_jsonb(${ANONYMIZED_DOCUMENT}::text),
+      false
+    )
+    ELSE ${bitacoraEntries.details}
+  END,
+  '{visitorDocument}',
+  to_jsonb(${ANONYMIZED_DOCUMENT}::text),
+  false
+)`;
+
+/**
+ * Anonymizes the visitor document older than the organization's window.
+ *
+ * Only the document leaves. The name, the companions, the plate, the summary
+ * and the authorizer stay: they are the record of who entered and who allowed
+ * it, and the administration asked to keep them. The document is the identifier
+ * that ages out, because it is the one that can be used to impersonate someone.
+ * Deleting the row would erase the operation; the visit still counts.
  */
 export async function anonymizeOrganization(
   organizationId: string,
@@ -120,7 +163,7 @@ export async function anonymizeOrganization(
   const outcome = await db.transaction(async (tx) => {
     const passesWhere = and(
       belongsToOrganization(accessPasses.communityId, organizationId),
-      lt(accessPasses.validUntil, cutoff),
+      sql`${passActivity} < ${cutoff.toISOString()}::timestamptz`,
       stillIdentified(accessPasses.visitorDocument),
     );
 
@@ -130,21 +173,13 @@ export async function anonymizeOrganization(
       stillIdentified(passScans.visitorDocument),
     );
 
-    // El autorizador no se anonimiza: no es el visitante. La identidad que se
-    // borra vive sólo en el detalle que describe a quien entró.
-    const entriesIdentity = sql`(
-      ${bitacoraEntries.details} ? 'visitor'
-      OR ${bitacoraEntries.details} ? 'companions'
-      OR ${bitacoraEntries.details} ? 'vehiclePlate'
-    )`;
-
     const entriesWhere = and(
       belongsToOrganization(bitacoraEntries.communityId, organizationId),
       lt(bitacoraEntries.createdAt, cutoff),
       entriesIdentity,
     );
 
-    const passesHeld = notHeld(organizationId, accessPasses.communityId, accessPasses.validUntil);
+    const passesHeld = notHeld(organizationId, accessPasses.communityId, passActivity);
     const scansHeld = notHeld(organizationId, passScans.communityId, passScans.scannedAt);
     const entriesHeld = notHeld(
       organizationId,
@@ -192,38 +227,21 @@ export async function anonymizeOrganization(
       if (counts.passes > 0) {
         await tx
           .update(accessPasses)
-          .set({
-            visitorFirstName: ANONYMIZED_NAME,
-            visitorLastName: '',
-            visitorDocument: ANONYMIZED_DOCUMENT,
-            companions: [],
-            vehiclePlate: null,
-            hasVehicle: false,
-          })
+          .set({ visitorDocument: ANONYMIZED_DOCUMENT })
           .where(and(passesWhere, passesHeld));
       }
 
       if (counts.scans > 0) {
         await tx
           .update(passScans)
-          .set({
-            visitorFirstName: ANONYMIZED_NAME,
-            visitorLastName: '',
-            visitorDocument: ANONYMIZED_DOCUMENT,
-            vehiclePlate: null,
-          })
+          .set({ visitorDocument: ANONYMIZED_DOCUMENT })
           .where(and(scansWhere, scansHeld));
       }
 
       if (counts.entries > 0) {
         await tx
           .update(bitacoraEntries)
-          .set({
-            summary: anonymizedSummary,
-            details: sql`(
-              ${bitacoraEntries.details} - 'visitor' - 'companions' - 'vehiclePlate'
-            )`,
-          })
+          .set({ details: redactedDetails })
           .where(and(entriesWhere, entriesHeld));
       }
     }

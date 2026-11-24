@@ -567,12 +567,12 @@ describe('retención de datos de acceso', () => {
       db.select().from(accessPasses).where(eq(accessPasses.id, oldPassAId)).limit(1),
       db.select().from(accessPasses).where(eq(accessPasses.id, newPassAId)).limit(1),
     ]);
-    assert.equal(oldPass[0].visitorFirstName, 'Anonimizado');
-    assert.equal(oldPass[0].visitorLastName, '');
+    assert.equal(oldPass[0].visitorFirstName, 'Visitante');
+    assert.equal(oldPass[0].visitorLastName, 'Antiguo');
     assert.equal(oldPass[0].visitorDocument, 'ANONIMIZADO');
-    assert.equal(oldPass[0].vehiclePlate, null);
-    assert.equal(oldPass[0].hasVehicle, false);
-    assert.deepEqual(oldPass[0].companions, []);
+    // El resto del registro se conserva: es la constancia de a quién se autorizó.
+    assert.equal(oldPass[0].vehiclePlate, 'ABC123');
+    assert.equal(oldPass[0].hasVehicle, true);
     assert.equal(newPass[0].visitorDocument, 'DOC-RECIENTE-A');
 
     const [oldScan, newScan] = await Promise.all([
@@ -580,7 +580,7 @@ describe('retención de datos de acceso', () => {
       db.select().from(passScans).where(eq(passScans.id, newScanAId)).limit(1),
     ]);
     assert.equal(oldScan[0].visitorDocument, 'ANONIMIZADO');
-    assert.equal(oldScan[0].visitorFirstName, 'Anonimizado');
+    assert.equal(oldScan[0].visitorFirstName, 'Visitante');
     assert.equal(newScan[0].visitorDocument, 'DOC-ESCANEO');
 
     const [oldEntry, newEntry] = await Promise.all([
@@ -588,16 +588,17 @@ describe('retención de datos de acceso', () => {
       db.select().from(bitacoraEntries).where(eq(bitacoraEntries.id, newEntryAId)).limit(1),
     ]);
     const oldDetails = oldEntry[0].details as Record<string, unknown>;
-    assert.equal(oldDetails.visitor, undefined);
-    assert.equal(oldDetails.companions, undefined);
-    assert.equal(oldDetails.vehiclePlate, undefined);
-    // El autorizador no es el visitante: se conserva para poder responder
-    // quién dejó entrar a esa persona.
-    assert.equal(oldDetails.authorizedByName, 'Guardia Antiguo');
+    const oldVisitor = oldDetails.visitor as Record<string, unknown>;
+    assert.equal(oldVisitor.document, 'ANONIMIZADO');
+    // El nombre, los acompañantes y la placa siguen: son el registro de quién
+    // entró, y la administración pidió conservarlos.
+    assert.equal(oldVisitor.firstName, 'Visitante');
+    assert.deepEqual(oldDetails.companions, [{ firstName: 'Acompañante' }]);
+    assert.equal(oldDetails.vehiclePlate, 'ABC123');
     assert.equal(oldDetails.action, 'entry');
     assert.equal(oldEntry[0].authorizedByName, 'Guardia Antiguo');
-    // El resumen llevaba el nombre en texto libre; pasa al marcador genérico.
-    assert.equal(oldEntry[0].summary, 'Acceso anonimizado');
+    // El resumen llevaba el nombre y se conserva: el nombre no se anonimiza.
+    assert.equal(oldEntry[0].summary, 'Ingresó Visitante Antiguo');
     assert.equal(newEntry[0].authorizedByName, 'Guardia Reciente');
     assert.notEqual((newEntry[0].details as Record<string, unknown>).visitor, undefined);
   });

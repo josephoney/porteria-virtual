@@ -53,15 +53,26 @@ Si la versión de la política cambia, se exige aceptar de nuevo.
 
 ## Conservación
 
-La identidad del visitante se conserva legible durante **30, 60 o 90 días**,
-según lo que defina cada organización (30 por defecto). Pasado ese plazo el
-registro **no se borra**: se **anonimiza**. La fila queda con la fecha, la
-portería, el resultado, el motivo, el turno y el pase; el nombre, el documento,
-la placa y los acompañantes se reemplazan por un valor anónimo, y el resumen de
-la bitácora pasa a «Acceso anonimizado».
+La identidad del visitante se conserva durante **30, 60 o 90 días**, según lo que
+defina cada organización (30 por defecto). Pasado ese plazo **se anonimiza el
+documento de identidad**: el número se reemplaza por `ANONIMIZADO` en el pase, en
+el escaneo y en la bitácora.
 
-El **nombre del guardia o residente que autorizó se conserva**: no es el dato del
-visitante y es lo que permite responder quién dejó entrar.
+Lo demás **se conserva**: el nombre y apellido del visitante, sus acompañantes,
+la placa del vehículo, la fecha, la portería, el resultado, el motivo, el turno,
+el pase y el nombre de quien autorizó.
+
+Esa es la decisión de la organización: la cédula es el dato que permite suplantar
+a una persona, y es el que deja de existir. El resto es el registro de quién
+entró y quién lo permitió, y es lo que permite responder ante un incidente
+meses después.
+
+La ventana del pase se mide desde su **último uso**, no desde su fecha de
+vencimiento: un pase de larga vigencia no conserva la cédula más tiempo que sus
+visitas.
+
+El **nombre del guardia o residente que autorizó se conserva siempre**: no es el
+dato del visitante y es lo que permite responder quién dejó entrar.
 
 Las exportaciones de reportes no incluyen identidad: sólo agregados por período,
 portería, método, resultado y turno.
@@ -85,8 +96,10 @@ plazo indicado.
 | Administrador de comunidad u organización | Sí                    | Completo, dentro de la ventana  |
 | Residente                                 | Sus propios invitados | Completo (lo escribió él)       |
 
-Fuera de la ventana, ni el administrador ni el residente ven la identidad: ya no
-existe.
+Fuera de la ventana, el documento deja de existir para todos los roles: se
+muestra como `ANONIMIZADO`. El nombre del visitante sigue visible en el registro
+—dónde, con qué resultado y quién lo autorizó— porque es la constancia de la
+visita.
 
 ## Transmisión a terceros
 
@@ -113,18 +126,20 @@ Conocer, actualizar, rectificar y suprimir sus datos, y revocar la autorización
 La solicitud se presenta a la organización responsable, que la atiende dentro de
 los plazos de la Ley 1581 de 2012.
 
-La supresión se resuelve anonimizando el registro: la persona deja de ser
-identificable y el evento de acceso se conserva como estadística operativa.
+La supresión se atiende sobre el registro de acceso: el sistema anonimiza el
+documento de forma automática al cumplirse la ventana, y si la persona pide la
+supresión del nombre, la organización la ejecuta sobre el registro, porque el
+sistema lo conserva como evidencia de la visita.
 
 ## Textos para portería
 
 **Aviso para el cartel de la entrada**
 
 > En este acceso se registran el nombre y el documento de las personas que
-> ingresan, con el fin de controlar el acceso y atender incidentes. Los datos se
-> conservan legibles durante el plazo definido por la administración y luego se
-> anonimizan. Puede consultar el aviso completo y ejercer sus derechos ante la
-> administración de la comunidad.
+> ingresan, con el fin de controlar el acceso y atender incidentes. Pasado el
+> plazo definido por la administración, el número de documento se anonimiza y el
+> registro de la visita se conserva. Puede consultar el aviso completo y ejercer
+> sus derechos ante la administración de la comunidad.
 
 **Texto de la casilla en el pase**
 

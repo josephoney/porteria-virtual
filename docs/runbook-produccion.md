@@ -161,12 +161,17 @@ docker compose ... exec -T db pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" -
 
 ## 11. Retención y privacidad de datos
 
-La identidad del visitante no se borra: pasada la ventana se **anonimiza**. La
-fila queda con fecha, portería, resultado, motivo y turno; desaparecen el nombre,
-el documento, la placa y los acompañantes, y el resumen de la bitácora pasa a
-«Acceso anonimizado». El **nombre de quien autorizó se conserva**: no es el dato
-del visitante y es lo que responde quién dejó entrar. Los reportes no cambian,
-porque leen el evento y nunca la identidad.
+La **cédula** del visitante no se borra con la fila: se **anonimiza** pasada la
+ventana. El número pasa a `ANONIMIZADO` en el pase, el escaneo y la bitácora; el
+nombre, los acompañantes, la placa, la fecha, la portería, el resultado, el
+motivo, el turno y **quien autorizó se conservan**. Es la decisión de la
+organización: la cédula es el dato que permite suplantar a una persona; el resto
+es la constancia de la visita. Los reportes no cambian, porque leen el evento y
+nunca el documento.
+
+La ventana del pase se mide por su **último uso** (o su creación si nunca se usó),
+no por su vencimiento: un pase de larga vigencia no conserva la cédula más tiempo
+que sus visitas.
 
 La ventana la define cada organización en **Mi organización → Retención de
 datos**: 30, 60 o 90 días (30 por defecto). La organización es la responsable del
@@ -210,9 +215,10 @@ consentimiento queda marcado como `at_gate`. Cambiar `PRIVACY_POLICY_VERSION`
 (`server/api/src/lib/privacy-policy.ts`) obliga a aceptar de nuevo.
 
 **Excepción conocida**: `bitacora_entries` es inmutable por trigger
-(`prevent_bitacora_update`, migraciones 0034 y 0035). El único `UPDATE` permitido
-es el que quita identidad y nada más —la función compara la forma de la fila—;
-cualquier otro cambio sigue fallando con `bitacora rows are immutable`.
+(`prevent_bitacora_update`, migraciones 0034, 0035 y 0036). El único `UPDATE`
+permitido es el que reemplaza el documento por `ANONIMIZADO` y no toca nada más
+—la función compara la forma de la fila—; cualquier otro cambio sigue fallando
+con `bitacora rows are immutable`.
 
 **Fuera de alcance**: el directorio `people`/`accounts` (residentes y personal)
 y la tabla legacy `visitors` no entran en esta ventana. Los textos libres que

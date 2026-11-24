@@ -76,7 +76,7 @@ Lista de go/no-go para la primera puesta en producción. Cada ítem debe tener e
 - [ ] Community admin capacitado: accesos, usuarios, bitácora, force-close.
 - [ ] Canal de soporte y escalamiento definidos.
 - [ ] Procedimiento de alta de comunidad probado de punta a punta.
-- [ ] Retención de datos y PII acordada con la comunidad: la plataforma anonimiza la identidad pasado el plazo que la organización define (30, 60 o 90 días), conserva el nombre de quien autorizó y permite preservar un rango por incidente. El consentimiento se registra con fecha, IP y versión de la política.
+- [ ] Retención de datos y PII acordada con la comunidad: la plataforma anonimiza la **cédula** pasado el plazo que la organización define (30, 60 o 90 días) y conserva nombre, acompañantes, placa y autorizador como constancia de la visita. El consentimiento se registra con fecha, IP y versión de la política.
 - [ ] Plan de comunicación para incidentes.
 
 ## 6. Contrato de API v1
