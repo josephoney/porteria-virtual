@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as reportsService from '../services/reports.service.js';
 import { can } from '../services/admin-permissions.service.js';
+import { parseLocalDate, toLocalDateString } from '../lib/report-dates.js';
 
 function getUser(request: FastifyRequest) {
   const u = request.user;
@@ -44,6 +45,44 @@ function resolveReportScope(
   return { organizationId: user.orgId, communityId };
 }
 
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Valida `YYYY-MM-DD` como fecha local real (rechaza 2026-02-31). */
+function parseReportPeriod(
+  query: { from?: string; to?: string },
+  reply: FastifyReply,
+): { from: string; to: string } | null {
+  const from = query.from?.trim();
+  const to = query.to?.trim();
+  if (!from || !to) {
+    reply.status(400).send({ error: 'Los parámetros from y to son obligatorios' });
+    return null;
+  }
+  for (const value of [from, to]) {
+    const parsed = parseLocalDate(value);
+    if (!DATE_PATTERN.test(value) || toLocalDateString(parsed) !== value) {
+      reply.status(400).send({ error: 'Las fechas deben tener el formato YYYY-MM-DD' });
+      return null;
+    }
+  }
+  if (from > to) {
+    reply.status(400).send({ error: 'from no puede ser posterior a to' });
+    return null;
+  }
+  return { from, to };
+}
+
+const GRANULARITIES = new Set(['day', 'week', 'month']);
+
+function parseGranularity(value: string | undefined, reply: FastifyReply) {
+  const granularity = (value?.trim() || 'day') as 'day' | 'week' | 'month';
+  if (!GRANULARITIES.has(granularity)) {
+    reply.status(400).send({ error: 'La granularidad debe ser day, week o month' });
+    return null;
+  }
+  return granularity;
+}
+
 export async function reportsRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -52,7 +91,10 @@ export async function reportsRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         statusCode: 401,
         error: 'Unauthorized',
-        message: (err as { code?: string }).code === 'FAST_JWT_EXPIRED' ? 'Token expired' : 'Invalid token',
+        message:
+          (err as { code?: string }).code === 'FAST_JWT_EXPIRED'
+            ? 'Token expired'
+            : 'Invalid token',
       });
     }
   });
@@ -83,7 +125,11 @@ export async function reportsRoutes(app: FastifyInstance) {
 
   app.get('/monthly', async (request: FastifyRequest, reply: FastifyReply) => {
     const u = getUser(request);
-    const query = request.query as { month?: string; communityId?: string; organizationId?: string };
+    const query = request.query as {
+      month?: string;
+      communityId?: string;
+      organizationId?: string;
+    };
     const scope = resolveReportScope(u, query, reply);
     if (!scope) return;
     return reportsService.getMonthlyReport(scope.organizationId, query.month, scope.communityId);
@@ -99,7 +145,12 @@ export async function reportsRoutes(app: FastifyInstance) {
     };
     const scope = resolveReportScope(u, query, reply);
     if (!scope) return;
-    return reportsService.getCallStats(scope.organizationId, query.from, query.to, scope.communityId);
+    return reportsService.getCallStats(
+      scope.organizationId,
+      query.from,
+      query.to,
+      scope.communityId,
+    );
   });
 
   app.get('/event-breakdown', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -123,5 +174,43 @@ export async function reportsRoutes(app: FastifyInstance) {
       query.bucket,
       scope.communityId,
     );
+  });
+
+  /**
+   * Reporte de accesos. `from` y `to` son días locales (`YYYY-MM-DD`) y
+   * `granularity` controla la serie: `day` (default), `week` o `month`.
+   */
+  app.get('/access', async (request: FastifyRequest, reply: FastifyReply) => {
+    const u = getUser(request);
+    const query = request.query as {
+      from?: string;
+      to?: string;
+      granularity?: string;
+      communityId?: string;
+      organizationId?: string;
+    };
+    const period = parseReportPeriod(query, reply);
+    if (!period) return;
+    const granularity = parseGranularity(query.granularity, reply);
+    if (!granularity) return;
+    const scope = resolveReportScope(u, query, reply);
+    if (!scope) return;
+    return reportsService.getAccessReport(scope, period.from, period.to, granularity);
+  });
+
+  /** Reporte de turnos; el período se evalúa sobre `guard_shifts.started_at`. */
+  app.get('/shifts', async (request: FastifyRequest, reply: FastifyReply) => {
+    const u = getUser(request);
+    const query = request.query as {
+      from?: string;
+      to?: string;
+      communityId?: string;
+      organizationId?: string;
+    };
+    const period = parseReportPeriod(query, reply);
+    if (!period) return;
+    const scope = resolveReportScope(u, query, reply);
+    if (!scope) return;
+    return reportsService.getShiftReport(scope, period.from, period.to);
   });
 }

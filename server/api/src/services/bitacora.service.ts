@@ -31,9 +31,10 @@ const db = createDb();
 /**
  * Motivos que describen un código que no funciona. El resto de los rechazos
  * son decisiones (el guardia deniega, el residente revoca) o códigos de otra
- * comunidad.
+ * comunidad. Los reportes de accesos reutilizan esta lista para no inventar
+ * un segundo criterio.
  */
-const CODE_FAILURE_REASONS = [
+export const CODE_FAILURE_REASONS = [
   'invalid_or_expired_token',
   'pass_used',
   'expired',
@@ -49,7 +50,7 @@ const CODE_FAILURE_REASONS = [
 const detailReason = sql<string | null>`${bitacoraEntries.details} ->> 'reason'`;
 
 /** Deriva el resultado legible de una entrada a partir de su tipo y motivo. */
-function resolveEntryResult(type: string, details: unknown): BitacoraEntryResult {
+export function resolveEntryResult(type: string, details: unknown): BitacoraEntryResult {
   if (type === 'manual') return 'observation';
   if (type === 'pass_entry' || type === 'pass_exit') return 'authorized';
   if (type === 'pass_rejected') return 'denied';
@@ -65,7 +66,7 @@ function resolveEntryResult(type: string, details: unknown): BitacoraEntryResult
   return 'observation';
 }
 
-function resultCondition(result: BitacoraEntryResult) {
+export function resultCondition(result: BitacoraEntryResult) {
   switch (result) {
     case 'authorized':
       return inArray(bitacoraEntries.type, ['pass_entry', 'pass_exit']);

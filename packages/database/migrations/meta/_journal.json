@@ -218,6 +218,13 @@
       "when": 1795384877305,
       "tag": "0030_retire_users_table",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795490920192,
+      "tag": "0031_bouncy_the_executioner",
+      "breakpoints": true
     }
   ]
 }

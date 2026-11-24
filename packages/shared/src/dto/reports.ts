@@ -26,6 +26,21 @@ export interface EventBreakdownQuery {
   communityId?: string;
 }
 
+export interface AccessReportQuery {
+  from: string;
+  to: string;
+  granularity?: 'day' | 'week' | 'month';
+  communityId?: string;
+  organizationId?: string;
+}
+
+export interface ShiftReportQuery {
+  from: string;
+  to: string;
+  communityId?: string;
+  organizationId?: string;
+}
+
 export interface CreateEventDto {
   eventType: string;
   organizationId?: string;

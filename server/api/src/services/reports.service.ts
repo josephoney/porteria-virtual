@@ -1,14 +1,19 @@
-import { eq, and, gte, lte, count, avg as sqlAvg, sql } from 'drizzle-orm';
+import { eq, and, gte, lte, inArray, count, avg as sqlAvg, sql } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { calls, events, memberships } from '@porteria/database/schema';
+import { calls, events, memberships, bitacoraEntries } from '@porteria/database/schema';
 import type {
   DailyReport,
   WeeklyReport,
   MonthlyReport,
   CallStats,
   EventTimeSeries,
+  AccessReport,
+  AccessReportSeriesPoint,
+  ReportGranularity,
+  ShiftReport,
 } from '@porteria/shared';
-import { dayEnd, dayStart, toLocalDateString } from '../lib/report-dates.js';
+import { resultCondition } from './bitacora.service.js';
+import { dayEnd, dayStart, parseLocalDate, toLocalDateString } from '../lib/report-dates.js';
 
 const db = createDb();
 
@@ -386,4 +391,507 @@ export async function getEventBreakdown(
   }
 
   return { buckets: [...bucketMap.values()] } as unknown as EventTimeSeries;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reportes de accesos y turnos                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Zona horaria con la que `report-dates` arma los rangos locales. Agrupar las
+ * entradas en el día equivocado movería accesos entre series y horas.
+ */
+const REPORT_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+export interface ReportsScope {
+  organizationId: string;
+  communityId?: string | null;
+}
+
+/** Tipos de la bitácora que representan accesos; los turnos no son accesos. */
+const ACCESS_ENTRY_TYPES = [
+  'pass_entry',
+  'pass_exit',
+  'pass_rejected',
+  'scan_denied',
+  'manual',
+] as const;
+
+function accessTypeCondition() {
+  return inArray(bitacoraEntries.type, [...ACCESS_ENTRY_TYPES]);
+}
+
+/** Condición de resultado reutilizada de la bitácora legible. */
+function accessResultCondition(result: 'authorized' | 'denied' | 'code_failure' | 'observation') {
+  const condition = resultCondition(result);
+  if (!condition) throw new Error(`Resultado sin condición: ${result}`);
+  return condition;
+}
+
+/**
+ * Dirección del acceso con la misma regla que la bitácora legible: los tipos
+ * `pass_entry`/`pass_exit` mandan y, para rechazos y entradas manuales, se lee
+ * `details.action` (`entry`/`exit`).
+ */
+const entryDirection = sql<string | null>`CASE
+  WHEN ${bitacoraEntries.type} = 'pass_entry' THEN 'entry'
+  WHEN ${bitacoraEntries.type} = 'pass_exit' THEN 'exit'
+  WHEN ${bitacoraEntries.details} ->> 'action' IN ('entry', 'exit') THEN ${bitacoraEntries.details} ->> 'action'
+  ELSE NULL
+END`;
+
+/**
+ * El método sale de la fuente de la bitácora, no de `pass_scans.origin`:
+ * `manual_identity` significa que el guardia verificó un documento.
+ */
+const entryMethod = sql<'qr' | 'document'>`CASE
+  WHEN ${bitacoraEntries.source} = 'manual_identity' THEN 'document'
+  ELSE 'qr'
+END`;
+
+function accessWhere(scope: ReportsScope, start: Date, end: Date) {
+  return sql`
+    INNER JOIN communities c ON c.id = bitacora_entries.community_id
+    WHERE c.organization_id = ${scope.organizationId}::uuid
+      ${scope.communityId ? sql`AND ${bitacoraEntries.communityId} = ${scope.communityId}::uuid` : sql``}
+      AND ${bitacoraEntries.createdAt} >= ${start.toISOString()}::timestamptz
+      AND ${bitacoraEntries.createdAt} <= ${end.toISOString()}::timestamptz
+      AND ${accessTypeCondition()}
+  `;
+}
+
+function shiftWhere(scope: ReportsScope, start: Date, end: Date) {
+  return sql`
+    INNER JOIN communities c ON c.id = gs.community_id
+    WHERE c.organization_id = ${scope.organizationId}::uuid
+      ${scope.communityId ? sql`AND gs.community_id = ${scope.communityId}::uuid` : sql``}
+      AND gs.started_at >= ${start.toISOString()}::timestamptz
+      AND gs.started_at <= ${end.toISOString()}::timestamptz
+  `;
+}
+
+/** Primer día local de la semana (lunes) para una fecha `YYYY-MM-DD`. */
+function weekStartKey(date: string): string {
+  const value = parseLocalDate(date);
+  const day = value.getDay();
+  value.setDate(value.getDate() + (day === 0 ? -6 : 1 - day));
+  return toLocalDateString(value);
+}
+
+/** Todas las fechas locales entre `from` y `to`, ambas incluidas. */
+function reportDays(from: string, to: string): string[] {
+  const days: string[] = [];
+  const cursor = parseLocalDate(from);
+  let key = toLocalDateString(cursor);
+  while (key <= to) {
+    days.push(key);
+    cursor.setDate(cursor.getDate() + 1);
+    key = toLocalDateString(cursor);
+  }
+  return days;
+}
+
+function seriesKey(day: string, granularity: ReportGranularity): string {
+  if (granularity === 'day') return day;
+  if (granularity === 'month') return day.slice(0, 7);
+  return weekStartKey(day);
+}
+
+function emptySeriesPoint(date: string): AccessReportSeriesPoint {
+  return {
+    date,
+    total: 0,
+    authorized: 0,
+    denied: 0,
+    codeFailure: 0,
+    observation: 0,
+    entries: 0,
+    exits: 0,
+  };
+}
+
+function roundHours(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Constructor del reporte de accesos sobre `bitacora_entries`, la bitácora real
+ * de portería: incluye ingresos y salidas QR, verificaciones por documento,
+ * rechazos y observaciones manuales. Los eventos de turno quedan fuera.
+ *
+ * La latencia se mide sólo sobre accesos con un escaneo QR confirmado; la
+ * cobertura (`confirmedScans / accessCount`) viaja en la respuesta para no
+ * presentarla como si aplicara a todas las entradas.
+ */
+export async function getAccessReport(
+  scope: ReportsScope,
+  from: string,
+  to: string,
+  granularity: ReportGranularity = 'day',
+): Promise<AccessReport> {
+  const start = dayStart(from);
+  const end = dayEnd(to);
+  const where = accessWhere(scope, start, end);
+
+  const [totalsResult, methods, accessPoints, hours, denialReasons, dailyResult, latencyResult] =
+    await Promise.all([
+      db.execute<{
+        total: number;
+        authorized: number;
+        denied: number;
+        code_failure: number;
+        observation: number;
+        entries: number;
+        exits: number;
+      }>(sql`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (
+          WHERE ${accessResultCondition('authorized')}
+        )::int AS authorized,
+        COUNT(*) FILTER (
+          WHERE ${accessResultCondition('denied')}
+        )::int AS denied,
+        COUNT(*) FILTER (
+          WHERE ${accessResultCondition('code_failure')}
+        )::int AS code_failure,
+        COUNT(*) FILTER (
+          WHERE ${accessResultCondition('observation')}
+        )::int AS observation,
+        COUNT(*) FILTER (WHERE ${entryDirection} = 'entry')::int AS entries,
+        COUNT(*) FILTER (WHERE ${entryDirection} = 'exit')::int AS exits
+      FROM bitacora_entries
+      ${where}
+    `),
+
+      db.execute<{ method: 'qr' | 'document'; count: number }>(sql`
+      SELECT ${entryMethod} AS method, COUNT(*)::int AS count
+      FROM bitacora_entries
+      ${where}
+      GROUP BY method
+      ORDER BY count DESC, method
+    `),
+
+      db.execute<{
+        access_point_id: string | null;
+        access_point_name: string | null;
+        count: number;
+      }>(sql`
+      SELECT
+        bitacora_entries.access_point_id AS access_point_id,
+        bitacora_entries.access_point_name AS access_point_name,
+        COUNT(*)::int AS count
+      FROM bitacora_entries
+      ${where}
+      GROUP BY bitacora_entries.access_point_id, bitacora_entries.access_point_name
+      ORDER BY count DESC, access_point_name
+    `),
+
+      db.execute<{ hour: number; count: number }>(sql`
+      SELECT
+        EXTRACT(
+          HOUR FROM bitacora_entries.created_at AT TIME ZONE ${REPORT_TIME_ZONE}::text
+        )::int AS hour,
+        COUNT(*)::int AS count
+      FROM bitacora_entries
+      ${where}
+      GROUP BY hour
+      ORDER BY hour
+    `),
+
+      db.execute<{ reason: string | null; count: number }>(sql`
+      SELECT ${bitacoraEntries.details} ->> 'reason' AS reason, COUNT(*)::int AS count
+      FROM bitacora_entries
+      ${where}
+        AND ${accessResultCondition('denied')}
+      GROUP BY reason
+      ORDER BY count DESC, reason
+    `),
+
+      db.execute<{
+        day: string;
+        total: number;
+        authorized: number;
+        denied: number;
+        code_failure: number;
+        observation: number;
+        entries: number;
+        exits: number;
+      }>(sql`
+      SELECT
+        TO_CHAR(
+          bitacora_entries.created_at AT TIME ZONE ${REPORT_TIME_ZONE}::text,
+          'YYYY-MM-DD'
+        ) AS day,
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (
+          WHERE ${accessResultCondition('authorized')}
+        )::int AS authorized,
+        COUNT(*) FILTER (
+          WHERE ${accessResultCondition('denied')}
+        )::int AS denied,
+        COUNT(*) FILTER (
+          WHERE ${accessResultCondition('code_failure')}
+        )::int AS code_failure,
+        COUNT(*) FILTER (
+          WHERE ${accessResultCondition('observation')}
+        )::int AS observation,
+        COUNT(*) FILTER (WHERE ${entryDirection} = 'entry')::int AS entries,
+        COUNT(*) FILTER (WHERE ${entryDirection} = 'exit')::int AS exits
+      FROM bitacora_entries
+      ${where}
+      GROUP BY day
+      ORDER BY day
+    `),
+
+      db.execute<{ avg_latency: string | null; confirmed_scans: number }>(sql`
+      SELECT
+        AVG(EXTRACT(EPOCH FROM ps.confirmed_at - ps.scanned_at)) AS avg_latency,
+        COUNT(DISTINCT bitacora_entries.id)::int AS confirmed_scans
+      FROM bitacora_entries
+      INNER JOIN pass_scans ps ON ps.id = bitacora_entries.pass_scan_id
+      ${where}
+        AND ps.confirmed_at IS NOT NULL
+    `),
+    ]);
+
+  const row = totalsResult.rows[0];
+  const total = row?.total ?? 0;
+  const authorized = row?.authorized ?? 0;
+  const denied = row?.denied ?? 0;
+  const codeFailure = row?.code_failure ?? 0;
+  const observation = row?.observation ?? 0;
+
+  const methodCounts = new Map(methods.rows.map((item) => [item.method, item.count]));
+  const hourCounts = new Map(hours.rows.map((item) => [item.hour, item.count]));
+
+  const daily = new Map<
+    string,
+    {
+      total: number;
+      authorized: number;
+      denied: number;
+      codeFailure: number;
+      observation: number;
+      entries: number;
+      exits: number;
+    }
+  >();
+  for (const item of dailyResult.rows) {
+    daily.set(item.day, {
+      total: item.total,
+      authorized: item.authorized,
+      denied: item.denied,
+      codeFailure: item.code_failure,
+      observation: item.observation,
+      entries: item.entries,
+      exits: item.exits,
+    });
+  }
+
+  const buckets = new Map<string, AccessReportSeriesPoint>();
+  for (const day of reportDays(from, to)) {
+    const key = seriesKey(day, granularity);
+    const point = buckets.get(key) ?? emptySeriesPoint(key);
+    const counts = daily.get(day);
+    if (counts) {
+      point.total += counts.total;
+      point.authorized += counts.authorized;
+      point.denied += counts.denied;
+      point.codeFailure += counts.codeFailure;
+      point.observation += counts.observation;
+      point.entries += counts.entries;
+      point.exits += counts.exits;
+    }
+    buckets.set(key, point);
+  }
+
+  const latencyRow = latencyResult.rows[0];
+  const rawLatency = latencyRow?.avg_latency == null ? null : Number(latencyRow.avg_latency);
+
+  return {
+    from,
+    to,
+    granularity,
+    scope: {
+      organizationId: scope.organizationId,
+      communityId: scope.communityId ?? null,
+    },
+    totals: {
+      total,
+      authorized,
+      denied,
+      codeFailure,
+      observation,
+      entries: row?.entries ?? 0,
+      exits: row?.exits ?? 0,
+    },
+    byMethod: (['qr', 'document'] as const).map((method) => ({
+      method,
+      count: methodCounts.get(method) ?? 0,
+    })),
+    byAccessPoint: accessPoints.rows.map((item) => ({
+      accessPointId: item.access_point_id,
+      accessPointName: item.access_point_name?.trim() || 'Sin portería',
+      count: item.count,
+    })),
+    byHour: Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      count: hourCounts.get(hour) ?? 0,
+    })),
+    denialReasons: denialReasons.rows.map((item) => ({
+      reason: item.reason?.trim() || 'sin_motivo',
+      count: item.count,
+    })),
+    latency: {
+      averageSeconds: rawLatency == null ? null : Math.round(rawLatency * 10) / 10,
+      confirmedScans: latencyRow?.confirmed_scans ?? 0,
+      accessCount: total,
+    },
+    series: [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date)),
+  };
+}
+
+/**
+ * Constructor del reporte de turnos sobre `guard_shifts`, con los accesos
+ * atribuidos por `bitacora_entries.shift_id`. Un turno abierto no aporta horas:
+ * se informa como abierto para no confundirlo con un turno de duración cero.
+ */
+export async function getShiftReport(
+  scope: ReportsScope,
+  from: string,
+  to: string,
+): Promise<ShiftReport> {
+  const start = dayStart(from);
+  const end = dayEnd(to);
+
+  const result = await db.execute<{
+    id: string;
+    guard_person_id: string;
+    guard_first_name: string | null;
+    guard_last_name: string | null;
+    status: 'open' | 'closed';
+    started_at: Date | string;
+    ended_at: Date | string | null;
+  }>(sql`
+    SELECT
+      gs.id AS id,
+      gs.guard_person_id AS guard_person_id,
+      p.first_name AS guard_first_name,
+      p.last_name AS guard_last_name,
+      gs.status::text AS status,
+      gs.started_at AS started_at,
+      gs.ended_at AS ended_at
+    FROM guard_shifts gs
+    INNER JOIN people p ON p.id = gs.guard_person_id
+    ${shiftWhere(scope, start, end)}
+    ORDER BY gs.started_at DESC
+  `);
+
+  const shiftIds = result.rows.map((item) => item.id);
+  const accessCounts = new Map<string, number>();
+  if (shiftIds.length > 0) {
+    const accessRows = await db
+      .select({ shiftId: bitacoraEntries.shiftId, value: count() })
+      .from(bitacoraEntries)
+      .where(and(inArray(bitacoraEntries.shiftId, shiftIds), accessTypeCondition()))
+      .groupBy(bitacoraEntries.shiftId);
+    for (const accessRow of accessRows) {
+      if (accessRow.shiftId) accessCounts.set(accessRow.shiftId, Number(accessRow.value));
+    }
+  }
+
+  const guardMap = new Map<
+    string,
+    {
+      guardPersonId: string;
+      guardName: string;
+      shifts: number;
+      openShifts: number;
+      closedShifts: number;
+      hours: number;
+      accesses: number;
+    }
+  >();
+
+  const shifts = result.rows.map((item) => {
+    const guardName =
+      [item.guard_first_name, item.guard_last_name].filter(Boolean).join(' ').trim() ||
+      'Sin nombre';
+    const accesses = accessCounts.get(item.id) ?? 0;
+    const startedAt = new Date(item.started_at);
+    const endedAt = item.ended_at ? new Date(item.ended_at) : null;
+    const closed = item.status === 'closed' && endedAt != null;
+    const hours = closed
+      ? Math.max(0, (endedAt!.getTime() - startedAt.getTime()) / 3_600_000)
+      : null;
+
+    const guard = guardMap.get(item.guard_person_id) ?? {
+      guardPersonId: item.guard_person_id,
+      guardName,
+      shifts: 0,
+      openShifts: 0,
+      closedShifts: 0,
+      hours: 0,
+      accesses: 0,
+    };
+    guard.shifts += 1;
+    guard.accesses += accesses;
+    if (closed) {
+      guard.closedShifts += 1;
+      guard.hours += hours!;
+    } else {
+      guard.openShifts += 1;
+    }
+    guardMap.set(item.guard_person_id, guard);
+
+    return {
+      shiftId: item.id,
+      guardPersonId: item.guard_person_id,
+      guardName,
+      status: item.status,
+      startedAt: startedAt.toISOString(),
+      endedAt: endedAt ? endedAt.toISOString() : null,
+      hours: hours == null ? null : roundHours(hours),
+      accesses,
+    };
+  });
+
+  const guards = [...guardMap.values()]
+    .map((guard) => ({ ...guard, hours: roundHours(guard.hours) }))
+    .sort((a, b) => b.hours - a.hours || a.guardName.localeCompare(b.guardName));
+
+  const openShifts = shifts
+    .filter((shift) => shift.status === 'open')
+    .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+    .map((shift) => ({
+      shiftId: shift.shiftId,
+      guardPersonId: shift.guardPersonId,
+      guardName: shift.guardName,
+      startedAt: shift.startedAt,
+    }));
+
+  const totals = shifts.reduce(
+    (acc, shift) => ({
+      shifts: acc.shifts + 1,
+      openShifts: acc.openShifts + (shift.status === 'open' ? 1 : 0),
+      closedShifts: acc.closedShifts + (shift.status === 'closed' ? 1 : 0),
+      hours: acc.hours + (shift.hours ?? 0),
+      accesses: acc.accesses + shift.accesses,
+    }),
+    { shifts: 0, openShifts: 0, closedShifts: 0, hours: 0, accesses: 0 },
+  );
+
+  return {
+    from,
+    to,
+    scope: {
+      organizationId: scope.organizationId,
+      communityId: scope.communityId ?? null,
+    },
+    totals: { ...totals, hours: roundHours(totals.hours) },
+    guards,
+    shifts,
+    openShifts,
+  };
 }

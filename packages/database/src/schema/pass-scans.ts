@@ -28,6 +28,9 @@ export const scanStatusEnum = pgEnum('scan_status', [
 
 export const scanResultEnum = pgEnum('scan_result', ['authorized', 'denied']);
 
+/** Cómo verificó el guardia el acceso: pase QR o documento de identidad. */
+export const scanOriginEnum = pgEnum('scan_origin', ['qr', 'document']);
+
 export const passScans = pgTable(
   'pass_scans',
   {
@@ -68,6 +71,12 @@ export const passScans = pgTable(
     visitorDocument: varchar('visitor_document', { length: 50 }).notNull(),
     vehiclePlate: varchar('vehicle_plate', { length: 20 }),
     action: scanActionEnum('action').notNull(),
+    /**
+     * Vía de verificación del escaneo; los escaneos previos son `qr`.
+     * El método del reporte de accesos sale de `bitacora_entries.source`
+     * (`manual_identity` → documento), no de esta columna.
+     */
+    origin: scanOriginEnum('origin').notNull().default('qr'),
     result: scanResultEnum('result').notNull().default('authorized'),
     reason: text('reason'),
     /** Guard observation attached to the decision; audited with the scan. */

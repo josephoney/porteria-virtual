@@ -33,7 +33,13 @@ export { relayOutputs, relayModeEnum } from './relay-outputs';
 export { invitations, invitationStatusEnum } from './invitations';
 export { outboxEvents, outboxStatusEnum, ingestedEvents } from './outbox-events';
 export { accessPasses, passTypeEnum, passStatusEnum, presenceStateEnum } from './access-passes';
-export { passScans, scanActionEnum, scanStatusEnum, scanResultEnum } from './pass-scans';
+export {
+  passScans,
+  scanActionEnum,
+  scanStatusEnum,
+  scanResultEnum,
+  scanOriginEnum,
+} from './pass-scans';
 export { passAlerts, passAlertTypeEnum, passAlertStatusEnum } from './pass-alerts';
 export { guardShifts, guardShiftStatusEnum } from './guard-shifts';
 export { guardShiftSegments } from './guard-shift-segments';

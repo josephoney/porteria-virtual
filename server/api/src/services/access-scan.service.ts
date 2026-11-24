@@ -319,6 +319,7 @@ export async function scanPass(
         visitorDocument: pass.visitorDocument,
         vehiclePlate: pass.vehiclePlate,
         action,
+        origin: 'qr',
         result: 'authorized',
         tokenJti: payload.jti,
         status: 'pending',
@@ -826,8 +827,10 @@ export async function searchAuthorizationsByDocument(
 /**
  * Registers an entry verified by document instead of by QR.
  *
- * The origin is stored as `manual_identity` so the audit can tell these entries
- * apart from the ones that came from a scan.
+ * La verificación por documento se audita en la bitácora con
+ * `source: 'manual_identity'`, pero no crea una fila en `pass_scans`: esa tabla
+ * exige un `token_jti` que sólo existe cuando el visitante presenta un QR. Por
+ * eso el origen `document` no se puede registrar en un escaneo que no existe.
  */
 export async function confirmIdentityEntry(
   requester: PassRequester,

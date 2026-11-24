@@ -65,6 +65,8 @@ export type {
   MonthlyReportQuery,
   CallStatsQuery,
   EventBreakdownQuery,
+  AccessReportQuery,
+  ShiftReportQuery,
   CreateEventDto,
 } from './dto/reports.js';
 export type {
@@ -73,6 +75,20 @@ export type {
   MonthlyReport,
   CallStats,
   EventTimeSeries,
+  ReportGranularity,
+  ReportScope,
+  AccessReport,
+  AccessReportTotals,
+  AccessReportMethodCount,
+  AccessReportAccessPointCount,
+  AccessReportHourCount,
+  AccessReportDenialReason,
+  AccessReportSeriesPoint,
+  AccessReportLatency,
+  ShiftReport,
+  ShiftReportShift,
+  ShiftReportGuard,
+  ShiftReportOpenShift,
 } from './types/reports.js';
 export type { EventEnvelope, OutboxStats, OutboxTopicStats } from './types/outbox.js';
 

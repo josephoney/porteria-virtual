@@ -1,36 +1,46 @@
 ## 1. Origen del acceso
 
-- [ ] 1.1 Agregar `origin` a `pass_scans` (`qr` | `document`), con default `qr` y
-      migración que backfillea los ingresos por documento desde el payload del
-      evento (`source: 'manual_identity'`).
-- [ ] 1.2 Registrar `document` en el camino de verificación por documento y `qr`
-      en el escaneo de pase.
-- [ ] 1.3 Tests: un ingreso por QR queda `qr`, uno por documento queda
-      `document`, y los escaneos previos conservan un valor definido.
+- [x] 1.1 Agregar `origin` a `pass_scans` (`qr` | `document`), con default `qr`.
+      La migración incluye un backfill defensivo desde el payload del evento
+      (`source: 'manual_identity'`), pero en este código no existen eventos de
+      verificación por documento: la consulta deja todo en `qr`.
+- [x] 1.2 Registrar el método del acceso según la realidad del registro: todo
+      escaneo de pase es QR (`origin: 'qr'` en `pass_scans`) y la verificación
+      por documento se informa desde `bitacora_entries.source = 'manual_identity'`.
+      **No existe un escaneo que registrar para el documento**: esa vía sólo
+      escribe bitácora porque `pass_scans` exige un `token_jti` que sólo tiene
+      el QR. No se inventó una fila de escaneo.
+- [x] 1.3 Tests: los escaneos de pase quedan `qr`; el ingreso por documento se
+      cuenta con método `document` desde la fuente de la bitácora y no tiene
+      `pass_scan_id`; los escaneos previos conservan un valor definido.
 
 ## 2. Reporte de accesos
 
-- [ ] 2.1 Constructor de datos sobre `pass_scans` con el alcance del solicitante
-      (comunidad, organización, plataforma) y los filtros de período.
-- [ ] 2.2 Métricas: totales por resultado, ingresos y salidas por separado, por
-      método, por portería, por hora, motivos de denegación ordenados y latencia
-      media de confirmación (excluyendo los no confirmados).
-- [ ] 2.3 Series diaria, semanal y mensual.
-- [ ] 2.4 Tests de integración: los totales coinciden con los escaneos
-      sembrados, las salidas no se suman a los ingresos, la falla de código no
-      se cuenta como denegación y la latencia ignora los no confirmados.
+- [x] 2.1 Constructor de datos sobre `bitacora_entries` con el alcance del
+      solicitante (comunidad, organización, plataforma) y los filtros de período.
+      Incluye `pass_entry`, `pass_exit`, `pass_rejected`, `scan_denied` y
+      `manual`; excluye los eventos de turno.
+- [x] 2.2 Métricas: totales por resultado (`authorized`, `denied`, `code_failure`,
+      `observation`), ingresos y salidas por separado, por método (`source`),
+      por portería, por hora, motivos de denegación ordenados y latencia media
+      de confirmación con su cobertura (sólo accesos con escaneo QR confirmado).
+- [x] 2.3 Series diaria, semanal y mensual.
+- [x] 2.4 Tests de integración: los totales coinciden con las filas sembradas
+      de la bitácora, el ingreso por documento cuenta como acceso, las salidas
+      no se suman a los ingresos, la falla de código no se cuenta como
+      denegación y la latencia ignora los accesos sin escaneo confirmado.
 
 ## 3. Reporte de turnos
 
-- [ ] 3.1 Constructor de datos sobre `guard_shifts` con el alcance del
+- [x] 3.1 Constructor de datos sobre `guard_shifts` con el alcance del
       solicitante.
-- [ ] 3.2 Métricas: turnos abiertos y cerrados, horas por guardia (un turno
+- [x] 3.2 Métricas: turnos abiertos y cerrados, horas por guardia (un turno
       abierto no son cero horas) y accesos por turno y por guardia vía
-      `shift_id`.
-- [ ] 3.3 Listado de turnos sin cerrar, con guardia y hora de inicio.
-- [ ] 3.4 Tests de integración: duración calculada desde el turno, turno abierto
-      reportado como abierto, accesos atribuidos a su turno y accesos sin turno
-      no atribuidos.
+      `bitacora_entries.shift_id`.
+- [x] 3.3 Listado de turnos sin cerrar, con guardia y hora de inicio.
+- [x] 3.4 Tests de integración: duración calculada desde el turno, turno abierto
+      reportado como abierto, accesos atribuidos a su turno desde la bitácora,
+      incluido el ingreso por documento, y accesos sin turno no atribuidos.
 
 ## 4. Exportación
 
