@@ -198,7 +198,7 @@ test.describe('resident workspace', () => {
     await expect(page.getByText('QA Confirmación')).toBeVisible();
     await expect(page.getByText('99000111')).toBeVisible();
     await expect(page.getByText('No ingresa en vehículo')).toBeVisible();
-    await expect(page.getByText('Ingreso y egreso')).toBeVisible();
+    await expect(page.getByText('Ingreso y salida')).toBeVisible();
 
     // Going back keeps every entered value.
     await page.getByRole('button', { name: 'Volver' }).click();
@@ -774,8 +774,8 @@ test.describe('common area branches', () => {
     try {
       await loginAs(page, DEMO_USERS.orgAdmin);
       await expect(page).toHaveURL(/\/admin$/);
-      await page.goto('/admin/units');
-      await expect(page.getByRole('heading', { level: 1, name: 'Unidades' })).toBeVisible();
+      await page.goto('/admin/sections');
+      await page.getByRole('tab', { name: 'Árbol' }).click();
 
       // Level one is always visible, so its add action is the only one on screen.
       await page.getByRole('button', { name: /^Agregar torre$/i }).click();

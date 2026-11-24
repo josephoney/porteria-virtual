@@ -7,6 +7,7 @@ import { CommunityEntryPage } from './pages/CommunityEntryPage';
 import { InvitePage } from './pages/InvitePage';
 import { PlatformPage } from './pages/PlatformPage';
 import { SectionsPage } from './pages/SectionsPage';
+import { UnitsPage } from './pages/UnitsPage';
 import { AnalysisPage } from './pages/AnalysisPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { OperatorPanel } from './components/operator/OperatorPanel';
@@ -140,7 +141,7 @@ function DashboardApp() {
             path="platform/units"
             element={
               <RequirePlatformAdmin>
-                <PlatformPage />
+                <UnitsPage />
               </RequirePlatformAdmin>
             }
           />
@@ -237,7 +238,7 @@ function DashboardApp() {
             path="admin/units"
             element={
               <RequireRole role={['org_admin', 'community_admin']}>
-                <AdminPanel />
+                <UnitsPage />
               </RequireRole>
             }
           />

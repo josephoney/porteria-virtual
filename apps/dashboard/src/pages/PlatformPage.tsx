@@ -21,7 +21,6 @@ import { FormDialog } from '../components/layout/FormDialog';
 import { COUNTRIES, DEFAULT_COUNTRY } from '../lib/countries';
 import { ListToolbar } from '../components/layout/ListToolbar';
 import { StructureTreeDialog } from '../components/layout/StructureTreeDialog';
-import { UnitsWorkspace } from '../components/admin/UnitsWorkspace';
 import { Skeleton } from '../components/ui/skeleton';
 import { LoadingState } from '../components/ui/loading-state';
 import {
@@ -192,12 +191,12 @@ const PAGE_META: Record<string, { title: string; description: string }> = {
     description: 'Comunidades agrupadas por organización.',
   },
   sections: {
-    title: 'Secciones',
-    description: 'Secciones de ubicación y su tipo dentro de cada comunidad.',
+    title: 'Estructura',
+    description: 'Secciones y árbol de ubicaciones de cada comunidad.',
   },
   units: {
     title: 'Unidades',
-    description: 'Estructura, secciones y unidades de cada comunidad.',
+    description: 'Unidades de cada comunidad, con su sección, tipo y piso.',
   },
   invitations: {
     title: 'Invitaciones',
@@ -1244,16 +1243,6 @@ export function PlatformPage() {
                   ))}
                 </TableBody>
               </Table>
-            </TabsContent>
-
-            <TabsContent value="units" className="space-y-4">
-              <UnitsWorkspace
-                communities={communities.map((community) => ({
-                  id: community.id,
-                  name: community.name,
-                }))}
-                onStructureChanged={() => void invalidate(queryKeys.buildings, queryKeys.units)}
-              />
             </TabsContent>
 
             <TabsContent value="users" className="space-y-4">

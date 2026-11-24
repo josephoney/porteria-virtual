@@ -11,6 +11,7 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { LoadingState } from '../components/ui/loading-state';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -26,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import { StructureTreeWorkspace } from '../components/admin/StructureTreeWorkspace';
 import { SECTION_TYPE_LABELS, sectionTypeLabel } from '../lib/section-types';
 import { queryKeys } from '../lib/query-keys';
 
@@ -82,6 +84,8 @@ function emptyForm(communityId = ''): SectionFormState {
 /**
  * Página compartida por `/platform/sections` y `/admin/sections`.
  *
+ * La etiqueta de navegación es "Estructura" porque la página reúne las dos
+ * vistas de la jerarquía: el listado plano de secciones y el árbol completo.
  * El alcance lo define la ruta: la consola de plataforma pide sus comunidades a
  * `/api/platform/communities`, mientras que la consola tenant usa
  * `/api/communities` (que ya viene filtrada por el membership activo).
@@ -91,6 +95,7 @@ export function SectionsPage() {
   const isPlatformScope = pathname.startsWith('/platform');
   const queryClient = useQueryClient();
 
+  const [view, setView] = useState<'list' | 'tree'>('list');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -207,13 +212,22 @@ export function SectionsPage() {
     }
   }
 
+  async function refreshAfterTreeChange() {
+    // El árbol toca los mismos niveles 1: mantener sincronizados el listado de
+    // secciones, las unidades y los contadores de los dashboards.
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['sections'] }),
+      queryClient.invalidateQueries({ queryKey: ['units'] }),
+    ]);
+  }
+
   return (
     <div className="p-6 space-y-6">
       <PageHeader
-        title="Secciones"
-        description="Secciones de ubicación y su tipo dentro de cada comunidad."
+        title="Estructura"
+        description="Secciones y árbol de ubicaciones de cada comunidad."
         actions={
-          sectionsQuery.isFetching && !sectionsQuery.isPending ? (
+          sectionsQuery.isFetching && !sectionsQuery.isPending && view === 'list' ? (
             <span role="status" className="text-xs text-muted-foreground">
               Actualizando…
             </span>
@@ -221,81 +235,152 @@ export function SectionsPage() {
         }
       />
 
-      <FormDialog
-        open={formOpen}
-        onOpenChange={(open) => {
-          setFormOpen(open);
-          if (!open) {
-            setEditing(null);
-            setFormError('');
-          }
-        }}
-        title={editing ? 'Editar sección' : 'Nueva sección'}
-        description={
-          editing
-            ? 'Actualiza el nombre, el código y el tipo de la sección.'
-            : 'Crea una sección de nivel 1 dentro de una comunidad.'
-        }
-        hideTrigger
+      <Tabs
+        value={view}
+        onValueChange={(value) => setView(value as 'list' | 'tree')}
+        className="space-y-6"
       >
-        <form onSubmit={saveSection} className="space-y-4">
-          {!editing && (
-            <div className="space-y-1">
-              <Label htmlFor="section-community">Comunidad</Label>
-              <Select
-                value={form.communityId}
-                onValueChange={(value) => setForm({ ...form, communityId: value })}
-              >
-                <SelectTrigger id="section-community" className="w-full" aria-label="Comunidad">
-                  <SelectValue placeholder="Elige una comunidad" />
-                </SelectTrigger>
-                <SelectContent>
-                  {communities.map((community) => (
-                    <SelectItem key={community.id} value={community.id}>
-                      {community.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+        <TabsList variant="line" className="self-start">
+          <TabsTrigger value="list">Secciones</TabsTrigger>
+          <TabsTrigger value="tree">Árbol</TabsTrigger>
+        </TabsList>
 
-          <div className="space-y-1">
-            <Label htmlFor="section-name">Nombre</Label>
-            <Input
-              id="section-name"
-              value={form.name}
-              onChange={(event) => setForm({ ...form, name: event.target.value })}
-              required
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="section-code">Código</Label>
-            <Input
-              id="section-code"
-              value={form.code}
-              onChange={(event) => setForm({ ...form, code: event.target.value })}
-              placeholder="Opcional"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="section-type">Tipo de sección</Label>
-            <Select
-              value={form.sectionType}
-              onValueChange={(value) =>
-                setForm({
-                  ...form,
-                  sectionType: value,
-                  sectionTypeLabel: value === 'other' ? form.sectionTypeLabel : '',
-                })
+        <TabsContent value="list" className="space-y-6">
+          <FormDialog
+            open={formOpen}
+            onOpenChange={(open) => {
+              setFormOpen(open);
+              if (!open) {
+                setEditing(null);
+                setFormError('');
               }
-            >
-              <SelectTrigger id="section-type" className="w-full" aria-label="Tipo de sección">
-                <SelectValue />
+            }}
+            title={editing ? 'Editar sección' : 'Nueva sección'}
+            description={
+              editing
+                ? 'Actualiza el nombre, el código y el tipo de la sección.'
+                : 'Crea una sección de nivel 1 dentro de una comunidad.'
+            }
+            hideTrigger
+          >
+            <form onSubmit={saveSection} className="space-y-4">
+              {!editing && (
+                <div className="space-y-1">
+                  <Label htmlFor="section-community">Comunidad</Label>
+                  <Select
+                    value={form.communityId}
+                    onValueChange={(value) => setForm({ ...form, communityId: value })}
+                  >
+                    <SelectTrigger id="section-community" className="w-full" aria-label="Comunidad">
+                      <SelectValue placeholder="Elige una comunidad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {communities.map((community) => (
+                        <SelectItem key={community.id} value={community.id}>
+                          {community.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label htmlFor="section-name">Nombre</Label>
+                <Input
+                  id="section-name"
+                  value={form.name}
+                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="section-code">Código</Label>
+                <Input
+                  id="section-code"
+                  value={form.code}
+                  onChange={(event) => setForm({ ...form, code: event.target.value })}
+                  placeholder="Opcional"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="section-type">Tipo de sección</Label>
+                <Select
+                  value={form.sectionType}
+                  onValueChange={(value) =>
+                    setForm({
+                      ...form,
+                      sectionType: value,
+                      sectionTypeLabel: value === 'other' ? form.sectionTypeLabel : '',
+                    })
+                  }
+                >
+                  <SelectTrigger id="section-type" className="w-full" aria-label="Tipo de sección">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SECTION_TYPE_OPTIONS.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {SECTION_TYPE_LABELS[type]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {form.sectionType === 'other' && (
+                <div className="space-y-1">
+                  <Label htmlFor="section-type-label">Nombre del tipo</Label>
+                  <Input
+                    id="section-type-label"
+                    value={form.sectionTypeLabel}
+                    onChange={(event) => setForm({ ...form, sectionTypeLabel: event.target.value })}
+                    placeholder="Ej. Torre, manzana, zona común"
+                    required
+                  />
+                </div>
+              )}
+
+              {formError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {formError}
+                </p>
+              )}
+
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear sección'}
+              </Button>
+            </form>
+          </FormDialog>
+
+          <ListToolbar
+            search={search}
+            onSearchChange={setSearch}
+            placeholder="Buscar por nombre o código…"
+            actions={<Button onClick={openCreate}>Crear sección</Button>}
+          >
+            <Select value={communityFilter} onValueChange={setCommunityFilter}>
+              <SelectTrigger className="w-56" aria-label="Filtrar por comunidad">
+                <SelectValue placeholder="Todas las comunidades" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">Todas las comunidades</SelectItem>
+                {communities.map((community) => (
+                  <SelectItem key={community.id} value={community.id}>
+                    {community.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-44" aria-label="Filtrar por tipo de sección">
+                <SelectValue placeholder="Todos los tipos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
                 {SECTION_TYPE_OPTIONS.map((type) => (
                   <SelectItem key={type} value={type}>
                     {SECTION_TYPE_LABELS[type]}
@@ -303,148 +388,97 @@ export function SectionsPage() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </ListToolbar>
 
-          {form.sectionType === 'other' && (
-            <div className="space-y-1">
-              <Label htmlFor="section-type-label">Nombre del tipo</Label>
-              <Input
-                id="section-type-label"
-                value={form.sectionTypeLabel}
-                onChange={(event) => setForm({ ...form, sectionTypeLabel: event.target.value })}
-                placeholder="Ej. Torre, manzana, zona común"
-                required
-              />
+          {sectionsQuery.isPending ? (
+            <LoadingState label="Cargando secciones…" />
+          ) : sectionsQuery.isError ? (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              <p>No se pudieron cargar las secciones. Reintenta en unos segundos.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => void sectionsQuery.refetch()}
+              >
+                Reintentar
+              </Button>
             </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Comunidad</TableHead>
+                      <TableHead>Niveles</TableHead>
+                      <TableHead>Unidades</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sections.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                          No hay secciones para mostrar
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {sections.map((section) => (
+                      <TableRow key={section.id}>
+                        <TableCell className="font-medium">{section.name}</TableCell>
+                        <TableCell className="font-mono text-xs">{section.code ?? '—'}</TableCell>
+                        <TableCell>
+                          {sectionTypeLabel(section.sectionType, section.sectionTypeLabel)}
+                        </TableCell>
+                        <TableCell>{section.communityName}</TableCell>
+                        <TableCell>{section.levelCount}</TableCell>
+                        <TableCell>{section.unitCount}</TableCell>
+                        <TableCell>
+                          <Badge variant={section.status === 'active' ? 'secondary' : 'outline'}>
+                            {statusLabel(section.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            aria-label={`Editar ${section.name}`}
+                            onClick={() => openEdit(section)}
+                          >
+                            Editar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                disabled={sectionsQuery.isFetching}
+              />
+            </>
           )}
+        </TabsContent>
 
-          {formError && (
-            <p role="alert" className="text-sm text-destructive">
-              {formError}
-            </p>
-          )}
-
-          <Button type="submit" disabled={saving}>
-            {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear sección'}
-          </Button>
-        </form>
-      </FormDialog>
-
-      <ListToolbar
-        search={search}
-        onSearchChange={setSearch}
-        placeholder="Buscar por nombre o código…"
-        actions={<Button onClick={openCreate}>Crear sección</Button>}
-      >
-        <Select value={communityFilter} onValueChange={setCommunityFilter}>
-          <SelectTrigger className="w-56" aria-label="Filtrar por comunidad">
-            <SelectValue placeholder="Todas las comunidades" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las comunidades</SelectItem>
-            {communities.map((community) => (
-              <SelectItem key={community.id} value={community.id}>
-                {community.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-44" aria-label="Filtrar por tipo de sección">
-            <SelectValue placeholder="Todos los tipos" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los tipos</SelectItem>
-            {SECTION_TYPE_OPTIONS.map((type) => (
-              <SelectItem key={type} value={type}>
-                {SECTION_TYPE_LABELS[type]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </ListToolbar>
-
-      {sectionsQuery.isPending ? (
-        <LoadingState label="Cargando secciones…" />
-      ) : sectionsQuery.isError ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          <p>No se pudieron cargar las secciones. Reintenta en unos segundos.</p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => void sectionsQuery.refetch()}
-          >
-            Reintentar
-          </Button>
-        </div>
-      ) : (
-        <>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Comunidad</TableHead>
-                  <TableHead>Niveles</TableHead>
-                  <TableHead>Unidades</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sections.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
-                      No hay secciones para mostrar
-                    </TableCell>
-                  </TableRow>
-                )}
-                {sections.map((section) => (
-                  <TableRow key={section.id}>
-                    <TableCell className="font-medium">{section.name}</TableCell>
-                    <TableCell className="font-mono text-xs">{section.code ?? '—'}</TableCell>
-                    <TableCell>
-                      {sectionTypeLabel(section.sectionType, section.sectionTypeLabel)}
-                    </TableCell>
-                    <TableCell>{section.communityName}</TableCell>
-                    <TableCell>{section.levelCount}</TableCell>
-                    <TableCell>{section.unitCount}</TableCell>
-                    <TableCell>
-                      <Badge variant={section.status === 'active' ? 'secondary' : 'outline'}>
-                        {statusLabel(section.status)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        aria-label={`Editar ${section.name}`}
-                        onClick={() => openEdit(section)}
-                      >
-                        Editar
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            disabled={sectionsQuery.isFetching}
+        <TabsContent value="tree">
+          <StructureTreeWorkspace
+            communities={communities}
+            onStructureChanged={() => void refreshAfterTreeChange()}
           />
-        </>
-      )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

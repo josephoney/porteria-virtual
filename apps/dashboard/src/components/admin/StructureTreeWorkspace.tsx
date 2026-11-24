@@ -27,7 +27,7 @@ interface CommunityOption {
   name: string;
 }
 
-interface UnitsWorkspaceProps {
+interface StructureTreeWorkspaceProps {
   communities: CommunityOption[];
   onStructureChanged?: () => void;
 }
@@ -76,7 +76,17 @@ function countDescendants(nodeId: string, nodes: LocationNode[]): number {
   return total;
 }
 
-export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspaceProps) {
+/**
+ * Árbol de ubicaciones de una comunidad.
+ *
+ * Vive en la página Estructura, pestaña Árbol. Crear y editar un nivel 1 exige
+ * el tipo de sección: el backend no lo deduce del nombre del nivel, y el label
+ * libre sólo aplica a `other`.
+ */
+export function StructureTreeWorkspace({
+  communities,
+  onStructureChanged,
+}: StructureTreeWorkspaceProps) {
   const [communityId, setCommunityId] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored && communities.some((community) => community.id === stored)
@@ -92,6 +102,7 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
   const [nodeName, setNodeName] = useState('');
   const [nodeCode, setNodeCode] = useState('');
   const [nodeSectionType, setNodeSectionType] = useState('other');
+  const [nodeSectionTypeLabel, setNodeSectionTypeLabel] = useState('');
   const [nodeSaving, setNodeSaving] = useState(false);
   const [nodeError, setNodeError] = useState('');
 
@@ -151,6 +162,7 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
     setNodeName('');
     setNodeCode('');
     setNodeSectionType(parent ? 'other' : defaultSectionTypeForLevelName(structure?.level1Name));
+    setNodeSectionTypeLabel('');
     setNodeError('');
   }
 
@@ -158,12 +170,30 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
     setNodeDialog({ mode: 'edit', node });
     setNodeName(node.name);
     setNodeCode(node.code ?? '');
+    setNodeSectionType(node.sectionType ?? 'other');
+    setNodeSectionTypeLabel(node.sectionTypeLabel ?? '');
     setNodeError('');
   }
 
   async function saveNode(event: FormEvent) {
     event.preventDefault();
     if (!nodeDialog) return;
+
+    const isSection =
+      nodeDialog.mode === 'edit' ? nodeDialog.node.levelPosition === 1 : nodeDialog.level === 1;
+
+    if (isSection && nodeSectionType === 'other' && !nodeSectionTypeLabel.trim()) {
+      setNodeError('Escribe el nombre del tipo de sección.');
+      return;
+    }
+
+    const typeFields = isSection
+      ? {
+          sectionType: nodeSectionType,
+          ...(nodeSectionType === 'other' ? { sectionTypeLabel: nodeSectionTypeLabel.trim() } : {}),
+        }
+      : {};
+
     setNodeSaving(true);
     setNodeError('');
     try {
@@ -171,6 +201,7 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
         await patch(`/api/location-units/${nodeDialog.node.id}`, {
           name: nodeName,
           code: nodeCode || null,
+          ...typeFields,
         });
       } else if (nodeDialog.parent) {
         await post('/api/location-units', {
@@ -185,8 +216,7 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
           structureId: structure.id,
           name: nodeName,
           code: nodeCode || null,
-          sectionType: nodeSectionType,
-          ...(nodeSectionType === 'other' ? { sectionTypeLabel: structure.level1Name } : {}),
+          ...typeFields,
         });
       }
       setNodeDialog(null);
@@ -234,6 +264,10 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
         structure,
         nodeDialog?.mode === 'edit' ? nodeDialog.node.levelPosition : (nodeDialog?.level ?? 1),
       );
+  const isSectionDialog =
+    nodeDialog?.mode === 'edit'
+      ? nodeDialog.node.levelPosition === 1
+      : nodeDialog?.mode === 'create' && nodeDialog.level === 1;
 
   return (
     <div className="space-y-4">
@@ -371,10 +405,16 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
                 placeholder="Opcional"
               />
             </div>
-            {nodeDialog?.mode === 'create' && nodeDialog.level === 1 && (
+            {isSectionDialog && (
               <div className="space-y-1">
                 <Label htmlFor="unit-node-section-type">Tipo de sección</Label>
-                <Select value={nodeSectionType} onValueChange={setNodeSectionType}>
+                <Select
+                  value={nodeSectionType}
+                  onValueChange={(value) => {
+                    setNodeSectionType(value);
+                    if (value !== 'other') setNodeSectionTypeLabel('');
+                  }}
+                >
                   <SelectTrigger id="unit-node-section-type" aria-label="Tipo de sección">
                     <SelectValue />
                   </SelectTrigger>
@@ -389,6 +429,18 @@ export function UnitsWorkspace({ communities, onStructureChanged }: UnitsWorkspa
                 <p className="text-xs text-muted-foreground">
                   Las zonas comunes agrupan lugares como piscina o club social.
                 </p>
+              </div>
+            )}
+            {isSectionDialog && nodeSectionType === 'other' && (
+              <div className="space-y-1">
+                <Label htmlFor="unit-node-section-type-label">Nombre del tipo</Label>
+                <Input
+                  id="unit-node-section-type-label"
+                  value={nodeSectionTypeLabel}
+                  onChange={(event) => setNodeSectionTypeLabel(event.target.value)}
+                  placeholder="Ej. Torre, manzana, zona común"
+                  required
+                />
               </div>
             )}
             {nodeError && (

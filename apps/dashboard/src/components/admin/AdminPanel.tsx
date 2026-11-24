@@ -27,7 +27,6 @@ import { LoadingState } from '../ui/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { UsersTable } from './UsersTable';
 import { CallHistoryTable } from './CallHistoryTable';
-import { UnitsWorkspace } from './UnitsWorkspace';
 import { DetailField, DetailGrid } from '../ui/detail-field';
 import { LogoUpload } from '../ui/logo-upload';
 import { expandableRowProps, useExpandedRow } from '../../lib/use-expanded-row';
@@ -290,12 +289,12 @@ const sectionMeta: Record<string, { title: string; description: string }> = {
     description: 'Comunidades dentro de tu alcance.',
   },
   sections: {
-    title: 'Secciones',
-    description: 'Secciones de ubicación y su tipo dentro de cada comunidad.',
+    title: 'Estructura',
+    description: 'Secciones y árbol de ubicaciones de cada comunidad.',
   },
   units: {
     title: 'Unidades',
-    description: 'Estructura, secciones y unidades de cada comunidad.',
+    description: 'Unidades de cada comunidad, con su sección, tipo y piso.',
   },
   invitations: {
     title: 'Invitaciones',
@@ -1277,19 +1276,6 @@ export function AdminPanel() {
                 onPageChange={setPage}
               />
             </>
-          )}
-
-          {section === 'units' && (
-            <UnitsWorkspace
-              communities={communities.map((community) => ({
-                id: community.id,
-                name: community.name,
-              }))}
-              onStructureChanged={() => {
-                void queryClient.invalidateQueries({ queryKey: queryKeys.buildings });
-                void queryClient.invalidateQueries({ queryKey: queryKeys.units });
-              }}
-            />
           )}
 
           {section === 'invitations' && (

@@ -31,7 +31,7 @@ console.
 #### Scenario: Platform navigation
 - **WHEN** a platform admin logs in
 - **THEN** the sidebar shows Administración with Resumen, Organizaciones, Comunidades,
-  Secciones, Unidades, Invitaciones and Usuarios
+  Estructura, Unidades, Invitaciones and Usuarios
 - **THEN** it shows Análisis with Bitácora, Reportes and Historial
 - **THEN** `/platform` renders the Resumen dashboard
 
@@ -43,7 +43,8 @@ console.
 - **WHEN** the console is open
 - **THEN** each of the six structure sections is a separate route with a central table
 - **THEN** each list supports pagination, search, filters and a create action
-- **THEN** the legacy “Torres” tab is replaced by “Secciones”
+- **THEN** the legacy “Torres” tab is replaced by “Estructura”, with a “Secciones” tab
+  for the flat list and an “Árbol” tab for the hierarchy
 
 #### Scenario: Platform analysis
 - **WHEN** a platform admin opens Bitácora, Reportes or Historial

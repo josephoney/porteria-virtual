@@ -92,7 +92,7 @@ const items: NavItem[] = [
   },
   {
     to: '/platform/sections',
-    label: 'Secciones',
+    label: 'Estructura',
     icon: RiNodeTree,
     roles: [],
     platformOnly: true,
@@ -148,7 +148,7 @@ const items: NavItem[] = [
   },
   {
     to: '/admin/sections',
-    label: 'Secciones',
+    label: 'Estructura',
     icon: RiNodeTree,
     roles: ['org_admin', 'community_admin'],
     group: 'admin',

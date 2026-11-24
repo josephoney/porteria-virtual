@@ -89,7 +89,7 @@ test.describe('Sections page', () => {
     await expect(page).toHaveURL(/\/platform$/);
     await page.goto('/platform/sections');
 
-    await expect(page.getByRole('heading', { level: 1, name: 'Secciones' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Estructura' })).toBeVisible();
 
     for (const column of [
       'Nombre',
@@ -121,7 +121,7 @@ test.describe('Sections page', () => {
     await loginAs(page, DEMO_USERS.platformAdmin);
     await expect(page).toHaveURL(/\/platform$/);
     await page.goto('/platform/sections');
-    await expect(page.getByRole('heading', { level: 1, name: 'Secciones' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Estructura' })).toBeVisible();
 
     await page.getByRole('combobox', { name: 'Filtrar por comunidad' }).click();
     await page.getByRole('option', { name: 'Torre Norte', exact: true }).click();

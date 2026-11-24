@@ -41,8 +41,8 @@
 - [x] 5.2 Show name, type, community, levels, units and status
 - [x] 5.3 Add community/type/search filters
 - [x] 5.4 Add create/edit with `sectionType` and `other` label
-- [ ] 5.5 Add units page filtered by community and section
-- [ ] 5.6 Verify type changes preserve children, units and residents
+- [x] 5.5 Add units page filtered by community and section
+- [x] 5.6 Verify type changes preserve children, units and residents
 
 ## 6. Access log views
 

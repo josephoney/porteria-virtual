@@ -1038,6 +1038,219 @@ describe('location node integration', () => {
     }
   });
 
+  it('preserves children, units and residents when a section changes type', async () => {
+    // Flujo completo: comunidad → estructura → sección padre → sección hija →
+    // unidad → residente. Cambiar el tipo de la sección padre no debe tocar
+    // nada de lo que cuelga de ella.
+    const suffix = randomUUID().slice(0, 8);
+    const communityResponse = await request(
+      'POST',
+      '/api/organizations/me/communities',
+      {
+        name: `Preserve Sections ${suffix}`,
+        address: 'Calle Preserve 123',
+        timezone: 'America/Bogota',
+        slug: `preserve-sections-${suffix}`,
+      },
+      orgAdminToken,
+    );
+    assert.equal(communityResponse.statusCode, 201, communityResponse.body);
+    const testCommunity = JSON.parse(communityResponse.body) as { id: string };
+
+    try {
+      const structureResponse = await request(
+        'POST',
+        '/api/location-structures',
+        {
+          communityId: testCommunity.id,
+          name: `Preserve Structure ${suffix}`,
+          levelCount: 3,
+          level1Name: 'Sección',
+          level2Name: 'Piso',
+          level3Name: 'Unidad',
+        },
+        orgAdminToken,
+      );
+      assert.equal(structureResponse.statusCode, 201, structureResponse.body);
+      const structure = JSON.parse(structureResponse.body) as { id: string };
+
+      const parentResponse = await request(
+        'POST',
+        '/api/sections',
+        {
+          communityId: testCommunity.id,
+          name: `Parent ${suffix}`,
+          code: `PARENT-${suffix}`,
+          sectionType: 'other',
+          sectionTypeLabel: 'Manzana',
+        },
+        orgAdminToken,
+      );
+      assert.equal(parentResponse.statusCode, 201, parentResponse.body);
+      const parent = JSON.parse(parentResponse.body) as {
+        id: string;
+        sectionType: string;
+        sectionTypeLabel: string | null;
+      };
+      assert.equal(parent.sectionType, 'other');
+      assert.equal(parent.sectionTypeLabel, 'Manzana');
+
+      const childResponse = await request(
+        'POST',
+        '/api/location-units',
+        {
+          communityId: testCommunity.id,
+          structureId: structure.id,
+          parentId: parent.id,
+          name: `Child ${suffix}`,
+          code: `CHILD-${suffix}`,
+        },
+        orgAdminToken,
+      );
+      assert.equal(childResponse.statusCode, 201, childResponse.body);
+      const child = JSON.parse(childResponse.body) as {
+        id: string;
+        parentId: string | null;
+        levelPosition: number;
+      };
+
+      const unitResponse = await request(
+        'POST',
+        '/api/units',
+        {
+          communityId: testCommunity.id,
+          sectionId: parent.id,
+          code: `UNIT-${suffix}`,
+          floor: 2,
+          type: 'apartment',
+        },
+        orgAdminToken,
+      );
+      assert.equal(unitResponse.statusCode, 201, unitResponse.body);
+      const unit = JSON.parse(unitResponse.body) as {
+        id: string;
+        parentId: string | null;
+        levelPosition: number;
+      };
+      assert.ok(unit.parentId);
+      const unitParentId = unit.parentId;
+
+      const residentResponse = await request(
+        'POST',
+        `/api/units/${unit.id}/residents`,
+        { userId: residentAccountId, relationship: 'owner' },
+        orgAdminToken,
+      );
+      assert.equal(residentResponse.statusCode, 201, residentResponse.body);
+      const association = JSON.parse(residentResponse.body) as { id: string };
+
+      async function assertTreePreserved(expectedType: string, expectedLabel: string | null) {
+        const [section] = await db
+          .select({
+            id: locationUnits.id,
+            parentId: locationUnits.parentId,
+            levelPosition: locationUnits.levelPosition,
+            sectionType: locationUnits.sectionType,
+            sectionTypeLabel: locationUnits.sectionTypeLabel,
+          })
+          .from(locationUnits)
+          .where(eq(locationUnits.id, parent.id));
+        assert.equal(section?.sectionType, expectedType);
+        assert.equal(section?.sectionTypeLabel, expectedLabel);
+        assert.equal(section?.parentId, null);
+        assert.equal(section?.levelPosition, 1);
+
+        const [childAfter] = await db
+          .select({
+            parentId: locationUnits.parentId,
+            levelPosition: locationUnits.levelPosition,
+          })
+          .from(locationUnits)
+          .where(eq(locationUnits.id, child.id));
+        assert.equal(childAfter?.parentId, parent.id);
+        assert.equal(childAfter?.levelPosition, 2);
+
+        const [unitAfter] = await db
+          .select({
+            parentId: locationUnits.parentId,
+            levelPosition: locationUnits.levelPosition,
+          })
+          .from(locationUnits)
+          .where(eq(locationUnits.id, unit.id));
+        assert.equal(unitAfter?.parentId, unitParentId);
+        assert.equal(unitAfter?.levelPosition, 3);
+
+        const [floorAfter] = await db
+          .select({
+            parentId: locationUnits.parentId,
+            levelPosition: locationUnits.levelPosition,
+          })
+          .from(locationUnits)
+          .where(eq(locationUnits.id, unitParentId));
+        assert.equal(floorAfter?.parentId, parent.id);
+        assert.equal(floorAfter?.levelPosition, 2);
+
+        const [residentAfter] = await db
+          .select({
+            id: locationResidents.id,
+            locationUnitId: locationResidents.locationUnitId,
+            status: locationResidents.status,
+          })
+          .from(locationResidents)
+          .where(eq(locationResidents.id, association.id));
+        assert.equal(residentAfter?.locationUnitId, unit.id);
+        assert.equal(residentAfter?.status, 'active');
+
+        const listedUnits = await request(
+          'GET',
+          `/api/units?communityId=${testCommunity.id}&sectionId=${parent.id}&pageSize=100`,
+          undefined,
+          orgAdminToken,
+        );
+        assert.equal(listedUnits.statusCode, 200, listedUnits.body);
+        const listed = JSON.parse(listedUnits.body) as {
+          data: Array<{ id: string; sectionId: string | null; sectionName: string | null }>;
+        };
+        const listedUnit = listed.data.find((row) => row.id === unit.id);
+        assert.ok(listedUnit);
+        assert.equal(listedUnit.sectionId, parent.id);
+        assert.equal(listedUnit.sectionName, `Parent ${suffix}`);
+      }
+
+      const toTower = await request(
+        'PATCH',
+        `/api/sections/${parent.id}`,
+        { sectionType: 'tower' },
+        orgAdminToken,
+      );
+      assert.equal(toTower.statusCode, 200, toTower.body);
+      const towered = JSON.parse(toTower.body) as {
+        sectionType: string;
+        sectionTypeLabel: string | null;
+      };
+      assert.equal(towered.sectionType, 'tower');
+      assert.equal(towered.sectionTypeLabel, null);
+      await assertTreePreserved('tower', null);
+
+      const backToOther = await request(
+        'PATCH',
+        `/api/sections/${parent.id}`,
+        { sectionType: 'other', sectionTypeLabel: 'Sector' },
+        orgAdminToken,
+      );
+      assert.equal(backToOther.statusCode, 200, backToOther.body);
+      const othered = JSON.parse(backToOther.body) as {
+        sectionType: string;
+        sectionTypeLabel: string | null;
+      };
+      assert.equal(othered.sectionType, 'other');
+      assert.equal(othered.sectionTypeLabel, 'Sector');
+      await assertTreePreserved('other', 'Sector');
+    } finally {
+      await db.delete(communities).where(eq(communities.id, testCommunity.id));
+    }
+  });
+
   it('creates sections when the community structure has a custom name', async () => {
     // El alta busca la estructura de la comunidad, no un nombre fijo: si la
     // comunidad renombró su estructura, igual tiene que poder crear secciones.
@@ -1919,7 +2132,9 @@ describe('location node integration', () => {
     });
     assert.equal(response.statusCode, 201);
 
-    const [event] = await db
+    // La suite crea asociaciones en varias unidades; filtrar por la unidad
+    // mantiene la aserción estable sin depender del orden de las filas.
+    const auditRows = await db
       .select({ eventType: events.eventType, metadata: events.metadata })
       .from(events)
       .where(
@@ -1928,6 +2143,10 @@ describe('location node integration', () => {
           eq(events.eventType, 'location_resident.associated'),
         ),
       );
+    const event = auditRows.find(
+      (row) =>
+        (row.metadata as { locationUnitId?: string } | undefined)?.locationUnitId === unitChildId,
+    );
     assert.equal(event?.eventType, 'location_resident.associated');
     assert.equal(
       (event?.metadata as { locationUnitId?: string } | undefined)?.locationUnitId,

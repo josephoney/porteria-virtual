@@ -7,7 +7,7 @@ role and active scope.
 
 #### Scenario: Platform context
 - **WHEN** a platform admin enters the platform context
-- **THEN** the sidebar shows Resumen, Organizaciones, Comunidades, Secciones, Unidades,
+- **THEN** the sidebar shows Resumen, Organizaciones, Comunidades, Estructura, Unidades,
   Invitaciones and Usuarios under Administración
 - **THEN** it shows Bitácora, Reportes and Historial under Análisis
 - **THEN** it does not show Operador or Guardia
@@ -15,13 +15,13 @@ role and active scope.
 #### Scenario: Org admin context
 - **WHEN** an org_admin enters a tenant context
 - **THEN** the sidebar shows Operación (Operador, Guardia), Administración (Resumen,
-  Comunidades, Secciones, Unidades, Invitaciones, Usuarios) and Análisis (Bitácora,
+  Comunidades, Estructura, Unidades, Invitaciones, Usuarios) and Análisis (Bitácora,
   Reportes)
 - **THEN** it does not show Historial
 
 #### Scenario: Community admin context
 - **WHEN** a community_admin enters a tenant context
-- **THEN** the sidebar shows Operación, Administración (Resumen, Secciones, Unidades,
+- **THEN** the sidebar shows Operación, Administración (Resumen, Estructura, Unidades,
   Invitaciones, Usuarios) and Análisis (Bitácora, Reportes)
 - **THEN** it does not show Organizaciones, Comunidades or Historial
 

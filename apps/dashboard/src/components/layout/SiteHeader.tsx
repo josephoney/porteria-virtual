@@ -6,7 +6,7 @@ const labels: Record<string, string> = {
   platform: 'Plataforma',
   organizations: 'Organizaciones',
   communities: 'Comunidades',
-  sections: 'Secciones',
+  sections: 'Estructura',
   units: 'Unidades',
   invitations: 'Invitaciones',
   users: 'Usuarios',

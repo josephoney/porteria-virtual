@@ -54,7 +54,7 @@ test.describe('Platform navigation', () => {
     await page.goto('/platform/sections');
 
     await expect(page).toHaveURL(/\/platform\/sections$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Secciones' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Estructura' })).toBeVisible();
   });
 
   test('breadcrumb reflects the current platform section', async ({ page }) => {
@@ -93,7 +93,7 @@ test.describe('Tenant admin navigation', () => {
     await page.goto('/admin/sections');
 
     await expect(page).toHaveURL(/\/admin\/sections$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Secciones' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Estructura' })).toBeVisible();
   });
 
   test('navigates between tenant admin pages through the sidebar', async ({ page }) => {

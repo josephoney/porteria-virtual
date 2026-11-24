@@ -13,6 +13,16 @@ export const queryKeys = {
   /** Página filtrada de secciones (`GET /api/sections`). */
   sectionsList: (params: { page: number; communityId: string; type: string; search: string }) =>
     ['sections', 'list', params] as const,
+  /** Opciones de sección para el filtro de unidades. */
+  sectionsOptions: (communityId: string) => ['sections', 'options', { communityId }] as const,
+  /** Página filtrada de unidades (`GET /api/units`). */
+  unitsList: (params: {
+    page: number;
+    communityId: string;
+    sectionId: string;
+    status: string;
+    search: string;
+  }) => ['units', 'list', params] as const,
   /** Unidades de todas las comunidades del alcance. */
   units: ['units', { pageSize: 100 }] as const,
   /** Invitaciones del alcance del usuario. */

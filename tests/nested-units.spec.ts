@@ -57,9 +57,9 @@ async function deleteNodeByName(
 test.describe('nested units workspace', () => {
   test('expands three levels and keeps two branches open', async ({ page }) => {
     await loginAndWait(page, DEMO_USERS.orgAdmin, /\/admin$/);
-    await page.goto('/admin/units');
+    await page.goto('/admin/sections');
+    await page.getByRole('tab', { name: 'Árbol' }).click();
 
-    await expect(page.getByRole('heading', { level: 1, name: 'Unidades' })).toBeVisible();
     await expect(page.getByLabel('Comunidad')).toContainText(COMMUNITY_NAME);
 
     const roots = page.locator('tbody tr[data-level="1"]');
@@ -104,7 +104,8 @@ test.describe('nested units workspace', () => {
     const communityId = await findCommunityId(request, token, COMMUNITY_NAME);
 
     await loginAndWait(page, DEMO_USERS.orgAdmin, /\/admin$/);
-    await page.goto('/admin/units');
+    await page.goto('/admin/sections');
+    await page.getByRole('tab', { name: 'Árbol' }).click();
     await expect(page.locator('tbody tr[data-level="1"]').first()).toBeVisible();
 
     try {
