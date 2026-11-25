@@ -96,6 +96,9 @@ export function IdentityCheck({
       // principal, sin el teclado ocupando media vista.
       setManualOpen(false);
       Keyboard.dismiss();
+      // Cada consulta empieza en blanco: el número anterior ya se evaluó y
+      // dejarlo escrito invita a verificar dos veces el mismo documento.
+      setDocument('');
     }
   }
 
