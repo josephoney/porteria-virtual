@@ -190,7 +190,13 @@ describe('report exports', () => {
         type: 'pass_entry',
         source: 'manual_identity',
         summary: 'Ingreso por documento',
-        details: { action: 'entry' },
+        // Identidad real en el evento: la exportación no debe llevarla.
+        details: {
+          action: 'entry',
+          visitor: { firstName: 'Zulema', lastName: 'Prueba', document: 'DOC-SECRETO-42' },
+          companions: [{ firstName: 'Acompanante' }],
+          vehiclePlate: 'XYZ999',
+        },
         createdAt: at(10, 30),
       },
       {
@@ -249,6 +255,13 @@ describe('report exports', () => {
     assert.ok(text.includes('Documento'), 'el ingreso por documento aparece como método');
     assert.ok(text.includes('Exportaciones A1'), 'el alcance nombra la comunidad');
     assert.ok(!text.includes('Exportaciones B1'), 'no incluye otra comunidad');
+
+    // El reporte es agregado: la identidad del visitante no viaja al archivo,
+    // ni completa ni enmascarada, aunque el evento la tenga.
+    assert.ok(!text.includes('DOC-SECRETO-42'), 'el CSV no lleva el documento del visitante');
+    assert.ok(!text.includes('Zulema'), 'el CSV no lleva el nombre del visitante');
+    assert.ok(!text.includes('XYZ999'), 'el CSV no lleva la placa del visitante');
+    assert.ok(!/\*\*\*\w{2,}/.test(text), 'el CSV no lleva documentos enmascarados');
 
     // Los totales del archivo coinciden con los del endpoint de la pantalla.
     const apiResponse = await request(

@@ -63,8 +63,10 @@
       reportes se arma con agregados y no incluye documentos.
 - [x] 4.6 Tests: guardia enmascarado en el detalle, administrador completo, el
       residente no alcanza pases ajenos.
-- [ ] 4.7 Test: el CSV de la exportación de accesos no contiene ningún documento
-      de visitante, ni completo ni enmascarado.
+- [x] 4.7 Test: el CSV de la exportación de accesos no contiene ningún documento
+      de visitante, ni completo ni enmascarado. Se siembra una entrada con
+      identidad real y se verifica que ni el nombre, ni el documento, ni la placa
+      aparecen en el archivo.
 
 ## 5. Panel
 
@@ -92,5 +94,7 @@
 ## 7. Verificación
 
 - [x] 7.1 Suites unitarias e integración en verde: 46/46 y 240/240.
-- [ ] 7.2 Smoke en staging: abrir un pase sin aceptar y comprobar que no hay QR,
+- [x] 7.2 Smoke en staging: abrir un pase sin aceptar y comprobar que no hay QR,
       aceptar, escanear, y ver el documento enmascarado con el rol de guardia.
+      Verificado por el usuario: la bitácora muestra la fila de consentimiento con
+      su fecha y modo, y los cuatro pasos del recorrido funcionan.
