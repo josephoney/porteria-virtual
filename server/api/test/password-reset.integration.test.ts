@@ -186,6 +186,26 @@ describe('recuperación de contraseña', () => {
     assert.equal(unknown.statusCode, 400);
   });
 
+  it('el correo conserva los acentos y el enlace', async () => {
+    const { buildPasswordResetBodies } = await import('../src/services/mail.service.js');
+    const bodies = buildPasswordResetBodies({
+      to: 'alguien@test.local',
+      firstName: 'Miguel',
+      resetUrl: 'https://staging.example.com/reset-password?token=abc',
+      expiresInMinutes: 60,
+    });
+
+    // Un archivo mal codificado rompe los acentos y el buzón los muestra como
+    // caracteres de reemplazo: el test lo detecta antes de que salga el correo.
+    assert.ok(!bodies.subject.includes('\uFFFD'));
+    assert.ok(bodies.subject.includes('contraseña'));
+    assert.ok(bodies.htmlbody.includes('contraseña'));
+    assert.ok(bodies.htmlbody.includes('sólo se puede usar una vez'));
+    assert.ok(bodies.textbody.includes('contraseña'));
+    assert.ok(bodies.htmlbody.includes('reset-password?token=abc'));
+    assert.ok(bodies.textbody.includes('reset-password?token=abc'));
+  });
+
   it('no deja rastros de la contraseña en la base', async () => {
     const [account] = await db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
     assert.ok(!account.passwordHash.includes('clave-nueva-456'));

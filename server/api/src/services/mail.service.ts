@@ -247,11 +247,60 @@ export interface SendPasswordResetEmailInput {
 }
 
 /**
- * Env�a el enlace de recuperaci�n.
+ * Cuerpo del correo de recuperación, con la misma tarjeta que la invitación.
  *
- * Mismo transporte que la invitaci�n, pero con su propio texto: quien lo abre
- * olvid� su contrase�a, no est� aceptando una invitaci�n.
+ * El texto se escribe acá en UTF-8 y el transporte declara el charset: sin eso,
+ * los acentos llegan como caracteres rotos al buzón.
  */
+export function buildPasswordResetBodies(input: SendPasswordResetEmailInput) {
+  const productName = DEFAULT_FROM_NAME;
+  const subject = `Recupera tu contraseña · ${productName}`;
+  const safeUrl = escapeHtml(input.resetUrl);
+  const safeName = escapeHtml(input.firstName);
+
+  const htmlbody = `<!doctype html>
+<html lang="es">
+  <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 16px;">
+      <div style="background-color:#ffffff;border-radius:12px;padding:32px;border:1px solid #e5e7eb;">
+        <p style="margin:0 0 4px;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;">${escapeHtml(productName)}</p>
+        <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;">Recupera tu contraseña</h1>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.6;">Hola ${safeName}, recibimos una solicitud para cambiar la contraseña de tu cuenta.</p>
+        <p style="margin:0 0 24px;font-size:15px;line-height:1.6;">
+          <a href="${safeUrl}" style="display:inline-block;padding:12px 20px;border-radius:8px;background-color:#111827;color:#ffffff;text-decoration:none;font-weight:600;">Definir contraseña nueva</a>
+        </p>
+        <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#374151;">
+          El enlace vence en ${input.expiresInMinutes} minutos y sólo se puede usar una vez.
+        </p>
+        <p style="margin:16px 0 8px;font-size:13px;line-height:1.6;color:#4b5563;">
+          Si el botón no funciona, copia y pega este enlace en tu navegador:
+        </p>
+        <p style="margin:0 0 24px;font-size:12px;line-height:1.5;color:#4b5563;word-break:break-all;font-family:Consolas,monospace;">${safeUrl}</p>
+        <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
+          Si no fuiste tú, ignora este correo: tu contraseña actual sigue funcionando y no se cierra ninguna sesión.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>`;
+
+  const textbody = [
+    `Recupera tu contraseña · ${productName}`,
+    '',
+    `Hola ${input.firstName}, recibimos una solicitud para cambiar la contraseña de tu cuenta.`,
+    '',
+    'Define una contraseña nueva en el siguiente enlace:',
+    input.resetUrl,
+    '',
+    `El enlace vence en ${input.expiresInMinutes} minutos y sólo se puede usar una vez.`,
+    '',
+    'Si no fuiste tú, ignora este correo: tu contraseña actual sigue funcionando y no se cierra ninguna sesión.',
+  ].join('\n');
+
+  return { subject, htmlbody, textbody };
+}
+
+/** Envía el enlace de recuperación con el mismo transporte que la invitación. */
 export async function sendPasswordResetEmail(
   input: SendPasswordResetEmailInput,
 ): Promise<SendInvitationEmailResult> {
@@ -272,16 +321,14 @@ export async function sendPasswordResetEmail(
   }
 
   const apiUrl = config.mail.zeptomailApiUrl.replace(/\/+$/, '');
-  const subject = 'Recupera tu contrase�a';
-  const htmlbody = `<p>Hola ${input.firstName},</p><p>Recibimos una solicitud para cambiar la contrase�a de tu cuenta.</p><p><a href="${input.resetUrl}">Definir una contrase�a nueva</a></p><p>El enlace vence en ${input.expiresInMinutes} minutos y s�lo se puede usar una vez. Si no fuiste t�, ignora este correo: tu contrase�a actual sigue funcionando.</p>`;
-  const textbody = `Hola ${input.firstName},\n\nRecibimos una solicitud para cambiar la contrase�a de tu cuenta.\n\nAbre este enlace para definir una nueva: ${input.resetUrl}\n\nEl enlace vence en ${input.expiresInMinutes} minutos y s�lo se puede usar una vez. Si no fuiste t�, ignora este correo.`;
+  const { subject, htmlbody, textbody } = buildPasswordResetBodies(input);
 
   try {
     const response = await fetch(`${apiUrl}/v1.1/email`, {
       method: 'POST',
       headers: {
         Authorization: `Zoho-enczapikey ${token}`,
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json; charset=utf-8',
       },
       body: JSON.stringify({
         from: parsedFrom,
