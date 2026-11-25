@@ -48,6 +48,11 @@ export interface BitacoraEntryDetailDto extends BitacoraEntryDto {
     mode: string | null;
     policyVersion: string | null;
   } | null;
+  /**
+   * Alerta de salida pendiente abierta para el pase de esta entrada. El detalle
+   * permite cerrarla a mano con un motivo; null cuando no hay alerta abierta.
+   */
+  alertId?: string | null;
 }
 
 export interface CreateBitacoraEntryDto {

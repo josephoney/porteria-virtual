@@ -553,6 +553,16 @@ export async function getBitacoraEntry(
       )[0] ?? null)
     : null;
 
+  // La alerta de salida pendiente se resuelve a mano desde este detalle, así que
+  // viaja su id cuando sigue abierta.
+  const [openAlert] = entry.passId
+    ? await db
+        .select({ id: passAlerts.id })
+        .from(passAlerts)
+        .where(and(eq(passAlerts.passId, entry.passId), eq(passAlerts.status, 'open')))
+        .limit(1)
+    : [];
+
   const comments = await db
     .select({
       comment: bitacoraComments,
@@ -592,6 +602,7 @@ export async function getBitacoraEntry(
             policyVersion: consent.policyVersion,
           }
         : null,
+      alertId: openAlert?.id ?? null,
     },
   };
 }

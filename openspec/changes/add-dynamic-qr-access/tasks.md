@@ -199,6 +199,8 @@
       del alcance, 409 si ya estaba resuelta. Resolver no toca `presenceState` ni
       escribe un acceso: inflaría los reportes con una salida que nadie vio. Queda
       el registro técnico `alert.resolved` con autor, motivo y momento.
+      El detalle de la bitácora expone `alertId` y ofrece «Marcar salida resuelta»
+      con el motivo: la pantalla ya no requiere llamar la API a mano.
 
 ### 17. Dashboard and operations
 

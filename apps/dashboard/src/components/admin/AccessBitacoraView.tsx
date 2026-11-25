@@ -78,6 +78,8 @@ interface BitacoraDetail extends BitacoraEntryRow {
     mode: string | null;
     policyVersion: string | null;
   } | null;
+  /** Alerta de salida pendiente abierta para el pase de la entrada. */
+  alertId?: string | null;
 }
 
 /** How often the board asks whether a new movement was recorded. */
@@ -335,6 +337,10 @@ export function AccessBitacoraView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<BitacoraDetail | null>(null);
+  /** Motivo con el que se cierra una alerta de salida pendiente. */
+  const [alertNote, setAlertNote] = useState('');
+  const [alertError, setAlertError] = useState('');
+  const [resolvingAlert, setResolvingAlert] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [comment, setComment] = useState('');
@@ -566,6 +572,32 @@ export function AccessBitacoraView({
   const selectedConsentDetail = selectedConsent?.acceptedAt
     ? `${selectedConsentLabel} · ${new Date(selectedConsent.acceptedAt).toLocaleString('es-CO')}`
     : selectedConsentLabel;
+
+  /**
+   * Cierra una alerta de salida pendiente. No registra una salida: deja el
+   * motivo y el autor, que es lo que el visitante nunca dejó en el portón.
+   */
+  async function resolveMissingExit() {
+    if (!selected?.alertId) return;
+    const note = alertNote.trim();
+    if (note.length < 5) {
+      setAlertError('Escribe al menos cinco caracteres explicando por qué se cierra.');
+      return;
+    }
+    setResolvingAlert(true);
+    setAlertError('');
+    try {
+      await post(`/api/alerts/${selected.alertId}/resolve`, { note });
+      setAlertNote('');
+      const refreshed = await get<BitacoraDetail>(`/api/bitacora/${selected.id}`);
+      setSelected(refreshed.data);
+      await load();
+    } catch (err) {
+      setAlertError(errorMessage(err));
+    } finally {
+      setResolvingAlert(false);
+    }
+  }
 
   async function openDetail(entry: BitacoraEntryRow) {
     setDetailOpen(true);
@@ -967,6 +999,33 @@ export function AccessBitacoraView({
                 <DetailField label="Regla" value={selectedRule ?? '—'} span="full" />
               </DetailGrid>
               <p className="rounded-3xl bg-muted/50 px-4 py-3 text-sm">{selected.summary}</p>
+              {selected.alertId ? (
+                <section className="space-y-2 rounded-3xl border border-warning/40 bg-warning/10 px-4 py-3">
+                  <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Salida pendiente
+                  </h3>
+                  <p className="text-sm">
+                    La alerta sigue abierta porque el visitante nunca registró su salida. Cerrarla
+                    no registra una salida: deja constancia de quién la cerró y por qué.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      aria-label="Motivo de cierre"
+                      value={alertNote}
+                      onChange={(event) => setAlertNote(event.target.value)}
+                      placeholder="Ej.: el guardia confirmó la salida por radio"
+                    />
+                    <Button
+                      type="button"
+                      onClick={resolveMissingExit}
+                      disabled={resolvingAlert || alertNote.trim().length < 5}
+                    >
+                      {resolvingAlert ? 'Cerrando…' : 'Marcar salida resuelta'}
+                    </Button>
+                  </div>
+                  {alertError && <p className="text-sm text-destructive">{alertError}</p>}
+                </section>
+              ) : null}
               <section className="space-y-1 rounded-3xl border border-border bg-muted/30 px-4 py-3">
                 <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Novedad del guardia
