@@ -48,5 +48,6 @@
 - [x] 6.1 Tests de integración: solicitud, consumo, reuso rechazado, vencimiento
       y sesiones revocadas.
 - [x] 6.2 Verificar que un correo inexistente produce la misma respuesta.
-- [ ] 6.3 Prueba manual del correo en staging: pedir el enlace con una cuenta
-      real y abrirlo desde el buzón.
+- [x] 6.3 Prueba manual del correo en staging: pedir el enlace con una cuenta
+      real y abrirlo desde el buzón. Verificado por el usuario: el correo llegó
+      con la plantilla y el cambio de contraseña funcionó.

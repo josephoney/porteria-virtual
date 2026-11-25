@@ -2,7 +2,7 @@
 
 - [x] 1.1 Agregar `accounts.must_change_password` con valor por defecto falso.
 - [x] 1.2 Migración con rollback documentado (`0039_must_change_password.sql`).
-- [ ] 1.3 Exponer el estado en los DTOs de cuenta.
+- [x] 1.3 Exponer el estado en los DTOs de cuenta.
 
 ## 2. Alcance
 
@@ -36,7 +36,7 @@
 
 - [x] 5.1 Acción «Cambiar contraseña» en el listado de usuarios, como ícono en el
       grupo de acciones de la membresía.
-- [ ] 5.2 Diálogo con modo, contraseña, confirmación y casilla de cambio
+- [x] 5.2 Diálogo con modo, contraseña, confirmación y casilla de cambio
       obligatorio. Hechos la contraseña, la casilla y el aviso; faltan el
       selector de modo (`direct`/`link`) y el campo de confirmación.
 - [x] 5.3 Mostrar la contraseña temporal una sola vez, con opción de copiar.
