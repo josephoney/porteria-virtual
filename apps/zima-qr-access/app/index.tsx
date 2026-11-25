@@ -1,6 +1,6 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '@/auth/AuthContext';
 import { homeForRole } from '@/auth/roles';
@@ -53,37 +53,50 @@ export default function LoginScreen() {
     <Screen scroll={false}>
       <KeyboardAvoidingView
         style={styles.keyboard}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.hero}>
-          <ZimaLogo />
-          <Text style={ui.title}>QR Access</Text>
-          <Text style={styles.subtitle}>Acceso a tu comunidad.</Text>
-        </View>
+        {/*
+          El formulario scrollea y se adapta al teclado: cuando el gestor de
+          contraseñas completa la cuenta, el botón de Ingresar sigue a la vista
+          en vez de quedar debajo. `keyboardShouldPersistTaps` deja que el primer
+          toque actúe aunque el teclado esté abierto.
+        */}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.hero}>
+            <ZimaLogo />
+            <Text style={ui.title}>QR Access</Text>
+            <Text style={styles.subtitle}>Acceso a tu comunidad.</Text>
+          </View>
 
-        <View style={styles.form}>
-          <Field
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="residente@porteria.local"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <Field
-            label="Contraseña"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            secureTextEntry
-            autoCapitalize="none"
-          />
-          {error ? <Text style={ui.error}>{error}</Text> : null}
-          <Button label="Ingresar" onPress={onSubmit} loading={submitting} />
-          {__DEV__ ? (
-            <Text style={styles.devHint}>Demo: residente@porteria.local · porteria123</Text>
-          ) : null}
-        </View>
+          <View style={styles.form}>
+            <Field
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="residente@porteria.local"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <Field
+              label="Contraseña"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              secureTextEntry
+              autoCapitalize="none"
+            />
+            {error ? <Text style={ui.error}>{error}</Text> : null}
+            <Button label="Ingresar" onPress={onSubmit} loading={submitting} />
+            {__DEV__ ? (
+              <Text style={styles.devHint}>Demo: residente@porteria.local · porteria123</Text>
+            ) : null}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -92,6 +105,9 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   keyboard: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     justifyContent: 'center',
     gap: spacing.xxl,
     padding: spacing.lg,
