@@ -68,7 +68,13 @@ export const updateMembershipSchema = z.object({
 });
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1),
+  /**
+   * Opcional sólo cuando la cuenta tiene un cambio pendiente: en ese estado la
+   * persona ya probó su identidad al ingresar, y volver a pedir la temporal no
+   * agrega seguridad. El servidor exige la contraseña actual en cualquier otro
+   * caso.
+   */
+  currentPassword: z.string().min(1).optional(),
   newPassword: z.string().min(8),
 });
 

@@ -505,6 +505,26 @@ export async function changePassword(
   return true;
 }
 
+/** ¿La cuenta tiene un cambio de contraseña pendiente? */
+export async function hasPendingPasswordChange(accountId: string): Promise<boolean> {
+  const [account] = await db
+    .select({ pending: accounts.mustChangePassword })
+    .from(accounts)
+    .where(eq(accounts.id, accountId))
+    .limit(1);
+  return Boolean(account?.pending);
+}
+
+/**
+ * Define la contraseña propia sin pedir la actual.
+ *
+ * Sólo se usa cuando hay un cambio pendiente: quien llama ya verificó en el
+ * controlador que ese es el caso.
+ */
+export async function setOwnPassword(accountId: string, newPassword: string): Promise<void> {
+  await setPassword(accountId, newPassword);
+}
+
 export async function getMe(accountId: string): Promise<UserResult | null> {
   const [account] = await db
     .select(accountPersonColumns)

@@ -94,6 +94,11 @@ export function UsersTable() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [actionError, setActionError] = useState('');
+  const [resetTarget, setResetTarget] = useState<UserData | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetMustChange, setResetMustChange] = useState(true);
+  const [resetResult, setResetResult] = useState<string | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
 
   /**
    * Mismo alcance que aplica el servidor, para no ofrecer una acción que va a
@@ -117,35 +122,34 @@ export function UsersTable() {
     return false;
   }
 
-  /** Define una contraseña temporal que la persona deberá cambiar al entrar. */
-  async function handleResetPassword(target: UserData) {
-    const suggestion = `Zima-${Math.random().toString(36).slice(2, 8)}`;
-    const temporary = window.prompt(
-      `Contraseña temporal para ${target.email}.\nLa persona deberá cambiarla en el próximo ingreso.`,
-      suggestion,
-    );
-    if (!temporary) return;
-    if (temporary.length < 8) {
-      setActionError('La contraseña temporal debe tener al menos ocho caracteres.');
-      return;
-    }
+  /** Define una contraseña temporal y decide si obliga a cambiarla al entrar. */
+  function openResetDialog(target: UserData) {
+    setResetTarget(target);
+    setResetPassword(`Zima-${Math.random().toString(36).slice(2, 8)}`);
+    setResetMustChange(true);
+    setResetResult(null);
+    setActionError('');
+  }
 
+  async function submitReset(event: React.FormEvent) {
+    event.preventDefault();
+    if (!resetTarget) return;
+    setResetBusy(true);
     try {
-      await post(`/api/accounts/${target.id}/password`, {
+      await post(`/api/accounts/${resetTarget.id}/password`, {
         mode: 'direct',
-        password: temporary,
-        mustChange: true,
+        password: resetPassword,
+        mustChange: resetMustChange,
       });
-      setActionError('');
-      window.alert(
-        `Contraseña temporal de ${target.email}:\n\n${temporary}\n\nSe revocaron sus sesiones y deberá cambiarla al ingresar.`,
-      );
+      setResetResult(resetPassword);
     } catch (err) {
       setActionError(
         err instanceof Error && err.message
           ? err.message
           : 'No se pudo cambiar la contraseña de esa cuenta.',
       );
+    } finally {
+      setResetBusy(false);
     }
   }
   const [communities, setCommunities] = useState<CommunityOption[]>([]);
@@ -661,7 +665,7 @@ export function UsersTable() {
                                   variant="ghost"
                                   size="xs"
                                   aria-label={`Cambiar contraseña de ${u.email}`}
-                                  onClick={() => handleResetPassword(u)}
+                                  onClick={() => openResetDialog(u)}
                                 >
                                   Contraseña
                                 </Button>
@@ -899,6 +903,97 @@ export function UsersTable() {
               {assignmentSaving ? 'Guardando…' : 'Agregar'}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={resetTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setResetTarget(null);
+            setResetResult(null);
+            setResetPassword('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cambiar contraseña</DialogTitle>
+          </DialogHeader>
+          {resetResult ? (
+            <div className="space-y-3">
+              <p className="text-sm">
+                Contraseña temporal de <span className="font-medium">{resetTarget?.email}</span>. Se
+                muestra una sola vez y sus sesiones quedaron revocadas.
+              </p>
+              <code className="block rounded-xl bg-muted px-3 py-2 font-mono text-sm">
+                {resetResult}
+              </code>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigator.clipboard.writeText(resetResult)}
+                >
+                  Copiar
+                </Button>
+                <Button type="button" size="sm" onClick={() => setResetTarget(null)}>
+                  Listo
+                </Button>
+              </div>
+              {resetMustChange && (
+                <p className="text-xs text-muted-foreground">
+                  Deberá cambiarla en el próximo ingreso: el resto de la plataforma queda bloqueado
+                  hasta entonces.
+                </p>
+              )}
+            </div>
+          ) : (
+            <form className="space-y-3" onSubmit={submitReset}>
+              <div className="space-y-1">
+                <Label htmlFor="reset-temp-password">Contraseña temporal</Label>
+                <Input
+                  id="reset-temp-password"
+                  value={resetPassword}
+                  onChange={(event) => setResetPassword(event.target.value)}
+                  minLength={8}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Al menos ocho caracteres. Entrégasela a la persona por un canal directo.
+                </p>
+              </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={resetMustChange}
+                  onChange={(event) => setResetMustChange(event.target.checked)}
+                />
+                <span>
+                  Obligar a cambiar la contraseña en el próximo ingreso
+                  <span className="block text-xs text-muted-foreground">
+                    Si lo desactivas, la persona podrá seguir usando la temporal.
+                  </span>
+                </span>
+              </label>
+              {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setResetTarget(null)}
+                  disabled={resetBusy}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={resetBusy || resetPassword.length < 8}>
+                  {resetBusy ? 'Guardando…' : 'Definir contraseña'}
+                </Button>
+              </div>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 

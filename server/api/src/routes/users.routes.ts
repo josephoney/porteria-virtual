@@ -72,7 +72,23 @@ export async function userRoutes(app: FastifyInstance) {
     const body = changePasswordSchema.parse(request.body);
     let ok: boolean;
     try {
-      ok = await usersService.changePassword(u.accountId, body.currentPassword, body.newPassword);
+      if (body.currentPassword) {
+        ok = await usersService.changePassword(u.accountId, body.currentPassword, body.newPassword);
+      } else {
+        // Sin contraseña actual sólo se admite cuando hay un cambio pendiente:
+        // el ingreso ya probó la identidad y la temporal la conoce quien la
+        // entregó, así que pedirla otra vez no protege nada.
+        const pending = await usersService.hasPendingPasswordChange(u.accountId);
+        if (!pending) {
+          return reply.status(400).send({
+            statusCode: 400,
+            error: 'Bad Request',
+            message: 'Current password is required',
+          });
+        }
+        await usersService.setOwnPassword(u.accountId, body.newPassword);
+        ok = true;
+      }
     } catch (err) {
       if (err instanceof PasswordPolicyError) {
         return reply.status(400).send({

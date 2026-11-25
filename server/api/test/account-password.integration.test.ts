@@ -198,7 +198,7 @@ describe('cambio de contraseña por el administrador', () => {
       method: 'PATCH',
       url: '/api/me/password',
       headers: { authorization: `Bearer ${operatorToken}` },
-      payload: { currentPassword: 'temporal-456', newPassword: 'definitiva-789' },
+      payload: { newPassword: 'definitiva-789' },
     });
     assert.equal(changed.statusCode, 200, changed.body);
 
@@ -220,6 +220,16 @@ describe('cambio de contraseña por el administrador', () => {
       403,
       'ya no hay cambio pendiente: la API vuelve a responder',
     );
+
+    // Sin cambio pendiente, la contraseña actual vuelve a ser obligatoria.
+    const withoutCurrent = await app.inject({
+      method: 'PATCH',
+      url: '/api/me/password',
+      headers: { authorization: `Bearer ${operatorToken}` },
+      payload: { newPassword: 'otra-mas-000' },
+    });
+    assert.equal(withoutCurrent.statusCode, 400);
+    assert.equal(JSON.parse(withoutCurrent.body).message, 'Current password is required');
   });
 
   it('registra el evento sin la contraseña', async () => {

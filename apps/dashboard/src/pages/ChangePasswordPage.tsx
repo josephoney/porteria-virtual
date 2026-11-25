@@ -19,7 +19,6 @@ const MIN_PASSWORD = 8;
 export function ChangePasswordPage() {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
   const [saving, setSaving] = useState(false);
@@ -27,14 +26,16 @@ export function ChangePasswordPage() {
 
   const tooShort = next.length > 0 && next.length < MIN_PASSWORD;
   const mismatch = repeat.length > 0 && next !== repeat;
-  const canSubmit = current.length > 0 && next.length >= MIN_PASSWORD && next === repeat;
+  const canSubmit = next.length >= MIN_PASSWORD && next === repeat;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
     setError('');
     try {
-      await patch('/api/me/password', { currentPassword: current, newPassword: next });
+      // No se envía la contraseña actual: el ingreso ya probó la identidad y la
+      // temporal la conoce quien la entregó.
+      await patch('/api/me/password', { newPassword: next });
       // El cambio revoca las sesiones: hay que volver a entrar con la nueva.
       logout();
       navigate('/login', { replace: true });
@@ -42,7 +43,7 @@ export function ChangePasswordPage() {
       setError(
         err instanceof Error && err.message
           ? err.message
-          : 'No se pudo cambiar la contraseña. Verifica la actual.',
+          : 'No se pudo cambiar la contraseña. Intenta de nuevo.',
       );
       setSaving(false);
     }
@@ -59,17 +60,6 @@ export function ChangePasswordPage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-3" onSubmit={submit}>
-            <div className="space-y-1">
-              <Label htmlFor="current-password">Contraseña actual (temporal)</Label>
-              <Input
-                id="current-password"
-                type="password"
-                autoComplete="current-password"
-                value={current}
-                onChange={(event) => setCurrent(event.target.value)}
-                required
-              />
-            </div>
             <div className="space-y-1">
               <Label htmlFor="new-password">Contraseña nueva</Label>
               <Input
