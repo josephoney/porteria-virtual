@@ -477,6 +477,7 @@ export default function GuardScanScreen() {
                       }
                     }}
                   />
+                  <View style={styles.aimFrame} pointerEvents="none" />
                 </View>
                 <Button label="Cancelar" variant="ghost" onPress={() => setCameraOpen(false)} />
               </>
@@ -774,10 +775,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   camera: {
-    height: 260,
+    // Cuadrada y a todo el ancho: el marco queda en el centro de la pantalla en
+    // vez de una franja baja que obliga a apuntar de costado.
     width: '100%',
+    aspectRatio: 1,
+  },
+  aimFrame: {
+    position: 'absolute',
+    width: '62%',
+    aspectRatio: 1,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.85)',
+    borderRadius: radius.lg,
   },
   accessOption: {
     gap: spacing.xs,
