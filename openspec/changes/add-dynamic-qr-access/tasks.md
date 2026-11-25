@@ -193,8 +193,12 @@
       abierta al registrar el egreso, con `resolved_by_person_id` y su motivo.
 - [ ] 16.4 Send notifications to resident, guard, and `community_admin`. Depende
       de 13.1–13.4.
-- [ ] 16.5 Resolve an open alert by manual admin action. No existe endpoint de
-      alertas; hoy sólo se resuelven solas con el egreso.
+- [x] 16.5 Resolve an open alert by manual admin action. `GET /api/alerts`
+      (guard/operator/community_admin/org_admin, acotado por organización y
+      comunidad) y `POST /api/alerts/:id/resolve` con nota obligatoria; 404 fuera
+      del alcance, 409 si ya estaba resuelta. Resolver no toca `presenceState` ni
+      escribe un acceso: inflaría los reportes con una salida que nadie vio. Queda
+      el registro técnico `alert.resolved` con autor, motivo y momento.
 
 ### 17. Dashboard and operations
 

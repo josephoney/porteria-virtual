@@ -242,6 +242,9 @@ export async function buildApp() {
   const { bitacoraRoutes } = await import('./routes/bitacora.routes.js');
   await app.register(bitacoraRoutes, { prefix: '/api/bitacora' });
 
+  const { alertsRoutes } = await import('./routes/alerts.routes.js');
+  await app.register(alertsRoutes, { prefix: '/api/alerts' });
+
   await startOutboxWorker(app.log);
   startPassAlertsWorker();
   startRetentionWorker();

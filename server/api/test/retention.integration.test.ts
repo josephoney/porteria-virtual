@@ -27,6 +27,7 @@ import {
 
 import { randomToken, sha256Hex } from '../src/lib/pass-tokens.js';
 import { PRIVACY_POLICY_VERSION } from '../src/lib/privacy-policy.js';
+import { passAlerts } from '@porteria/database/schema';
 import {
   anonymizeOrganization,
   createRetentionHold,
@@ -754,5 +755,48 @@ describe('retención de datos de acceso', () => {
           .where(eq(bitacoraEntries.id, newEntryAId)),
       /immutable/,
     );
+  });
+
+  it('lista y resuelve a mano una alerta de salida pendiente', async () => {
+    const [alert] = await db
+      .insert(passAlerts)
+      .values({
+        passId: newPassAId,
+        communityId: communityAId,
+        type: 'missing_exit',
+        dueAt: daysBefore(new Date(), 2),
+      })
+      .returning();
+
+    const list = await request('GET', '/api/alerts', adminToken);
+    assert.equal(list.statusCode, 200, list.body);
+    const items = JSON.parse(list.body) as { id: string; visitorDocument: string }[];
+    assert.ok(
+      items.some((item) => item.id === alert.id),
+      'la alerta aparece en el alcance',
+    );
+    // La consulta no expone el documento completo.
+    assert.ok(items.every((item) => item.visitorDocument.startsWith('***')));
+
+    // Una comunidad ajena no la ve ni la puede resolver.
+    const otherOrg = await request('GET', `/api/alerts?organizationId=${orgBId}`, platformToken);
+    assert.equal(otherOrg.statusCode, 200);
+    assert.ok(!JSON.parse(otherOrg.body).some((item: { id: string }) => item.id === alert.id));
+
+    const resolved = await request('POST', `/api/alerts/${alert.id}/resolve`, adminToken, {
+      note: 'El guardia confirmó la salida en la bitácora de papel',
+    });
+    assert.equal(resolved.statusCode, 200, resolved.body);
+    assert.equal(JSON.parse(resolved.body).data.id, alert.id);
+
+    const again = await request('POST', `/api/alerts/${alert.id}/resolve`, adminToken, {
+      note: 'Segundo intento sobre la misma alerta',
+    });
+    assert.equal(again.statusCode, 409);
+
+    const [row] = await db.select().from(passAlerts).where(eq(passAlerts.id, alert.id)).limit(1);
+    assert.equal(row.status, 'resolved');
+    assert.ok(row.resolvedAt);
+    assert.equal(row.resolvedByPersonId, adminPersonId);
   });
 });
