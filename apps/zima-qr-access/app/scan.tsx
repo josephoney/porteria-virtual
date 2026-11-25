@@ -42,7 +42,7 @@ import { ZimaLogo } from '@/components/zima-logo';
 import { reasonText, toActivityItem } from '@/lib/bitacora';
 import { errorMessage } from '@/lib/errors';
 import { formatDateTime, formatTime, roleLabel } from '@/lib/format';
-import { colors, radius, spacing } from '@/theme';
+import { colors, radius, spacing, typography } from '@/theme';
 
 function formatElapsed(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));
@@ -540,19 +540,23 @@ export default function GuardScanScreen() {
                       <Text style={ui.heading}>
                         {scanResult.visitor.firstName} {scanResult.visitor.lastName}
                       </Text>
-                      <Text style={ui.muted}>Documento: {scanResult.visitor.document}</Text>
-                      {scanResult.vehiclePlate ? (
-                        <Text style={ui.muted}>Vehículo: {scanResult.vehiclePlate}</Text>
-                      ) : null}
-                      <Text style={ui.muted}>Ubicación: {scanResult.locationPath}</Text>
-                      <Text style={ui.muted}>Acceso: {scanResult.accessPointName}</Text>
-                      <Text style={ui.muted}>Autoriza: {scanResult.authorizedByName}</Text>
-                      <Text style={ui.muted}>
-                        Vigencia: {formatDateTime(scanResult.schedule.validFrom)} →{' '}
-                        {isPermanentPass(scanResult.schedule.validUntil)
-                          ? 'sin fecha de fin'
-                          : formatDateTime(scanResult.schedule.validUntil)}
-                      </Text>
+                      <View style={styles.detailTable}>
+                        <DetailRow label="Documento" value={scanResult.visitor.document} />
+                        {scanResult.vehiclePlate ? (
+                          <DetailRow label="Vehículo" value={scanResult.vehiclePlate} />
+                        ) : null}
+                        <DetailRow label="Destino" value={scanResult.locationPath} />
+                        <DetailRow label="Acceso" value={scanResult.accessPointName} />
+                        <DetailRow label="Autoriza" value={scanResult.authorizedByName} />
+                        <DetailRow
+                          label="Vigencia"
+                          value={`${formatDateTime(scanResult.schedule.validFrom)} – ${
+                            isPermanentPass(scanResult.schedule.validUntil)
+                              ? 'sin fecha de fin'
+                              : formatDateTime(scanResult.schedule.validUntil)
+                          }`}
+                        />
+                      </View>
                       {scanResult.companions.length > 0 ? (
                         <View style={styles.companions}>
                           <Text style={styles.companionsTitle}>
@@ -715,6 +719,21 @@ export default function GuardScanScreen() {
   );
 }
 
+/**
+ * Fila de la ficha del visitante: etiqueta a la izquierda, dato a la derecha.
+ *
+ * Sin bordes de tabla, sólo una línea fina entre filas para que el ojo siga la
+ * columna. El valor va en blanco y semibold porque es lo que el guardia lee.
+ */
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   brandBar: {
     alignItems: 'center',
@@ -791,6 +810,33 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.85)',
     borderRadius: radius.lg,
+  },
+  detailTable: {
+    marginTop: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  detailLabel: {
+    width: 92,
+    paddingTop: 2,
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  detailValue: {
+    flex: 1,
+    color: colors.text,
+    fontSize: typography.body,
+    fontWeight: '600',
+    lineHeight: 20,
   },
   accessOption: {
     gap: spacing.xs,
