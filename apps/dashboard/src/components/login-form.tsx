@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth, type ActiveMembership } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -230,6 +230,14 @@ export function LoginForm({
                     {loading && <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />}
                     {loading ? 'Ingresando…' : 'Ingresar'}
                   </Button>
+                </Field>
+                <Field>
+                  <Link
+                    className="block text-center text-sm underline underline-offset-4"
+                    to="/forgot-password"
+                  >
+                    Olvidé mi contraseña
+                  </Link>
                 </Field>
               </FieldGroup>
             </form>

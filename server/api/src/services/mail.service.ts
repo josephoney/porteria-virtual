@@ -238,3 +238,75 @@ export async function sendInvitationEmail(
     return { sent: false, reason: 'send_failed' };
   }
 }
+
+export interface SendPasswordResetEmailInput {
+  to: string;
+  firstName: string;
+  resetUrl: string;
+  expiresInMinutes: number;
+}
+
+/**
+ * Env�a el enlace de recuperaci�n.
+ *
+ * Mismo transporte que la invitaci�n, pero con su propio texto: quien lo abre
+ * olvid� su contrase�a, no est� aceptando una invitaci�n.
+ */
+export async function sendPasswordResetEmail(
+  input: SendPasswordResetEmailInput,
+): Promise<SendInvitationEmailResult> {
+  const token = config.mail.zeptomailToken
+    .trim()
+    .replace(/^Zoho-enczapikey\s+/i, '')
+    .trim();
+  const from = config.mail.from.trim();
+
+  if (!token || !from) {
+    return { sent: false, reason: 'mail_not_configured' };
+  }
+
+  const parsedFrom = parseFrom(from);
+  if (!parsedFrom) {
+    console.warn('[mail] MAIL_FROM is invalid; password reset email was not sent');
+    return { sent: false, reason: 'mail_not_configured' };
+  }
+
+  const apiUrl = config.mail.zeptomailApiUrl.replace(/\/+$/, '');
+  const subject = 'Recupera tu contrase�a';
+  const htmlbody = `<p>Hola ${input.firstName},</p><p>Recibimos una solicitud para cambiar la contrase�a de tu cuenta.</p><p><a href="${input.resetUrl}">Definir una contrase�a nueva</a></p><p>El enlace vence en ${input.expiresInMinutes} minutos y s�lo se puede usar una vez. Si no fuiste t�, ignora este correo: tu contrase�a actual sigue funcionando.</p>`;
+  const textbody = `Hola ${input.firstName},\n\nRecibimos una solicitud para cambiar la contrase�a de tu cuenta.\n\nAbre este enlace para definir una nueva: ${input.resetUrl}\n\nEl enlace vence en ${input.expiresInMinutes} minutos y s�lo se puede usar una vez. Si no fuiste t�, ignora este correo.`;
+
+  try {
+    const response = await fetch(`${apiUrl}/v1.1/email`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Zoho-enczapikey ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: parsedFrom,
+        to: [{ email_address: { address: input.to } }],
+        subject,
+        htmlbody,
+        textbody,
+      }),
+      signal: createTimeoutSignal(),
+    });
+
+    if (!response.ok) {
+      const providerError = await readProviderError(response, [token, input.resetUrl]);
+      console.error('[mail] ZeptoMail rejected the password reset email', {
+        status: response.status,
+        providerError,
+      });
+      return { sent: false, reason: 'send_failed' };
+    }
+
+    return { sent: true };
+  } catch (err) {
+    console.error('[mail] ZeptoMail request failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { sent: false, reason: 'send_failed' };
+  }
+}

@@ -24,6 +24,7 @@ export {
 export { kiosks, kioskStatusEnum } from './kiosks';
 export { visitors, visitorTypeEnum } from './visitors';
 export { refreshTokens } from './refresh-tokens';
+export { passwordResetTokens } from './password-reset-tokens';
 export { calls, callStatusEnum } from './calls';
 export { events, EVENTS_HYPERTABLE_SQL } from './events';
 export { guardRounds, roundStatusEnum } from './guard-rounds';

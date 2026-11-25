@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { RequireAuth, RequireRole, RequirePlatformAdmin } from './components/RequireAuth';
 import { LoginPage } from './pages/LoginPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { CommunityEntryPage } from './pages/CommunityEntryPage';
 import { InvitePage } from './pages/InvitePage';
 import { PlatformPage } from './pages/PlatformPage';
@@ -84,6 +86,8 @@ function DashboardApp() {
     <ErrorBoundary resetKey={pathname} fullPage>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/c/:slug" element={<CommunityEntryPage />} />
         <Route path="/invite/:token" element={<InvitePage />} />
         <Route

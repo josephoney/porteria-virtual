@@ -156,6 +156,9 @@ export async function buildApp() {
   const { authRoutes } = await import('./routes/auth.routes.js');
   await app.register(authRoutes, { prefix: '/api/auth' });
 
+  const { passwordResetRoutes } = await import('./routes/password-reset.routes.js');
+  await app.register(passwordResetRoutes, { prefix: '/api/auth' });
+
   const { publicRoutes } = await import('./routes/public.routes.js');
   await app.register(publicRoutes, { prefix: '/api/public' });
 

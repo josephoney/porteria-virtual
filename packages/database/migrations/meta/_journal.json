@@ -267,6 +267,13 @@
       "when": 1795573600000,
       "tag": "0037_bitacora_two_redactions",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795580000000,
+      "tag": "0038_password_reset_tokens",
+      "breakpoints": true
     }
   ]
 }
