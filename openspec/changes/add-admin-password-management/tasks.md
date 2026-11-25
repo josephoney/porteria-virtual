@@ -34,11 +34,13 @@
 
 ## 5. Interfaz
 
-- [ ] 5.1 Acción «Cambiar contraseña» en el listado de usuarios.
+- [x] 5.1 Acción «Cambiar contraseña» en el listado de usuarios, como ícono en el
+      grupo de acciones de la membresía.
 - [ ] 5.2 Diálogo con modo, contraseña, confirmación y casilla de cambio
-      obligatorio.
-- [ ] 5.3 Mostrar la contraseña temporal una sola vez, con opción de copiar.
-- [ ] 5.4 Ocultar la acción para objetivos fuera de alcance.
+      obligatorio. Hechos la contraseña, la casilla y el aviso; faltan el
+      selector de modo (`direct`/`link`) y el campo de confirmación.
+- [x] 5.3 Mostrar la contraseña temporal una sola vez, con opción de copiar.
+- [x] 5.4 Ocultar la acción para objetivos fuera de alcance.
 - [x] 5.5 Pantalla de cambio obligatorio tras el login: `/change-password`, con
       redirección automática cuando la API responde `password_change_required`.
 

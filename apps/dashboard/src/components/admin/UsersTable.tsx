@@ -13,6 +13,7 @@ import { LoadingState } from '../ui/loading-state';
 import {
   RiSearchLine,
   RiUserAddLine,
+  RiLockPasswordLine,
   RiUserFollowLine,
   RiUserUnfollowLine,
 } from '@remixicon/react';
@@ -657,20 +658,7 @@ export function UsersTable() {
                       {index === 0 && (
                         <>
                           <TableCell rowSpan={rowSpan} className="py-2 align-top font-medium">
-                            <div className="flex items-center gap-1">
-                              <span>{u.email}</span>
-                              {canResetUser(u) && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="xs"
-                                  aria-label={`Cambiar contraseña de ${u.email}`}
-                                  onClick={() => openResetDialog(u)}
-                                >
-                                  Contraseña
-                                </Button>
-                              )}
-                            </div>
+                            {u.email}
                           </TableCell>
                           <TableCell rowSpan={rowSpan} className="py-2 align-top">
                             <div className="flex flex-col">
@@ -763,6 +751,18 @@ export function UsersTable() {
                                 onClick={() => openAssignment(u)}
                               >
                                 <RiUserAddLine />
+                              </Button>
+                            )}
+                            {index === 0 && canResetUser(u) && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-xs"
+                                title="Cambiar contraseña"
+                                aria-label={`Cambiar contraseña de ${u.email}`}
+                                onClick={() => openResetDialog(u)}
+                              >
+                                <RiLockPasswordLine />
                               </Button>
                             )}
                           </div>
