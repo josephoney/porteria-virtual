@@ -43,13 +43,16 @@ function buildResetUrl(token: string): string {
  * formulario en un verificador de correos registrados. Si la cuenta existe se
  * invalida cualquier enlace anterior y se envía uno nuevo.
  */
-export async function requestPasswordReset(email: string, ip: string | null): Promise<ResetResult> {
-  const account = await accountForEmail(email);
-
-  // Un correo inexistente, inactivo o sin cuenta no produce ningún enlace, y la
-  // respuesta es la misma que en el caso feliz.
-  if (!account || !account.active) return { ok: true, data: { sent: false } };
-
+/**
+ * Emite un enlace para una cuenta, anulando los anteriores.
+ *
+ * Devuelve el token en claro: el llamador lo envía por correo y no lo guarda.
+ * La base sólo conserva el hash.
+ */
+export async function issueResetToken(
+  accountId: string,
+  ip: string | null,
+): Promise<{ token: string; expiresAt: Date }> {
   const token = randomToken(32);
   const expiresAt = new Date(Date.now() + RESET_TOKEN_MINUTES * 60_000);
 
@@ -60,26 +63,46 @@ export async function requestPasswordReset(email: string, ip: string | null): Pr
       .update(passwordResetTokens)
       .set({ usedAt: new Date() })
       .where(
-        and(
-          eq(passwordResetTokens.accountId, account.accountId),
-          isNull(passwordResetTokens.usedAt),
-        ),
+        and(eq(passwordResetTokens.accountId, accountId), isNull(passwordResetTokens.usedAt)),
       );
 
     await tx.insert(passwordResetTokens).values({
-      accountId: account.accountId,
+      accountId,
       tokenHash: sha256Hex(token),
       expiresAt,
       requestedIp: ip?.slice(0, 64) ?? null,
     });
   });
 
+  return { token, expiresAt };
+}
+
+/** Envía el enlace ya emitido al correo de la cuenta. */
+export async function deliverResetEmail(
+  to: string,
+  firstName: string,
+  token: string,
+): Promise<{ sent: boolean; reason?: string }> {
   const delivery = await sendPasswordResetEmail({
-    to: account.email,
-    firstName: account.firstName,
+    to,
+    firstName,
     resetUrl: buildResetUrl(token),
     expiresInMinutes: RESET_TOKEN_MINUTES,
   });
+  return delivery.reason
+    ? { sent: delivery.sent, reason: delivery.reason }
+    : { sent: delivery.sent };
+}
+
+export async function requestPasswordReset(email: string, ip: string | null): Promise<ResetResult> {
+  const account = await accountForEmail(email);
+
+  // Un correo inexistente, inactivo o sin cuenta no produce ningún enlace, y la
+  // respuesta es la misma que en el caso feliz.
+  if (!account || !account.active) return { ok: true, data: { sent: false } };
+
+  const { token } = await issueResetToken(account.accountId, ip);
+  const delivery = await deliverResetEmail(account.email, account.firstName, token);
 
   return {
     ok: true,
@@ -126,7 +149,7 @@ export async function resetPassword(
 
     await tx
       .update(accounts)
-      .set({ passwordHash, updatedAt: now })
+      .set({ passwordHash, mustChangePassword: false, updatedAt: now })
       .where(eq(accounts.id, row.accountId));
 
     await tx

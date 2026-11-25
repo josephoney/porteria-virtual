@@ -171,6 +171,9 @@ export async function buildApp() {
   const { userRoutes } = await import('./routes/users.routes.js');
   await app.register(userRoutes, { prefix: '/api' });
 
+  const { accountPasswordRoutes } = await import('./routes/account-password.routes.js');
+  await app.register(accountPasswordRoutes, { prefix: '/api/accounts' });
+
   const { peopleRoutes } = await import('./routes/people.routes.js');
   await app.register(peopleRoutes, { prefix: '/api/people' });
 

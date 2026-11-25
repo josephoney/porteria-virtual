@@ -18,6 +18,13 @@ export const accounts = pgTable(
     email: varchar('email', { length: 255 }).notNull(),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     active: boolean('active').notNull().default(true),
+    /**
+     * Obliga a definir una contraseña nueva en el próximo ingreso.
+     *
+     * Lo marca el administrador cuando entrega una contraseña temporal; la
+     * cuenta no puede seguir usándola sin cambiarla.
+     */
+    mustChangePassword: boolean('must_change_password').notNull().default(false),
     isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
