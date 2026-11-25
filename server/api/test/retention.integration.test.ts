@@ -5,6 +5,9 @@ import type { FastifyInstance } from 'fastify';
 
 process.env.OUTBOX_WORKER_ENABLED = 'false';
 process.env.RETENTION_WORKER_ENABLED = 'false';
+// El portal público no entrega nada si el QR dinámico está apagado, y esa
+// variable no viene encendida en todos los entornos.
+process.env.DYNAMIC_QR_ENABLED = 'true';
 process.env.NODE_ENV = 'test';
 
 import { createDb } from '@porteria/database';
