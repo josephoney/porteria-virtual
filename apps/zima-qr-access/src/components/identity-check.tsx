@@ -1,5 +1,5 @@
 import { CameraView } from 'expo-camera';
-import { useState } from 'react';
+import { useRef, useState, type ComponentRef } from 'react';
 import { Keyboard, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 import { isPermanentPass } from '@porteria/shared';
@@ -58,6 +58,7 @@ export function IdentityCheck({
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const documentInput = useRef<ComponentRef<typeof TextInput>>(null);
 
   function reset() {
     setCandidates(null);
@@ -187,6 +188,11 @@ export function IdentityCheck({
           animationType="fade"
           transparent
           onRequestClose={() => setManualOpen(false)}
+          onShow={() => {
+            // `autoFocus` compite con la animación del modal y en Android suele
+            // perder: el foco se pide cuando la hoja ya está en pantalla.
+            setTimeout(() => documentInput.current?.focus(), 120);
+          }}
         >
           {/*
             La cédula se escribe en una hoja propia: así el campo y el botón
@@ -195,11 +201,12 @@ export function IdentityCheck({
           */}
           <KeyboardAvoidingView
             style={styles.manualBackdrop}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
             <View style={styles.manualBox}>
               <Text style={ui.body}>Número de cédula</Text>
               <TextInput
+                ref={documentInput}
                 style={styles.input}
                 value={document}
                 onChangeText={setDocument}
@@ -208,7 +215,6 @@ export function IdentityCheck({
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
-                autoFocus
               />
               <Button
                 label="Verificar autorización"
