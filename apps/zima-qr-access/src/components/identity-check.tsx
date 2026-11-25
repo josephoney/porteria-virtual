@@ -1,6 +1,7 @@
 import { CameraView } from 'expo-camera';
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform } from 'react-native';
 import { isPermanentPass } from '@porteria/shared';
 
 import {
@@ -173,25 +174,44 @@ export function IdentityCheck({
       ) : null}
 
       {manualOpen ? (
-        <View style={styles.manualBox}>
-          <Text style={ui.body}>Número de cédula</Text>
-          <TextInput
-            style={styles.input}
-            value={document}
-            onChangeText={setDocument}
-            keyboardType="number-pad"
-            placeholder="Ej. 1020304050"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Button
-            label="Verificar autorización"
-            onPress={() => void search(document)}
-            loading={searching}
-            disabled={searching || document.trim().length < 4}
-          />
-        </View>
+        <Modal
+          visible={manualOpen}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setManualOpen(false)}
+        >
+          {/*
+            La cédula se escribe en una hoja propia: así el campo y el botón
+            quedan por encima del teclado numérico sin depender del scroll de la
+            pantalla que hay detrás.
+          */}
+          <KeyboardAvoidingView
+            style={styles.manualBackdrop}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.manualBox}>
+              <Text style={ui.body}>Número de cédula</Text>
+              <TextInput
+                style={styles.input}
+                value={document}
+                onChangeText={setDocument}
+                keyboardType="number-pad"
+                placeholder="Ej. 1020304050"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
+              />
+              <Button
+                label="Verificar autorización"
+                onPress={() => void search(document)}
+                loading={searching}
+                disabled={searching || document.trim().length < 4}
+              />
+              <Button label="Cancelar" variant="ghost" onPress={() => setManualOpen(false)} />
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       ) : (
         <Button
           label="Ingresar cédula"
@@ -322,8 +342,19 @@ const styles = StyleSheet.create({
     height: 260,
     overflow: 'hidden',
   },
+  manualBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: spacing.lg,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
   manualBox: {
     gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
   },
   input: {
     backgroundColor: colors.surfaceElevated,
