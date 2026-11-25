@@ -1,6 +1,6 @@
 import { CameraView } from 'expo-camera';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 import { isPermanentPass } from '@porteria/shared';
 
@@ -91,6 +91,11 @@ export function IdentityCheck({
       );
     } finally {
       setSearching(false);
+      // La hoja se cierra al terminar la consulta, salga como salga: el
+      // resultado (o el aviso de que no está autorizado) se lee en la pantalla
+      // principal, sin el teclado ocupando media vista.
+      setManualOpen(false);
+      Keyboard.dismiss();
     }
   }
 
