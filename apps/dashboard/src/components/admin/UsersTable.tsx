@@ -94,6 +94,60 @@ export function UsersTable() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [actionError, setActionError] = useState('');
+
+  /**
+   * Mismo alcance que aplica el servidor, para no ofrecer una acción que va a
+   * ser rechazada: nadie resetea a un par, a un platform admin ni a otra
+   * comunidad.
+   */
+  function canResetUser(target: UserData): boolean {
+    if (target.isPlatformAdmin) return false;
+    if (target.id === user?.id) return false;
+    if (target.memberships.length === 0) return false;
+    if (activeMembership?.role === 'org_admin') {
+      return target.memberships.every((membership) => membership.role !== 'org_admin');
+    }
+    if (activeMembership?.role === 'community_admin') {
+      return target.memberships.every(
+        (membership) =>
+          membership.communityId === activeMembership.communityId &&
+          ['operator', 'guard', 'resident'].includes(membership.role),
+      );
+    }
+    return false;
+  }
+
+  /** Define una contraseña temporal que la persona deberá cambiar al entrar. */
+  async function handleResetPassword(target: UserData) {
+    const suggestion = `Zima-${Math.random().toString(36).slice(2, 8)}`;
+    const temporary = window.prompt(
+      `Contraseña temporal para ${target.email}.\nLa persona deberá cambiarla en el próximo ingreso.`,
+      suggestion,
+    );
+    if (!temporary) return;
+    if (temporary.length < 8) {
+      setActionError('La contraseña temporal debe tener al menos ocho caracteres.');
+      return;
+    }
+
+    try {
+      await post(`/api/accounts/${target.id}/password`, {
+        mode: 'direct',
+        password: temporary,
+        mustChange: true,
+      });
+      setActionError('');
+      window.alert(
+        `Contraseña temporal de ${target.email}:\n\n${temporary}\n\nSe revocaron sus sesiones y deberá cambiarla al ingresar.`,
+      );
+    } catch (err) {
+      setActionError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'No se pudo cambiar la contraseña de esa cuenta.',
+      );
+    }
+  }
   const [communities, setCommunities] = useState<CommunityOption[]>([]);
   const [units, setUnits] = useState<UnitOption[]>([]);
   const [formOpen, setFormOpen] = useState(false);
@@ -599,7 +653,20 @@ export function UsersTable() {
                       {index === 0 && (
                         <>
                           <TableCell rowSpan={rowSpan} className="py-2 align-top font-medium">
-                            {u.email}
+                            <div className="flex items-center gap-1">
+                              <span>{u.email}</span>
+                              {canResetUser(u) && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="xs"
+                                  aria-label={`Cambiar contraseña de ${u.email}`}
+                                  onClick={() => handleResetPassword(u)}
+                                >
+                                  Contraseña
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell rowSpan={rowSpan} className="py-2 align-top">
                             <div className="flex flex-col">
