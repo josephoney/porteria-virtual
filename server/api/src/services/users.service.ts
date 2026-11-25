@@ -46,6 +46,8 @@ export interface UserResult {
   name: string;
   isPlatformAdmin: boolean;
   active: boolean;
+  /** La cuenta debe cambiar su contraseña en el próximo ingreso. */
+  mustChangePassword: boolean;
   memberships: MembershipView[];
   createdAt: Date;
   updatedAt: Date;
@@ -61,6 +63,7 @@ const accountPersonColumns = {
   email: accounts.email,
   active: accounts.active,
   isPlatformAdmin: accounts.isPlatformAdmin,
+  mustChangePassword: accounts.mustChangePassword,
   createdAt: accounts.createdAt,
   updatedAt: accounts.updatedAt,
   firstName: people.firstName,
@@ -75,6 +78,7 @@ interface AccountPersonRow {
   email: string;
   active: boolean;
   isPlatformAdmin: boolean;
+  mustChangePassword: boolean;
   createdAt: Date;
   updatedAt: Date;
   firstName: string;
@@ -174,6 +178,7 @@ function toUserResult(
     name: name || row.email,
     isPlatformAdmin: row.isPlatformAdmin,
     active: row.active,
+    mustChangePassword: row.mustChangePassword,
     memberships: membershipRows.map(toMembershipView),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

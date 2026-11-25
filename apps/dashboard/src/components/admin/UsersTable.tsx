@@ -41,6 +41,7 @@ interface UserData {
   personPhone?: string | null;
   isPlatformAdmin: boolean;
   active: boolean;
+  mustChangePassword?: boolean;
   memberships: MembershipView[];
 }
 
@@ -97,6 +98,8 @@ export function UsersTable() {
   const [actionError, setActionError] = useState('');
   const [resetTarget, setResetTarget] = useState<UserData | null>(null);
   const [resetPassword, setResetPassword] = useState('');
+  const [resetRepeat, setResetRepeat] = useState('');
+  const [resetMode, setResetMode] = useState<'direct' | 'link'>('direct');
   const [resetMustChange, setResetMustChange] = useState(true);
   const [resetResult, setResetResult] = useState<string | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
@@ -127,6 +130,8 @@ export function UsersTable() {
   function openResetDialog(target: UserData) {
     setResetTarget(target);
     setResetPassword(`Zima-${Math.random().toString(36).slice(2, 8)}`);
+    setResetRepeat('');
+    setResetMode('direct');
     setResetMustChange(true);
     setResetResult(null);
     setActionError('');
@@ -135,14 +140,20 @@ export function UsersTable() {
   async function submitReset(event: React.FormEvent) {
     event.preventDefault();
     if (!resetTarget) return;
+    if (resetMode === 'direct' && resetPassword !== resetRepeat) {
+      setActionError('Las contraseñas no coinciden.');
+      return;
+    }
     setResetBusy(true);
     try {
       await post(`/api/accounts/${resetTarget.id}/password`, {
-        mode: 'direct',
-        password: resetPassword,
-        mustChange: resetMustChange,
+        mode: resetMode,
+        ...(resetMode === 'direct'
+          ? { password: resetPassword, mustChange: resetMustChange }
+          : { mustChange: true }),
       });
-      setResetResult(resetPassword);
+      // El modo enlace no devuelve contraseña: se avisa que salió el correo.
+      setResetResult(resetMode === 'direct' ? resetPassword : 'link-sent');
     } catch (err) {
       setActionError(
         err instanceof Error && err.message
@@ -658,7 +669,14 @@ export function UsersTable() {
                       {index === 0 && (
                         <>
                           <TableCell rowSpan={rowSpan} className="py-2 align-top font-medium">
-                            {u.email}
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span>{u.email}</span>
+                              {u.mustChangePassword && u.active && (
+                                <Badge variant="warning" className="text-[10px]">
+                                  cambio pendiente
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell rowSpan={rowSpan} className="py-2 align-top">
                             <div className="flex flex-col">
@@ -923,21 +941,30 @@ export function UsersTable() {
           {resetResult ? (
             <div className="space-y-3">
               <p className="text-sm">
-                Contraseña temporal de <span className="font-medium">{resetTarget?.email}</span>. Se
-                muestra una sola vez y sus sesiones quedaron revocadas.
+                Cambio de contraseña de <span className="font-medium">{resetTarget?.email}</span>.
+                Sus sesiones abiertas quedaron revocadas.
               </p>
-              <code className="block rounded-xl bg-muted px-3 py-2 font-mono text-sm">
-                {resetResult}
-              </code>
+              {resetResult === 'link-sent' ? (
+                <p className="rounded-xl bg-muted px-3 py-2 text-sm">
+                  Enviamos el enlace al correo. La persona define su contraseña desde ahí: nadie más
+                  la conoce.
+                </p>
+              ) : (
+                <code className="block rounded-xl bg-muted px-3 py-2 font-mono text-sm">
+                  {resetResult}
+                </code>
+              )}
               <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigator.clipboard.writeText(resetResult)}
-                >
-                  Copiar
-                </Button>
+                {resetResult !== 'link-sent' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigator.clipboard.writeText(resetResult)}
+                  >
+                    Copiar
+                  </Button>
+                )}
                 <Button type="button" size="sm" onClick={() => setResetTarget(null)}>
                   Listo
                 </Button>
@@ -952,32 +979,72 @@ export function UsersTable() {
           ) : (
             <form className="space-y-3" onSubmit={submitReset}>
               <div className="space-y-1">
-                <Label htmlFor="reset-temp-password">Contraseña temporal</Label>
-                <Input
-                  id="reset-temp-password"
-                  value={resetPassword}
-                  onChange={(event) => setResetPassword(event.target.value)}
-                  minLength={8}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Al menos ocho caracteres. Entrégasela a la persona por un canal directo.
-                </p>
+                <Label htmlFor="reset-mode">Cómo se define</Label>
+                <Select
+                  value={resetMode}
+                  onValueChange={(value) => setResetMode(value as 'direct' | 'link')}
+                >
+                  <SelectTrigger id="reset-mode" aria-label="Cómo se define la contraseña">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="direct">Contraseña temporal (yo la defino)</SelectItem>
+                    <SelectItem value="link">Enlace por correo (la define la persona)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4"
-                  checked={resetMustChange}
-                  onChange={(event) => setResetMustChange(event.target.checked)}
-                />
-                <span>
-                  Obligar a cambiar la contraseña en el próximo ingreso
-                  <span className="block text-xs text-muted-foreground">
-                    Si lo desactivas, la persona podrá seguir usando la temporal.
-                  </span>
-                </span>
-              </label>
+
+              {resetMode === 'link' && (
+                <p className="rounded-xl bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  Se envía el enlace de recuperación al correo registrado. Nadie que administre ve
+                  la contraseña, y el cambio en el próximo ingreso queda obligatorio.
+                </p>
+              )}
+
+              {resetMode === 'direct' && (
+                <>
+                  <div className="space-y-1">
+                    <Label htmlFor="reset-temp-password">Contraseña temporal</Label>
+                    <Input
+                      id="reset-temp-password"
+                      value={resetPassword}
+                      onChange={(event) => setResetPassword(event.target.value)}
+                      minLength={8}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Al menos ocho caracteres. Entrégasela a la persona por un canal directo.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="reset-temp-repeat">Repite la contraseña</Label>
+                    <Input
+                      id="reset-temp-repeat"
+                      value={resetRepeat}
+                      onChange={(event) => setResetRepeat(event.target.value)}
+                      minLength={8}
+                      required
+                    />
+                    {resetRepeat.length > 0 && resetPassword !== resetRepeat && (
+                      <p className="text-xs text-destructive">No coinciden.</p>
+                    )}
+                  </div>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={resetMustChange}
+                      onChange={(event) => setResetMustChange(event.target.checked)}
+                    />
+                    <span>
+                      Obligar a cambiar la contraseña en el próximo ingreso
+                      <span className="block text-xs text-muted-foreground">
+                        Si lo desactivas, la persona podrá seguir usando la temporal.
+                      </span>
+                    </span>
+                  </label>
+                </>
+              )}
               {actionError && <p className="text-sm text-destructive">{actionError}</p>}
               <div className="flex justify-end gap-2">
                 <Button
@@ -988,8 +1055,19 @@ export function UsersTable() {
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={resetBusy || resetPassword.length < 8}>
-                  {resetBusy ? 'Guardando…' : 'Definir contraseña'}
+                <Button
+                  type="submit"
+                  disabled={
+                    resetBusy ||
+                    (resetMode === 'direct' &&
+                      (resetPassword.length < 8 || resetPassword !== resetRepeat))
+                  }
+                >
+                  {resetBusy
+                    ? 'Guardando…'
+                    : resetMode === 'link'
+                      ? 'Enviar enlace'
+                      : 'Definir contraseña'}
                 </Button>
               </div>
             </form>
