@@ -27,6 +27,7 @@ let orgId: string;
 let communityId: string;
 let orgAdminToken: string;
 let communityAdminToken: string;
+let operatorToken: string;
 let operatorAccountId: string;
 let peerAdminAccountId: string;
 let operatorSessionId: string;
@@ -117,6 +118,7 @@ describe('cambio de contraseña por el administrador', () => {
     communityAdminToken = communityAdmin.token;
     const operator = await makeAccount('Opera', 'operator', communityId);
     operatorAccountId = operator.accountId;
+    operatorToken = operator.token;
     const peer = await makeAccount('Par', 'community_admin', communityId);
     peerAdminAccountId = peer.accountId;
 
@@ -171,6 +173,53 @@ describe('cambio de contraseña por el administrador', () => {
       .where(eq(refreshTokens.id, operatorSessionId))
       .limit(1);
     assert.equal(session.revoked, true);
+  });
+
+  it('cierra la API mientras la contraseña temporal no se cambie', async () => {
+    // La sesión sigue viva pero sólo sirve para ver el perfil y cambiarla.
+    const profile = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      headers: { authorization: `Bearer ${operatorToken}` },
+    });
+    assert.notEqual(profile.statusCode, 403);
+
+    const blocked = await app.inject({
+      method: 'GET',
+      url: '/api/bitacora?page=1&pageSize=1',
+      headers: { authorization: `Bearer ${operatorToken}` },
+    });
+    assert.equal(blocked.statusCode, 403);
+    assert.equal(JSON.parse(blocked.body).message, 'password_change_required');
+  });
+
+  it('al cambiar la contraseña se limpia la marca y vuelve el acceso', async () => {
+    const changed = await app.inject({
+      method: 'PATCH',
+      url: '/api/me/password',
+      headers: { authorization: `Bearer ${operatorToken}` },
+      payload: { currentPassword: 'temporal-456', newPassword: 'definitiva-789' },
+    });
+    assert.equal(changed.statusCode, 200, changed.body);
+
+    const [account] = await db
+      .select()
+      .from(accounts)
+      .where(eq(accounts.id, operatorAccountId))
+      .limit(1);
+    assert.equal(account.mustChangePassword, false);
+    assert.equal(await bcrypt.compare('definitiva-789', account.passwordHash), true);
+
+    const allowed = await app.inject({
+      method: 'GET',
+      url: '/api/bitacora?page=1&pageSize=1',
+      headers: { authorization: `Bearer ${operatorToken}` },
+    });
+    assert.notEqual(
+      allowed.statusCode,
+      403,
+      'ya no hay cambio pendiente: la API vuelve a responder',
+    );
   });
 
   it('registra el evento sin la contraseña', async () => {

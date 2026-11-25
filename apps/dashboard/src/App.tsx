@@ -1,10 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { RequireAuth, RequireRole, RequirePlatformAdmin } from './components/RequireAuth';
 import { LoginPage } from './pages/LoginPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { CommunityEntryPage } from './pages/CommunityEntryPage';
 import { InvitePage } from './pages/InvitePage';
 import { PlatformPage } from './pages/PlatformPage';
@@ -84,10 +86,19 @@ function DashboardApp() {
 
   return (
     <ErrorBoundary resetKey={pathname} fullPage>
+      <PasswordChangeRedirect />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route
+          path="/change-password"
+          element={
+            <RequireAuth>
+              <ChangePasswordPage />
+            </RequireAuth>
+          }
+        />
         <Route path="/c/:slug" element={<CommunityEntryPage />} />
         <Route path="/invite/:token" element={<InvitePage />} />
         <Route
@@ -333,4 +344,22 @@ export default function App() {
       </AuthProvider>
     </BrowserRouter>
   );
+}
+
+/**
+ * Lleva a la pantalla de cambio cuando la API responde que la contraseña
+ * temporal sigue pendiente, sin importar en qué pantalla estaba la persona.
+ */
+function PasswordChangeRedirect() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    function onRequired() {
+      navigate('/change-password', { replace: true });
+    }
+    window.addEventListener('password-change-required', onRequired);
+    return () => window.removeEventListener('password-change-required', onRequired);
+  }, [navigate]);
+
+  return null;
 }

@@ -1,0 +1,108 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import { useAuth } from '../contexts/AuthContext';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { patch } from '../lib/apiClient';
+
+const MIN_PASSWORD = 8;
+
+/**
+ * Cambio obligatorio tras un reseteo del administrador.
+ *
+ * Se muestra antes que cualquier otra pantalla: mientras la contraseña temporal
+ * esté activa, la API responde 403 `password_change_required` en todo lo demás.
+ */
+export function ChangePasswordPage() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [repeat, setRepeat] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const tooShort = next.length > 0 && next.length < MIN_PASSWORD;
+  const mismatch = repeat.length > 0 && next !== repeat;
+  const canSubmit = current.length > 0 && next.length >= MIN_PASSWORD && next === repeat;
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await patch('/api/me/password', { currentPassword: current, newPassword: next });
+      // El cambio revoca las sesiones: hay que volver a entrar con la nueva.
+      logout();
+      navigate('/login', { replace: true });
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'No se pudo cambiar la contraseña. Verifica la actual.',
+      );
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Define tu contraseña</CardTitle>
+          <CardDescription>
+            La contraseña actual es temporal. Elige una propia para seguir usando la plataforma.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-3" onSubmit={submit}>
+            <div className="space-y-1">
+              <Label htmlFor="current-password">Contraseña actual (temporal)</Label>
+              <Input
+                id="current-password"
+                type="password"
+                autoComplete="current-password"
+                value={current}
+                onChange={(event) => setCurrent(event.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="new-password">Contraseña nueva</Label>
+              <Input
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                value={next}
+                onChange={(event) => setNext(event.target.value)}
+                required
+              />
+              {tooShort && (
+                <p className="text-xs text-destructive">Debe tener al menos ocho caracteres.</p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="repeat-password">Repite la contraseña nueva</Label>
+              <Input
+                id="repeat-password"
+                type="password"
+                autoComplete="new-password"
+                value={repeat}
+                onChange={(event) => setRepeat(event.target.value)}
+                required
+              />
+              {mismatch && <p className="text-xs text-destructive">No coinciden.</p>}
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" className="w-full" disabled={saving || !canSubmit}>
+              {saving ? 'Guardando…' : 'Cambiar contraseña'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

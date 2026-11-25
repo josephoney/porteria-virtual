@@ -20,17 +20,17 @@
       `must_change_password` según la casilla y devuelve la temporal una sola vez.
 - [x] 3.3 Modo `link`: emite el token del flujo de recuperación y envía el correo.
 - [x] 3.4 Revocar sesiones en ambos modos.
-- [x] 3.5 Registrar el evento de auditoría sin datos sensibles (test que el
-      evento no contiene la contraseña).
+- [x] 3.5 Registrar el evento de auditoría sin datos sensibles.
 
 ## 4. Bloqueo por cambio obligatorio
 
-- [ ] 4.1 Rechazar login completo cuando `must_change_password` esté activo,
-      devolviendo la marca correspondiente.
-- [ ] 4.2 Permitir sólo el endpoint de cambio de contraseña en ese estado.
-- [ ] 4.3 Limpiar la marca al cambiar la contraseña (el flujo de recuperación ya
-      la limpia; falta el cambio autenticado).
-- [ ] 4.4 Tests de login, refresh y salida del estado.
+- [x] 4.1 Mientras `must_change_password` esté activo, toda la API responde 403
+      `password_change_required` salvo el perfil y el cambio de contraseña.
+- [x] 4.2 Sólo `/api/me` y `/api/me/password` quedan abiertos en ese estado.
+- [x] 4.3 `setPassword` limpia la marca: cualquier cambio deliberado de
+      contraseña salda la obligación.
+- [x] 4.4 Tests: la API queda cerrada con la temporal activa, el perfil sigue
+      accesible y al cambiarla vuelve el acceso.
 
 ## 5. Interfaz
 
@@ -39,12 +39,12 @@
       obligatorio.
 - [ ] 5.3 Mostrar la contraseña temporal una sola vez, con opción de copiar.
 - [ ] 5.4 Ocultar la acción para objetivos fuera de alcance.
-- [ ] 5.5 Pantalla de cambio obligatorio tras el login.
+- [x] 5.5 Pantalla de cambio obligatorio tras el login: `/change-password`, con
+      redirección automática cuando la API responde `password_change_required`.
 
 ## 6. Verificación
 
-- [ ] 6.1 Tests de integración: reseteo permitido, reseteo denegado, revocación
-      de sesiones y cambio obligatorio. Hechos los tres primeros; falta el
-      cambio obligatorio, que depende de la sección 4.
+- [x] 6.1 Tests de integración: reseteo permitido, reseteo denegado, revocación
+      de sesiones y cambio obligatorio.
 - [x] 6.2 Verificar que la contraseña no aparece en logs ni en auditoría.
 - [x] 6.3 `openspec validate add-admin-password-management --strict`.

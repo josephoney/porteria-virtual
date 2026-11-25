@@ -120,6 +120,14 @@ async function request<T>(
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
+    if (
+      res.status === 403 &&
+      (errorBody as { message?: string }).message === 'password_change_required'
+    ) {
+      // La sesión vive, pero la contraseña temporal no se cambió todavía: la app
+      // lleva a la pantalla de cambio en vez de mostrar un error suelto.
+      window.dispatchEvent(new CustomEvent('password-change-required'));
+    }
     throw new ApiError(errorBody.message || `HTTP ${res.status}`, res.status, errorBody);
   }
 

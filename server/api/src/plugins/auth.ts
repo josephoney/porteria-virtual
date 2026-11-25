@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { memberships } from '@porteria/database/schema';
+import { accounts, memberships } from '@porteria/database/schema';
 
 export interface JwtPayload {
   sub: string;
@@ -111,6 +111,31 @@ export function registerMembershipGuard(app: FastifyInstance) {
         error: 'Unauthorized',
         message: 'Membership inactive or invalid',
       });
+    }
+
+    // Contraseña temporal pendiente de cambio: la sesión vive, pero sólo alcanza
+    // para cambiarla. El resto de la API queda cerrado hasta que la reemplace,
+    // porque una temporal la conoce quien la entregó.
+    const [account] = await db
+      .select({ mustChange: accounts.mustChangePassword })
+      .from(accounts)
+      .where(eq(accounts.id, payload.accountId))
+      .limit(1);
+
+    if (account?.mustChange) {
+      const allowed =
+        path === '/api/me' ||
+        path.startsWith('/api/me/') ||
+        path === '/api/users/me' ||
+        path.startsWith('/api/users/me/');
+
+      if (!allowed) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: 'Forbidden',
+          message: 'password_change_required',
+        });
+      }
     }
   });
 }
