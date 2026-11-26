@@ -45,7 +45,12 @@ interface AuthState {
   isLoading: boolean;
   login: (email: string, password: string, communitySlug?: string) => Promise<LoginResult>;
   selectContext: (membershipId: string, selectionToken: string) => Promise<void>;
-  acceptInvitation: (token: string, name?: string, password?: string) => Promise<void>;
+  acceptInvitation: (
+    token: string,
+    name?: string,
+    password?: string,
+    profile?: { phone?: string; documentNumber?: string },
+  ) => Promise<void>;
   switchContext: (membershipId: string) => Promise<void>;
   logout: () => void;
 }
@@ -246,7 +251,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const acceptInvitation = useCallback(
-    async (token: string, name?: string, password?: string) => {
+    async (
+      token: string,
+      name?: string,
+      password?: string,
+      profile?: { phone?: string; documentNumber?: string },
+    ) => {
       const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
@@ -254,7 +264,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`${CONFIG.API_URL}/api/public/invitations/${token}/accept`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ name, password }),
+        body: JSON.stringify({
+          name,
+          password,
+          phone: profile?.phone,
+          documentNumber: profile?.documentNumber,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

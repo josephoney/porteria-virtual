@@ -64,10 +64,10 @@
 
 ## 8. Página de aceptación
 
-- [ ] 8.1 Mostrar en `InvitePage` todas las unidades de la invitación.
-- [ ] 8.2 Agregar teléfono y documento opcionales al formulario de cuenta nueva, con validación inline.
-- [ ] 8.3 Enviar `phone` y `documentNumber` en el accept y refrescar el perfil al entrar.
-- [ ] 8.4 Mantener el camino de cuenta existente (login requerido, 403 por email distinto) sin cambios.
+- [x] 8.1 Mostrar en `InvitePage` todas las unidades de la invitación.
+- [x] 8.2 Agregar teléfono y documento opcionales al formulario de cuenta nueva, con validación inline.
+- [x] 8.3 Enviar `phone` y `documentNumber` en el accept y refrescar el perfil al entrar.
+- [x] 8.4 Mantener el camino de cuenta existente (login requerido, 403 por email distinto) sin cambios.
 
 ## 9. Pruebas y verificación
 

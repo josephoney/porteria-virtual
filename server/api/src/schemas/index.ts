@@ -121,8 +121,22 @@ export const triggerRelaySchema = z.object({
 export const acceptInvitationSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   password: z.string().min(8).optional(),
-  phone: z.string().max(30).optional(),
-  documentNumber: z.string().max(50).optional(),
+  phone: z
+    .string()
+    .trim()
+    .max(30)
+    .refine((value) => value === '' || /^\+?[\d\s().-]{6,30}$/.test(value), {
+      message: 'invalid_phone',
+    })
+    .optional(),
+  documentNumber: z
+    .string()
+    .trim()
+    .max(50)
+    .refine((value) => value === '' || /^[A-Za-z0-9][A-Za-z0-9 .-]{3,49}$/.test(value), {
+      message: 'invalid_document',
+    })
+    .optional(),
 });
 
 export const createInvitationSchema = z.object({
