@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { CONFIG } from '../config';
 import { configureApiClient } from '../lib/apiClient';
+import { queryClient } from '../lib/query-client';
 
 export interface AuthUser {
   id: string;
@@ -116,6 +117,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [memberships, setMemberships] = useState<ActiveMembership[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const initRan = useRef(false);
+  // Identifica el contexto cuyos datos están cacheados. Si cambia (login,
+  // logout o cambio de membresía), el cache de React Query se descarta: las
+  // claves no incluyen la organización y reutilizarlas mostraría datos del
+  // contexto anterior hasta que venza el staleTime.
+  const appliedContextId = useRef<string | null>(
+    getStoredJson<ActiveMembership>(STORAGE_KEYS.ACTIVE_MEMBERSHIP)?.id ?? null,
+  );
 
   const applyAuth = useCallback(
     (data: {
@@ -127,6 +135,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedMemberships = getStoredJson<ActiveMembership[]>(STORAGE_KEYS.MEMBERSHIPS) ?? [
         data.activeMembership,
       ];
+      if (appliedContextId.current !== data.activeMembership.id) {
+        appliedContextId.current = data.activeMembership.id;
+        queryClient.clear();
+      }
       persistAuth(
         data.accessToken,
         data.refreshToken,
@@ -192,6 +204,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       onLogout: () => {
         clearPersistedAuth();
+        appliedContextId.current = null;
+        queryClient.clear();
         setToken(null);
         setUser(null);
         setActiveMembership(null);
@@ -299,6 +313,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     const rt = getStoredRefreshToken();
     clearPersistedAuth();
+    appliedContextId.current = null;
+    queryClient.clear();
     setToken(null);
     setUser(null);
     setActiveMembership(null);

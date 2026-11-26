@@ -83,11 +83,15 @@ function AppRequiredPage() {
 
 function DashboardApp() {
   const { pathname } = useLocation();
+  const { activeMembership } = useAuth();
 
   return (
     <ErrorBoundary resetKey={pathname} fullPage>
       <PasswordChangeRedirect />
-      <Routes>
+      {/* Remonta la pantalla activa al cambiar de contexto: además de limpiar el
+          cache, garantiza que los paneles vuelvan a pedir sus datos con el
+          token de la organización nueva. */}
+      <Routes key={activeMembership?.id ?? 'anonymous'}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

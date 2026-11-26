@@ -16,6 +16,7 @@ import {
   type LocationStructureInfo,
 } from './LocationTreeTable';
 import { ResidentAssignmentPanel } from './ResidentAssignmentPanel';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface StructureRow extends LocationStructureInfo {
   communityId: string;
@@ -87,8 +88,12 @@ export function StructureTreeWorkspace({
   communities,
   onStructureChanged,
 }: StructureTreeWorkspaceProps) {
+  const { activeMembership } = useAuth();
+  // La comunidad elegida se recuerda por contexto: si la clave fuera global,
+  // al entrar con otra organización se abriría el árbol de la anterior.
+  const storageKey = `${STORAGE_KEY}:${activeMembership?.id ?? 'anonymous'}`;
   const [communityId, setCommunityId] = useState(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(storageKey);
     return stored && communities.some((community) => community.id === stored)
       ? stored
       : (communities[0]?.id ?? '');
@@ -149,8 +154,21 @@ export function StructureTreeWorkspace({
 
   useEffect(() => {
     if (!communityId) return;
-    localStorage.setItem(STORAGE_KEY, communityId);
-  }, [communityId]);
+    localStorage.setItem(storageKey, communityId);
+  }, [communityId, storageKey]);
+
+  useEffect(() => {
+    // Clave de versiones anteriores: no distinguía el contexto activo.
+    localStorage.removeItem(STORAGE_KEY);
+  }, []);
+
+  useEffect(() => {
+    if (communities.length === 0) return;
+    if (communities.some((community) => community.id === communityId)) return;
+    // La comunidad recordada ya no pertenece al alcance actual (cambio de
+    // organización o de membresía): volvemos a la primera disponible.
+    setCommunityId(communities[0]!.id);
+  }, [communities, communityId]);
 
   const refreshAll = useCallback(async () => {
     await load();
