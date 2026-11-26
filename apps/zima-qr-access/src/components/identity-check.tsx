@@ -12,6 +12,7 @@ import {
 } from '@/api/access';
 import { Badge, Button, Divider, ui } from '@/components/ui';
 import { documentFromBarcode } from '@/lib/cedula';
+import { DetailRow, DetailTable } from '@/components/detail-table';
 import { colors, radius, spacing, typography } from '@/theme';
 
 type RequestFn = <T>(
@@ -265,7 +266,7 @@ export function IdentityCheck({
               // guard sees it as used or expired and gets no action.
               const inside = candidate.presenceState === 'inside' && !consumed && !expired;
               const action: 'entry' | 'exit' = inside ? 'exit' : 'entry';
-              const label = inside ? 'Registrar salida' : 'Confirmar ingreso';
+              const label = inside ? 'Registrar salida' : 'Registrar entrada';
               const usedLabel = candidate.rule.recurrence === 'once' ? 'Usado' : 'Sin usos hoy';
               return (
                 <View key={candidate.passId} style={styles.candidate}>
@@ -280,13 +281,17 @@ export function IdentityCheck({
                       tone={expired || consumed ? 'danger' : inside ? 'warning' : 'success'}
                     />
                   </View>
-                  <Text style={ui.muted}>
-                    {candidate.destinationPath || candidate.destinationName}
-                  </Text>
-                  <Text style={ui.muted}>
-                    {formatWindow(candidate.validFrom, candidate.validUntil)}
-                  </Text>
-                  <Text style={ui.muted}>{candidate.rule.summary}</Text>
+                  <DetailTable>
+                    <DetailRow
+                      label="Destino"
+                      value={candidate.destinationPath || candidate.destinationName}
+                    />
+                    <DetailRow
+                      label="Vigencia"
+                      value={formatWindow(candidate.validFrom, candidate.validUntil)}
+                    />
+                    <DetailRow label="Regla" value={candidate.rule.summary} />
+                  </DetailTable>
                   {candidate.companions?.length ? (
                     <View style={styles.companions}>
                       <Text style={styles.companionsTitle}>

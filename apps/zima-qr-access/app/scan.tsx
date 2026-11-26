@@ -38,6 +38,7 @@ import {
   ui,
 } from '@/components/ui';
 import { IdentityCheck } from '@/components/identity-check';
+import { DetailRow, DetailTable } from '@/components/detail-table';
 import { ZimaLogo } from '@/components/zima-logo';
 import { reasonText, toActivityItem } from '@/lib/bitacora';
 import { errorMessage } from '@/lib/errors';
@@ -549,7 +550,7 @@ export default function GuardScanScreen() {
                       <Text style={ui.heading}>
                         {scanResult.visitor.firstName} {scanResult.visitor.lastName}
                       </Text>
-                      <View style={styles.detailTable}>
+                      <DetailTable>
                         <DetailRow label="Documento" value={scanResult.visitor.document} />
                         {scanResult.vehiclePlate ? (
                           <DetailRow label="Vehículo" value={scanResult.vehiclePlate} />
@@ -565,7 +566,7 @@ export default function GuardScanScreen() {
                               : formatDateTime(scanResult.schedule.validUntil)
                           }`}
                         />
-                      </View>
+                      </DetailTable>
                       {scanResult.companions.length > 0 ? (
                         <View style={styles.companions}>
                           <Text style={styles.companionsTitle}>
@@ -600,7 +601,11 @@ export default function GuardScanScreen() {
                           <Text style={ui.muted}>{note.length}/500</Text>
                           <Row>
                             <Button
-                              label="Confirmar"
+                              label={
+                                scanResult.action === 'exit'
+                                  ? 'Registrar salida'
+                                  : 'Registrar entrada'
+                              }
                               onPress={() => void onConfirm()}
                               loading={busy}
                             />
@@ -728,21 +733,6 @@ export default function GuardScanScreen() {
   );
 }
 
-/**
- * Fila de la ficha del visitante: etiqueta a la izquierda, dato a la derecha.
- *
- * Sin bordes de tabla, sólo una línea fina entre filas para que el ojo siga la
- * columna. El valor va en blanco y semibold porque es lo que el guardia lee.
- */
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   brandBar: {
     alignItems: 'center',
@@ -819,33 +809,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.85)',
     borderRadius: radius.lg,
-  },
-  detailTable: {
-    marginTop: spacing.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  detailLabel: {
-    width: 92,
-    paddingTop: 2,
-    color: colors.textMuted,
-    fontSize: typography.tiny,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  detailValue: {
-    flex: 1,
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: '600',
-    lineHeight: 20,
   },
   accessOption: {
     gap: spacing.xs,
