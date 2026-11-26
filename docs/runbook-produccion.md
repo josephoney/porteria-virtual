@@ -196,6 +196,11 @@ dato. El detalle del tratamiento está en `docs/tratamiento-datos-personales.md`
 5. Idempotencia: una segunda corrida sobre la misma ventana informa cero filas.
    La marca de anonimizado (`visitor_document = 'ANONIMIZADO'`) evita reprocesar.
 
+En staging las tres variables se leen de `.env.staging` y el compose las reenvía
+al servicio `api`. Como el intervalo se calcula al arrancar, después de cambiarlas
+hay que recrear el contenedor:
+`docker compose -f docker-compose.staging.yml --env-file .env.staging up -d api`.
+
 ### Preservación por incidente
 
 Cuando ocurre un incidente, la organización preserva un rango de fechas antes de

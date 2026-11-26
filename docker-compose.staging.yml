@@ -75,6 +75,11 @@ services:
       AUTH_LOGIN_RATE_LIMIT: ${AUTH_LOGIN_RATE_LIMIT:-10}
       PASS_DAILY_LIMIT_PER_UNIT: ${PASS_DAILY_LIMIT_PER_UNIT:-50}
       PASS_ALERT_INTERVAL_MINUTES: ${PASS_ALERT_INTERVAL_MINUTES:-5}
+      # Retención de datos: la ventana se configura por organización desde el
+      # dashboard. El barrido simula por defecto; ver docs/runbook-produccion.md §11.
+      RETENTION_INTERVAL_MINUTES: ${RETENTION_INTERVAL_MINUTES:-1440}
+      RETENTION_WRITE_ENABLED: ${RETENTION_WRITE_ENABLED:-false}
+      RETENTION_WORKER_ENABLED: ${RETENTION_WORKER_ENABLED:-true}
     volumes:
       - assets-data:/data/uploads
     depends_on:
