@@ -14,6 +14,7 @@ import { ListToolbar } from '../layout/ListToolbar';
 import { Pagination } from '../layout/Pagination';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 import { SectionCards } from '../layout/SectionCards';
 import { ChartAreaInteractive } from '../layout/ChartAreaInteractive';
 import { StructureTreeDialog } from '../layout/StructureTreeDialog';
@@ -426,6 +427,8 @@ export function AdminPanel() {
   const [resendCopied, setResendCopied] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
+  const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
+  const [revokePending, setRevokePending] = useState(false);
 
   /**
    * Revalida los recursos cacheados. A diferencia del `load()` anterior, no
@@ -491,19 +494,22 @@ export function AdminPanel() {
   );
 
   async function revokeInvitation(invitation: Invitation) {
-    if (
-      !window.confirm(
-        `¿Cancelar y archivar la invitación de ${invitation.email}? Dejará de ser válida y quedará registrada como cancelada; no se elimina del historial.`,
-      )
-    ) {
-      return;
-    }
+    setRevokeTarget(invitation);
+  }
+
+  async function confirmRevokeInvitation() {
+    const invitation = revokeTarget;
+    if (!invitation) return;
+    setRevokePending(true);
     setError('');
     try {
       await post(`/api/invitations/${invitation.id}/revoke`);
       await queryClient.invalidateQueries({ queryKey: queryKeys.invitations });
+      setRevokeTarget(null);
     } catch {
       setError('No se pudo cancelar la invitación.');
+    } finally {
+      setRevokePending(false);
     }
   }
 
@@ -758,6 +764,18 @@ export function AdminPanel() {
 
   return (
     <div className="p-6 space-y-6">
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null);
+        }}
+        title="Cancelar invitación"
+        description={`La invitación de "${revokeTarget?.email ?? ''}" dejará de ser válida y quedará registrada como cancelada; no se elimina del historial.`}
+        confirmLabel="Cancelar invitación"
+        destructive
+        pending={revokePending}
+        onConfirm={() => void confirmRevokeInvitation()}
+      />
       <PageHeader
         title={meta.title}
         description={meta.description}

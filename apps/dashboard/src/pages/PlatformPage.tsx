@@ -15,6 +15,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { PageHeader } from '../components/layout/PageHeader';
 import { SectionCards } from '../components/layout/SectionCards';
 import { FormDialog } from '../components/layout/FormDialog';
@@ -321,6 +322,8 @@ export function PlatformPage() {
       ? 'No se pudo cargar parte de la información. Reintenta en unos segundos.'
       : '');
   const [formDialog, setFormDialog] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
+  const [revokePending, setRevokePending] = useState(false);
   const [organizationSearch, setOrganizationSearch] = useState('');
   const organizationRow = useExpandedRow();
   const [editingOrganizationId, setEditingOrganizationId] = useState<string | null>(null);
@@ -625,19 +628,22 @@ export function PlatformPage() {
   }
 
   async function revokeInvitation(invitation: Invitation) {
-    if (
-      !window.confirm(
-        `¿Cancelar y archivar la invitación de ${invitation.email}? Dejará de ser válida y quedará registrada como cancelada; no se elimina del historial.`,
-      )
-    ) {
-      return;
-    }
+    setRevokeTarget(invitation);
+  }
+
+  async function confirmRevokeInvitation() {
+    const invitation = revokeTarget;
+    if (!invitation) return;
+    setRevokePending(true);
     setError('');
     try {
       await post(`/api/invitations/${invitation.id}/revoke`);
       await invalidate(queryKeys.invitations);
+      setRevokeTarget(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo cancelar la invitación.');
+    } finally {
+      setRevokePending(false);
     }
   }
 
@@ -726,6 +732,18 @@ export function PlatformPage() {
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto">
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null);
+        }}
+        title="Cancelar invitación"
+        description={`La invitación de "${revokeTarget?.email ?? ''}" dejará de ser válida y quedará registrada como cancelada; no se elimina del historial.`}
+        confirmLabel="Cancelar invitación"
+        destructive
+        pending={revokePending}
+        onConfirm={() => void confirmRevokeInvitation()}
+      />
       <PageHeader
         title={meta.title}
         description={meta.description}

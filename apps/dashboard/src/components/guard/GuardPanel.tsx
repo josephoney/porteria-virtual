@@ -7,6 +7,7 @@ import { AccessBitacoraView } from '../admin/AccessBitacoraView';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
@@ -110,6 +111,8 @@ export function GuardPanel() {
   const [activeGuards, setActiveGuards] = useState<ActiveGuard[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [endShiftDialogOpen, setEndShiftDialogOpen] = useState(false);
+  const [endShiftPending, setEndShiftPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bitacoraToken, setBitacoraToken] = useState(0);
   /** Last total seen by the poll, used to tell "nothing new" from "new row". */
@@ -399,18 +402,23 @@ export function GuardPanel() {
 
   async function endShift() {
     if (!current?.shift) return;
-    if (!window.confirm('¿Cerrar el turno actual?')) return;
-    setBusy(true);
+    setEndShiftDialogOpen(true);
+  }
+
+  async function confirmEndShift() {
+    if (!current?.shift) return;
+    setEndShiftPending(true);
     setError(null);
     try {
       await post(`/api/guard/shifts/${current.shift.id}/end`, {
         source: 'dashboard',
       });
       await Promise.all([loadCurrent(), loadHistory()]);
+      setEndShiftDialogOpen(false);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
-      setBusy(false);
+      setEndShiftPending(false);
     }
   }
 
@@ -432,6 +440,16 @@ export function GuardPanel() {
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto">
+      <ConfirmDialog
+        open={endShiftDialogOpen}
+        onOpenChange={setEndShiftDialogOpen}
+        title="Cerrar turno"
+        description={`Se cerrará el turno abierto en "${current?.accessPoint?.name ?? 'este acceso'}". La bitácora ya escrita se conserva y podrás iniciar un turno nuevo.`}
+        confirmLabel="Cerrar turno"
+        destructive
+        pending={endShiftPending}
+        onConfirm={() => void confirmEndShift()}
+      />
       <PageHeader
         title="Guardia"
         description={
