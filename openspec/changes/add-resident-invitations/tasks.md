@@ -89,13 +89,13 @@
 
 ## 11. Activación de cuentas creadas por el administrador
 
-- [ ] 11.1 Quitar `password` de `createUserSchema` y actualizar el tipo de respuesta con `emailSent` y `activationUrl?`.
-- [ ] 11.2 En `users.service.createUser`, generar un hash aleatorio inutilizable y dejar de usar la contraseña del admin.
-- [ ] 11.3 Después de crear la cuenta, emitir el token con `issueResetToken` y enviar el correo; si falla, devolver el link una sola vez.
-- [ ] 11.4 Agregar `sendAccountActivationEmail` en `mail.service` reutilizando `buildPasswordResetBodies` con asunto y copy de bienvenida.
-- [ ] 11.5 Implementar `POST /api/users/:id/activation` con autorización por alcance y `409 already_active` si la cuenta ya eligió contraseña.
-- [ ] 11.6 Adaptar el copy de `ResetPasswordPage` cuando el enlace viene de una activación (parámetro `motivo=activacion`).
-- [ ] 11.7 En `UsersTable`, quitar el campo contraseña del alta, mostrar el link una vez si el correo falló y agregar la acción «Reenviar activación».
-- [ ] 11.8 Registrar eventos de auditoría `user.activation.sent`, `user.activation.resent` y `user.activation.completed`.
-- [ ] 11.9 Integración en `users.integration.test.ts`: alta sin contraseña, login rechazado antes de activar, activación exitosa, 409 al reenviar una cuenta activa y 403 fuera de alcance.
-- [ ] 11.10 Ejecutar `pnpm --filter @porteria/api test` e `test:integration`, y `npx eslint src/` en dashboard y API sin errores nuevos.
+- [x] 11.1 Quitar `password` de `createUserSchema` y actualizar el tipo de respuesta con `emailSent` y `activationUrl?`.
+- [x] 11.2 En `users.service.createUser`, generar un hash aleatorio inutilizable y dejar de usar la contraseña del admin.
+- [x] 11.3 Después de crear la cuenta, emitir el token con `issueResetToken` y enviar el correo; si falla, devolver el link una sola vez.
+- [x] 11.4 Agregar `sendAccountActivationEmail` en `mail.service` reutilizando `buildPasswordResetBodies` con asunto y copy de bienvenida.
+- [x] 11.5 Implementar `POST /api/users/:id/activation` con autorización por alcance y `409 already_active` si la cuenta ya eligió contraseña.
+- [x] 11.6 Adaptar el copy de `ResetPasswordPage` cuando el enlace viene de una activación (parámetro `motivo=activacion`).
+- [x] 11.7 En `UsersTable`, quitar el campo contraseña del alta, mostrar el link una vez si el correo falló y agregar la acción «Reenviar activación».
+- [x] 11.8 Registrar eventos de auditoría `user.activation.sent`, `user.activation.resent` y `user.activation.completed`.
+- [x] 11.9 Integración en `users.integration.test.ts`: alta sin contraseña, login rechazado antes de activar, activación exitosa, 409 al reenviar una cuenta activa y 403 fuera de alcance.
+- [x] 11.10 Ejecutar `pnpm --filter @porteria/api test` e `test:integration`, y `npx eslint src/` en dashboard y API sin errores nuevos.

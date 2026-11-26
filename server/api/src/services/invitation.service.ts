@@ -322,32 +322,34 @@ export async function createInvitation(
   const token = generateToken();
   const insertedInvitations = await db
     .transaction(async (tx) => {
-    const inserted = await tx
-      .insert(invitations)
-      .values({
-        tokenHash: hashToken(token),
-        email,
-        organizationId: scope.organizationId,
-        communityId: scope.communityId,
-        unitId: scope.unitId,
-        locationUnitId: unitIds[0] ?? scope.locationUnitId,
-        role: data.role,
-        status: 'pending',
-        expiresAt: expiryDate(data.expiresInDays),
-        invitedByPersonId: requester.personId,
-      })
-      .returning();
+      const inserted = await tx
+        .insert(invitations)
+        .values({
+          tokenHash: hashToken(token),
+          email,
+          organizationId: scope.organizationId,
+          communityId: scope.communityId,
+          unitId: scope.unitId,
+          locationUnitId: unitIds[0] ?? scope.locationUnitId,
+          role: data.role,
+          status: 'pending',
+          expiresAt: expiryDate(data.expiresInDays),
+          invitedByPersonId: requester.personId,
+        })
+        .returning();
 
-    const invitationRow = inserted[0];
-    if (!invitationRow) {
-      throw new Error('Invitation insert returned no rows');
-    }
-    if (unitIds.length > 0) {
-      await tx
-        .insert(invitationUnits)
-        .values(unitIds.map((locationUnitId) => ({ invitationId: invitationRow.id, locationUnitId })))
-        .onConflictDoNothing();
-    }
+      const invitationRow = inserted[0];
+      if (!invitationRow) {
+        throw new Error('Invitation insert returned no rows');
+      }
+      if (unitIds.length > 0) {
+        await tx
+          .insert(invitationUnits)
+          .values(
+            unitIds.map((locationUnitId) => ({ invitationId: invitationRow.id, locationUnitId })),
+          )
+          .onConflictDoNothing();
+      }
 
       return inserted;
     })
@@ -384,7 +386,7 @@ export async function createInvitation(
   return { ok: true, data: { invitation, acceptUrl, emailSent } };
 }
 
-type InvitationWithUnits = (typeof invitations.$inferSelect) & {
+type InvitationWithUnits = typeof invitations.$inferSelect & {
   units: { id: string; code: string; path: string }[];
 };
 
@@ -573,9 +575,7 @@ export async function previewInvitation(
   };
 }
 
-const RESIDENT_RELATIONSHIP_BY_ROLE: Partial<
-  Record<string, 'owner' | 'tenant' | 'resident'>
-> = {
+const RESIDENT_RELATIONSHIP_BY_ROLE: Partial<Record<string, 'owner' | 'tenant' | 'resident'>> = {
   owner: 'owner',
   tenant: 'tenant',
   resident: 'resident',
@@ -685,7 +685,9 @@ async function communityUnitIndex(communityId: string) {
   return { byCode, byPath, parentIds, pathOf };
 }
 
-type UnitResolution = { ok: true; unitId: string; unitPath: string } | { ok: false; reason: string };
+type UnitResolution =
+  | { ok: true; unitId: string; unitPath: string }
+  | { ok: false; reason: string };
 
 function resolveBulkUnit(
   index: Awaited<ReturnType<typeof communityUnitIndex>>,
@@ -962,6 +964,7 @@ export async function acceptInvitation(
           email,
           passwordHash,
           active: true,
+          activatedAt: new Date(),
           isPlatformAdmin: false,
         })
         .returning({ id: accounts.id });

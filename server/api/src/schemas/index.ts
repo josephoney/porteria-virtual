@@ -30,7 +30,10 @@ export const contextSwitchSchema = z.object({
 
 export const createUserSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8),
+  /**
+   * Sin contraseña: la persona la define con el enlace de activación. Si llega
+   * un campo `password`, Zod lo descarta y el servidor lo ignora.
+   */
   name: z.string().min(1).max(255).optional(),
   firstName: z.string().min(1).max(120).optional(),
   lastName: z.string().max(120).optional(),

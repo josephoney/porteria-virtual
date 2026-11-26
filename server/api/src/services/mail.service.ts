@@ -244,19 +244,41 @@ export interface SendPasswordResetEmailInput {
   firstName: string;
   resetUrl: string;
   expiresInMinutes: number;
+  /** `activation` reutiliza el cuerpo con asunto y copy de bienvenida. */
+  purpose?: 'reset' | 'activation';
+}
+
+export interface SendAccountActivationEmailInput {
+  to: string;
+  firstName: string;
+  activationUrl: string;
+  expiresInMinutes: number;
 }
 
 /**
  * Cuerpo del correo de recuperación, con la misma tarjeta que la invitación.
  *
  * El texto se escribe acá en UTF-8 y el transporte declara el charset: sin eso,
- * los acentos llegan como caracteres rotos al buzón.
+ * los acentos llegan como caracteres rotos al buzón. La variante `activation`
+ * reutiliza la tarjeta y cambia el asunto y el copy: la cuenta la creó un
+ * administrador y la persona todavía no eligió contraseña.
  */
 export function buildPasswordResetBodies(input: SendPasswordResetEmailInput) {
   const productName = DEFAULT_FROM_NAME;
-  const subject = `Recupera tu contraseña · ${productName}`;
+  const activation = input.purpose === 'activation';
+  const subject = activation
+    ? `Activa tu cuenta · ${productName}`
+    : `Recupera tu contraseña · ${productName}`;
+  const heading = activation ? 'Activa tu cuenta' : 'Recupera tu contraseña';
   const safeUrl = escapeHtml(input.resetUrl);
   const safeName = escapeHtml(input.firstName);
+  const intro = activation
+    ? `Hola ${safeName}, un administrador creó una cuenta para ti. Define tu contraseña para empezar a usarla.`
+    : `Hola ${safeName}, recibimos una solicitud para cambiar la contraseña de tu cuenta.`;
+  const cta = activation ? 'Definir mi contraseña' : 'Definir contraseña nueva';
+  const footer = activation
+    ? 'Si no esperabas esta cuenta, ignora este correo: nadie puede ingresar hasta que definas una contraseña.'
+    : 'Si no fuiste tú, ignora este correo: tu contraseña actual sigue funcionando y no se cierra ninguna sesión.';
 
   const htmlbody = `<!doctype html>
 <html lang="es">
@@ -264,10 +286,10 @@ export function buildPasswordResetBodies(input: SendPasswordResetEmailInput) {
     <div style="max-width:560px;margin:0 auto;padding:32px 16px;">
       <div style="background-color:#ffffff;border-radius:12px;padding:32px;border:1px solid #e5e7eb;">
         <p style="margin:0 0 4px;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;">${escapeHtml(productName)}</p>
-        <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;">Recupera tu contraseña</h1>
-        <p style="margin:0 0 16px;font-size:15px;line-height:1.6;">Hola ${safeName}, recibimos una solicitud para cambiar la contraseña de tu cuenta.</p>
+        <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;">${heading}</h1>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.6;">${intro}</p>
         <p style="margin:0 0 24px;font-size:15px;line-height:1.6;">
-          <a href="${safeUrl}" style="display:inline-block;padding:12px 20px;border-radius:8px;background-color:#111827;color:#ffffff;text-decoration:none;font-weight:600;">Definir contraseña nueva</a>
+          <a href="${safeUrl}" style="display:inline-block;padding:12px 20px;border-radius:8px;background-color:#111827;color:#ffffff;text-decoration:none;font-weight:600;">${cta}</a>
         </p>
         <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#374151;">
           El enlace vence en ${input.expiresInMinutes} minutos y sólo se puede usar una vez.
@@ -277,7 +299,7 @@ export function buildPasswordResetBodies(input: SendPasswordResetEmailInput) {
         </p>
         <p style="margin:0 0 24px;font-size:12px;line-height:1.5;color:#4b5563;word-break:break-all;font-family:Consolas,monospace;">${safeUrl}</p>
         <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
-          Si no fuiste tú, ignora este correo: tu contraseña actual sigue funcionando y no se cierra ninguna sesión.
+          ${footer}
         </p>
       </div>
     </div>
@@ -285,25 +307,42 @@ export function buildPasswordResetBodies(input: SendPasswordResetEmailInput) {
 </html>`;
 
   const textbody = [
-    `Recupera tu contraseña · ${productName}`,
+    `${heading} · ${productName}`,
     '',
-    `Hola ${input.firstName}, recibimos una solicitud para cambiar la contraseña de tu cuenta.`,
+    activation
+      ? `Hola ${input.firstName}, un administrador creó una cuenta para ti. Define tu contraseña para empezar a usarla.`
+      : `Hola ${input.firstName}, recibimos una solicitud para cambiar la contraseña de tu cuenta.`,
     '',
-    'Define una contraseña nueva en el siguiente enlace:',
+    activation
+      ? 'Define tu contraseña en el siguiente enlace:'
+      : 'Define una contraseña nueva en el siguiente enlace:',
     input.resetUrl,
     '',
     `El enlace vence en ${input.expiresInMinutes} minutos y sólo se puede usar una vez.`,
     '',
-    'Si no fuiste tú, ignora este correo: tu contraseña actual sigue funcionando y no se cierra ninguna sesión.',
+    footer,
   ].join('\n');
 
   return { subject, htmlbody, textbody };
 }
 
-/** Envía el enlace de recuperación con el mismo transporte que la invitación. */
-export async function sendPasswordResetEmail(
-  input: SendPasswordResetEmailInput,
-): Promise<SendInvitationEmailResult> {
+interface DeliveryBodies {
+  subject: string;
+  htmlbody: string;
+  textbody: string;
+}
+
+/**
+ * Transporte compartido por los correos con enlace de un solo uso.
+ *
+ * El mismo gateway sirve para recuperación y activación: sólo cambia el cuerpo.
+ */
+async function deliverWithZeptoMail(input: {
+  to: string;
+  bodies: DeliveryBodies;
+  secret: string;
+  kind: 'password reset' | 'account activation';
+}): Promise<SendInvitationEmailResult> {
   const token = config.mail.zeptomailToken
     .trim()
     .replace(/^Zoho-enczapikey\s+/i, '')
@@ -316,12 +355,11 @@ export async function sendPasswordResetEmail(
 
   const parsedFrom = parseFrom(from);
   if (!parsedFrom) {
-    console.warn('[mail] MAIL_FROM is invalid; password reset email was not sent');
+    console.warn(`[mail] MAIL_FROM is invalid; ${input.kind} email was not sent`);
     return { sent: false, reason: 'mail_not_configured' };
   }
 
   const apiUrl = config.mail.zeptomailApiUrl.replace(/\/+$/, '');
-  const { subject, htmlbody, textbody } = buildPasswordResetBodies(input);
 
   try {
     const response = await fetch(`${apiUrl}/v1.1/email`, {
@@ -333,16 +371,14 @@ export async function sendPasswordResetEmail(
       body: JSON.stringify({
         from: parsedFrom,
         to: [{ email_address: { address: input.to } }],
-        subject,
-        htmlbody,
-        textbody,
+        ...input.bodies,
       }),
       signal: createTimeoutSignal(),
     });
 
     if (!response.ok) {
-      const providerError = await readProviderError(response, [token, input.resetUrl]);
-      console.error('[mail] ZeptoMail rejected the password reset email', {
+      const providerError = await readProviderError(response, [token, input.secret]);
+      console.error(`[mail] ZeptoMail rejected the ${input.kind} email`, {
         status: response.status,
         providerError,
       });
@@ -356,4 +392,34 @@ export async function sendPasswordResetEmail(
     });
     return { sent: false, reason: 'send_failed' };
   }
+}
+
+/** Envía el enlace de recuperación con el mismo transporte que la invitación. */
+export async function sendPasswordResetEmail(
+  input: SendPasswordResetEmailInput,
+): Promise<SendInvitationEmailResult> {
+  return deliverWithZeptoMail({
+    to: input.to,
+    bodies: buildPasswordResetBodies(input),
+    secret: input.resetUrl,
+    kind: 'password reset',
+  });
+}
+
+/** Envía el enlace de activación de una cuenta creada por el administrador. */
+export async function sendAccountActivationEmail(
+  input: SendAccountActivationEmailInput,
+): Promise<SendInvitationEmailResult> {
+  return deliverWithZeptoMail({
+    to: input.to,
+    bodies: buildPasswordResetBodies({
+      to: input.to,
+      firstName: input.firstName,
+      resetUrl: input.activationUrl,
+      expiresInMinutes: input.expiresInMinutes,
+      purpose: 'activation',
+    }),
+    secret: input.activationUrl,
+    kind: 'account activation',
+  });
 }

@@ -16,6 +16,7 @@ import {
   RiLockPasswordLine,
   RiUserFollowLine,
   RiUserUnfollowLine,
+  RiMailSendLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { emailError, fieldA11y, hasErrors, minLengthError, requiredError } from '../../lib/form';
@@ -43,6 +44,8 @@ interface UserData {
   isPlatformAdmin: boolean;
   active: boolean;
   mustChangePassword?: boolean;
+  /** Todavía no eligió contraseña: el alta fue hecha por un administrador. */
+  pendingActivation?: boolean;
   memberships: MembershipView[];
 }
 
@@ -108,6 +111,18 @@ export function UsersTable() {
     password?: string;
     repeat?: string;
   }>({});
+  /** Enlace de activación que no salió por correo: se muestra una sola vez. */
+  const [createdActivation, setCreatedActivation] = useState<{
+    email: string;
+    url: string;
+  } | null>(null);
+  const [activationTarget, setActivationTarget] = useState<UserData | null>(null);
+  const [activationBusy, setActivationBusy] = useState(false);
+  const [activationResult, setActivationResult] = useState<{
+    email: string;
+    sent: boolean;
+    url?: string;
+  } | null>(null);
 
   /**
    * Mismo alcance que aplica el servidor, para no ofrecer una acción que va a
@@ -129,6 +144,53 @@ export function UsersTable() {
       );
     }
     return false;
+  }
+
+  /**
+   * Mismo alcance que el alta: un `community_admin` no reenvía a otra comunidad
+   * ni a un administrador, y un `org_admin` no toca a otro `org_admin`.
+   */
+  function canResendActivation(target: UserData): boolean {
+    if (!target.pendingActivation) return false;
+    if (target.isPlatformAdmin) return Boolean(user?.isPlatformAdmin);
+    if (target.memberships.length === 0) return false;
+    if (user?.isPlatformAdmin) return true;
+    if (activeMembership?.role === 'org_admin') {
+      return target.memberships.every(
+        (membership) =>
+          membership.role !== 'org_admin' &&
+          membership.organizationId === activeMembership.organizationId,
+      );
+    }
+    if (activeMembership?.role === 'community_admin') {
+      return target.memberships.every(
+        (membership) =>
+          membership.communityId === activeMembership.communityId &&
+          !['org_admin', 'community_admin'].includes(membership.role),
+      );
+    }
+    return false;
+  }
+
+  async function handleResendActivation(target: UserData) {
+    setActivationBusy(true);
+    setActionError('');
+    try {
+      const { data } = await post<{ emailSent: boolean; activationUrl?: string }>(
+        `/api/users/${target.id}/activation`,
+      );
+      setActivationTarget(null);
+      setActivationResult({
+        email: target.email,
+        sent: data.emailSent,
+        ...(data.activationUrl ? { url: data.activationUrl } : {}),
+      });
+    } catch (err: unknown) {
+      setActionError(err instanceof ApiError ? err.message : 'No se pudo reenviar la activación.');
+      setActivationTarget(null);
+    } finally {
+      setActivationBusy(false);
+    }
   }
 
   /** Define una contraseña temporal y decide si obliga a cambiarla al entrar. */
@@ -186,7 +248,6 @@ export function UsersTable() {
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({
     email: '',
-    password: '',
     firstName: '',
     lastName: '',
     documentNumber: '',
@@ -204,7 +265,6 @@ export function UsersTable() {
   const [createFieldErrors, setCreateFieldErrors] = useState<{
     firstName?: string;
     email?: string;
-    password?: string;
   }>({});
   const [assignmentUser, setAssignmentUser] = useState<UserData | null>(null);
   const [assignmentUnits, setAssignmentUnits] = useState<UnitOption[]>([]);
@@ -279,9 +339,6 @@ export function UsersTable() {
     const validation = {
       firstName: requiredError(form.firstName, 'El nombre'),
       email: emailError(form.email),
-      password:
-        requiredError(form.password, 'La contraseña') ||
-        minLengthError(form.password, 8, 'La contraseña'),
     };
     setCreateFieldErrors(validation);
     if (hasErrors(validation)) return;
@@ -289,9 +346,11 @@ export function UsersTable() {
     setError('');
     setCreating(true);
     try {
-      await post('/api/users', {
+      const { data: created } = await post<{
+        emailSent: boolean;
+        activationUrl?: string;
+      }>('/api/users', {
         email: form.email,
-        password: form.password,
         firstName: form.firstName,
         lastName: form.lastName,
         documentNumber: form.documentNumber || undefined,
@@ -301,11 +360,9 @@ export function UsersTable() {
         ...(communityIds.length > 1 ? { communityIds } : {}),
         locationUnitId: communityIds.length > 1 ? null : form.unitId || null,
       });
-      setFormOpen(false);
       setCommunityIds([]);
       setForm({
         email: '',
-        password: '',
         firstName: '',
         lastName: '',
         documentNumber: '',
@@ -314,6 +371,12 @@ export function UsersTable() {
         communityId: '',
         unitId: '',
       });
+      if (!created.emailSent && created.activationUrl) {
+        // El correo no salió: el enlace se muestra una sola vez, acá mismo.
+        setCreatedActivation({ email: form.email, url: created.activationUrl });
+      } else {
+        setFormOpen(false);
+      }
       fetchUsers();
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : 'Error al crear usuario');
@@ -434,7 +497,10 @@ export function UsersTable() {
               open={formOpen}
               onOpenChange={(open) => {
                 setFormOpen(open);
-                if (!open) setCreateFieldErrors({});
+                if (!open) {
+                  setCreateFieldErrors({});
+                  setCreatedActivation(null);
+                }
               }}
             >
               <DialogTrigger asChild>
@@ -442,207 +508,220 @@ export function UsersTable() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Nuevo Usuario</DialogTitle>
+                  <DialogTitle>{createdActivation ? 'Cuenta creada' : 'Nuevo Usuario'}</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleCreate} className="flex flex-col gap-3" noValidate>
-                  <div className="space-y-2 rounded-md border border-border p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Persona
+                {createdActivation ? (
+                  <div className="space-y-3">
+                    <p className="text-sm">
+                      La cuenta de <span className="font-medium">{createdActivation.email}</span>{' '}
+                      quedó creada, pero el correo de activación no pudo enviarse. Comparte este
+                      enlace una sola vez:
                     </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <code className="block break-all rounded-xl bg-muted px-3 py-2 font-mono text-sm">
+                      {createdActivation.url}
+                    </code>
+                    <p className="text-xs text-muted-foreground">
+                      Vence en 60 minutos y no se puede volver a mostrar.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigator.clipboard.writeText(createdActivation.url)}
+                      >
+                        Copiar
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          setFormOpen(false);
+                          setCreatedActivation(null);
+                        }}
+                      >
+                        Listo
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleCreate} className="flex flex-col gap-3" noValidate>
+                    <div className="space-y-2 rounded-md border border-border p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Persona
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="new-first-name">Nombre</Label>
+                          <Input
+                            id="new-first-name"
+                            value={form.firstName}
+                            onChange={(e) => {
+                              setForm({ ...form, firstName: e.target.value });
+                              setCreateFieldErrors((prev) => ({ ...prev, firstName: '' }));
+                            }}
+                            {...fieldA11y('new-first-name', createFieldErrors.firstName)}
+                          />
+                          {createFieldErrors.firstName && (
+                            <p
+                              id="new-first-name-error"
+                              role="alert"
+                              className="text-xs text-destructive"
+                            >
+                              {createFieldErrors.firstName}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="new-last-name">Apellido</Label>
+                          <Input
+                            id="new-last-name"
+                            value={form.lastName}
+                            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="new-document">Documento</Label>
+                          <Input
+                            id="new-document"
+                            value={form.documentNumber}
+                            onChange={(e) => setForm({ ...form, documentNumber: e.target.value })}
+                            placeholder="Opcional"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="new-phone">Teléfono</Label>
+                          <Input
+                            id="new-phone"
+                            value={form.phone}
+                            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                            placeholder="Opcional"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2 rounded-md border border-border p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Cuenta de acceso
+                      </p>
                       <div className="space-y-1">
-                        <Label htmlFor="new-first-name">Nombre</Label>
+                        <Label htmlFor="new-email">Correo</Label>
                         <Input
-                          id="new-first-name"
-                          value={form.firstName}
+                          id="new-email"
+                          type="email"
+                          value={form.email}
                           onChange={(e) => {
-                            setForm({ ...form, firstName: e.target.value });
-                            setCreateFieldErrors((prev) => ({ ...prev, firstName: '' }));
+                            setForm({ ...form, email: e.target.value });
+                            setCreateFieldErrors((prev) => ({ ...prev, email: '' }));
                           }}
-                          {...fieldA11y('new-first-name', createFieldErrors.firstName)}
+                          {...fieldA11y('new-email', createFieldErrors.email)}
                         />
-                        {createFieldErrors.firstName && (
-                          <p
-                            id="new-first-name-error"
-                            role="alert"
-                            className="text-xs text-destructive"
-                          >
-                            {createFieldErrors.firstName}
+                        {createFieldErrors.email && (
+                          <p id="new-email-error" role="alert" className="text-xs text-destructive">
+                            {createFieldErrors.email}
                           </p>
                         )}
                       </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="new-last-name">Apellido</Label>
-                        <Input
-                          id="new-last-name"
-                          value={form.lastName}
-                          onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="new-document">Documento</Label>
-                        <Input
-                          id="new-document"
-                          value={form.documentNumber}
-                          onChange={(e) => setForm({ ...form, documentNumber: e.target.value })}
-                          placeholder="Opcional"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="new-phone">Teléfono</Label>
-                        <Input
-                          id="new-phone"
-                          value={form.phone}
-                          onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                          placeholder="Opcional"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-2 rounded-md border border-border p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Cuenta de acceso
-                    </p>
-                    <div className="space-y-1">
-                      <Label htmlFor="new-email">Correo</Label>
-                      <Input
-                        id="new-email"
-                        type="email"
-                        value={form.email}
-                        onChange={(e) => {
-                          setForm({ ...form, email: e.target.value });
-                          setCreateFieldErrors((prev) => ({ ...prev, email: '' }));
-                        }}
-                        {...fieldA11y('new-email', createFieldErrors.email)}
-                      />
-                      {createFieldErrors.email && (
-                        <p id="new-email-error" role="alert" className="text-xs text-destructive">
-                          {createFieldErrors.email}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="new-password">Contraseña</Label>
-                      <Input
-                        id="new-password"
-                        type="password"
-                        value={form.password}
-                        onChange={(e) => {
-                          setForm({ ...form, password: e.target.value });
-                          setCreateFieldErrors((prev) => ({ ...prev, password: '' }));
-                        }}
-                        aria-describedby={
-                          createFieldErrors.password
-                            ? 'new-password-error new-password-help'
-                            : 'new-password-help'
-                        }
-                        aria-invalid={Boolean(createFieldErrors.password)}
-                      />
-                      {createFieldErrors.password && (
-                        <p
-                          id="new-password-error"
-                          role="alert"
-                          className="text-xs text-destructive"
-                        >
-                          {createFieldErrors.password}
-                        </p>
-                      )}
-                      <p id="new-password-help" className="text-xs text-muted-foreground">
-                        Mínimo ocho caracteres.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="new-role">Rol</Label>
-                    <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                      <SelectTrigger id="new-role">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {assignableRoles.map((role) => (
-                          <SelectItem key={role} value={role}>
-                            {ROLE_LABELS[role] ?? role}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="new-community">Comunidad</Label>
-                    <Select
-                      value={form.communityId || 'none'}
-                      onValueChange={(v) =>
-                        setForm({ ...form, communityId: v === 'none' ? '' : v, unitId: '' })
-                      }
-                    >
-                      <SelectTrigger id="new-community">
-                        <SelectValue placeholder="Sin comunidad" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sin comunidad</SelectItem>
-                        {communities.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {form.role !== 'org_admin' && (
-                    <div className="space-y-1">
-                      <Label>Comunidades asignadas</Label>
-                      <div className="grid max-h-32 gap-1 overflow-y-auto rounded border border-border p-2">
-                        {communities.map((c) => (
-                          <label key={c.id} className="flex items-center gap-2 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={communityIds.includes(c.id)}
-                              onChange={(event) =>
-                                setCommunityIds((current) =>
-                                  event.target.checked
-                                    ? [...current, c.id]
-                                    : current.filter((id) => id !== c.id),
-                                )
-                              }
-                            />
-                            {c.name}
-                          </label>
-                        ))}
-                      </div>
                       <p className="text-xs text-muted-foreground">
-                        Para staff/community admin se puede asignar más de una comunidad.
+                        La persona define su contraseña con el enlace de activación que le enviamos
+                        al crear la cuenta.
                       </p>
                     </div>
-                  )}
-                  <div className="space-y-1">
-                    <Label htmlFor="new-unit">Unidad</Label>
-                    <Select
-                      value={form.unitId || 'none'}
-                      onValueChange={(v) => setForm({ ...form, unitId: v === 'none' ? '' : v })}
-                      disabled={!form.communityId || communityIds.length > 1}
-                    >
-                      <SelectTrigger id="new-unit">
-                        <SelectValue placeholder="Sin unidad" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sin unidad</SelectItem>
-                        {units.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            {u.code}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
-                  <Button type="submit" className="mt-2" disabled={creating}>
-                    {creating ? 'Creando…' : 'Crear'}
-                  </Button>
-                </form>
+                    <div className="space-y-1">
+                      <Label htmlFor="new-role">Rol</Label>
+                      <Select
+                        value={form.role}
+                        onValueChange={(v) => setForm({ ...form, role: v })}
+                      >
+                        <SelectTrigger id="new-role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {assignableRoles.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {ROLE_LABELS[role] ?? role}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="new-community">Comunidad</Label>
+                      <Select
+                        value={form.communityId || 'none'}
+                        onValueChange={(v) =>
+                          setForm({ ...form, communityId: v === 'none' ? '' : v, unitId: '' })
+                        }
+                      >
+                        <SelectTrigger id="new-community">
+                          <SelectValue placeholder="Sin comunidad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sin comunidad</SelectItem>
+                          {communities.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {form.role !== 'org_admin' && (
+                      <div className="space-y-1">
+                        <Label>Comunidades asignadas</Label>
+                        <div className="grid max-h-32 gap-1 overflow-y-auto rounded border border-border p-2">
+                          {communities.map((c) => (
+                            <label key={c.id} className="flex items-center gap-2 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={communityIds.includes(c.id)}
+                                onChange={(event) =>
+                                  setCommunityIds((current) =>
+                                    event.target.checked
+                                      ? [...current, c.id]
+                                      : current.filter((id) => id !== c.id),
+                                  )
+                                }
+                              />
+                              {c.name}
+                            </label>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Para staff/community admin se puede asignar más de una comunidad.
+                        </p>
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <Label htmlFor="new-unit">Unidad</Label>
+                      <Select
+                        value={form.unitId || 'none'}
+                        onValueChange={(v) => setForm({ ...form, unitId: v === 'none' ? '' : v })}
+                        disabled={!form.communityId || communityIds.length > 1}
+                      >
+                        <SelectTrigger id="new-unit">
+                          <SelectValue placeholder="Sin unidad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sin unidad</SelectItem>
+                          {units.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.code}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {error && (
+                      <Alert variant="destructive">
+                        <AlertDescription>{error}</AlertDescription>
+                      </Alert>
+                    )}
+                    <Button type="submit" className="mt-2" disabled={creating}>
+                      {creating ? 'Creando…' : 'Crear'}
+                    </Button>
+                  </form>
+                )}
               </DialogContent>
             </Dialog>
           </div>
@@ -754,6 +833,11 @@ export function UsersTable() {
                                   cambio pendiente
                                 </Badge>
                               )}
+                              {u.pendingActivation && u.active && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  activación pendiente
+                                </Badge>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell rowSpan={rowSpan} className="py-2 align-top">
@@ -859,6 +943,21 @@ export function UsersTable() {
                                 onClick={() => openResetDialog(u)}
                               >
                                 <RiLockPasswordLine />
+                              </Button>
+                            )}
+                            {index === 0 && canResendActivation(u) && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-xs"
+                                title="Reenviar activación"
+                                aria-label={`Reenviar activación de ${u.email}`}
+                                onClick={() => {
+                                  setActionError('');
+                                  setActivationTarget(u);
+                                }}
+                              >
+                                <RiMailSendLine />
                               </Button>
                             )}
                           </div>
@@ -1167,6 +1266,87 @@ export function UsersTable() {
               </div>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={activationTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setActivationTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reenviar activación</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm">
+            Se enviará un enlace nuevo a{' '}
+            <span className="font-medium">{activationTarget?.email}</span>. El enlace anterior deja
+            de funcionar.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setActivationTarget(null)}
+              disabled={activationBusy}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => activationTarget && handleResendActivation(activationTarget)}
+              disabled={activationBusy}
+            >
+              {activationBusy ? 'Enviando…' : 'Reenviar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={activationResult !== null}
+        onOpenChange={(open) => {
+          if (!open) setActivationResult(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Activación</DialogTitle>
+          </DialogHeader>
+          {activationResult?.sent ? (
+            <p className="text-sm">
+              Enviamos el enlace de activación a{' '}
+              <span className="font-medium">{activationResult?.email}</span>.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm">
+                La cuenta de <span className="font-medium">{activationResult?.email}</span> todavía
+                espera activación, pero el correo no pudo enviarse. Comparte este enlace una sola
+                vez:
+              </p>
+              <code className="block break-all rounded-xl bg-muted px-3 py-2 font-mono text-sm">
+                {activationResult?.url}
+              </code>
+              <p className="text-xs text-muted-foreground">
+                Vence en 60 minutos y no se puede volver a mostrar.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => navigator.clipboard.writeText(activationResult?.url ?? '')}
+              >
+                Copiar
+              </Button>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button type="button" size="sm" onClick={() => setActivationResult(null)}>
+              Listo
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

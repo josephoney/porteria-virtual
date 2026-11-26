@@ -15,6 +15,7 @@ const MIN_PASSWORD = 8;
 export function ResetPasswordPage() {
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
+  const isActivation = params.get('motivo') === 'activacion';
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
   const [saving, setSaving] = useState(false);
@@ -47,9 +48,13 @@ export function ResetPasswordPage() {
     <AuthShell>
       <div className="space-y-4">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Nueva contraseña</h1>
+          <h1 className="text-xl font-semibold">
+            {isActivation ? 'Activa tu cuenta' : 'Nueva contraseña'}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Al guardar, se cierran todas las sesiones abiertas de tu cuenta.
+            {isActivation
+              ? 'Define la contraseña con la que vas a ingresar. Sólo puedes usar este enlace una vez.'
+              : 'Al guardar, se cierran todas las sesiones abiertas de tu cuenta.'}
           </p>
         </div>
 
@@ -64,7 +69,9 @@ export function ResetPasswordPage() {
         ) : done ? (
           <div className="space-y-3">
             <p className="text-sm">
-              La contraseña quedó guardada. Ya puedes ingresar con la nueva.
+              {isActivation
+                ? 'Tu cuenta quedó activada. Ya puedes ingresar con la contraseña que definiste.'
+                : 'La contraseña quedó guardada. Ya puedes ingresar con la nueva.'}
             </p>
             <Link className="text-sm underline underline-offset-4" to="/login">
               Ir al ingreso
@@ -118,7 +125,7 @@ export function ResetPasswordPage() {
               </Alert>
             )}
             <Button type="submit" className="w-full" disabled={saving || !canSubmit}>
-              {saving ? 'Guardando…' : 'Guardar contraseña'}
+              {saving ? 'Guardando…' : isActivation ? 'Activar cuenta' : 'Guardar contraseña'}
             </Button>
           </form>
         )}

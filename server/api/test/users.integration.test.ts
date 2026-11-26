@@ -7,6 +7,9 @@ import type { FastifyInstance } from 'fastify';
 process.env.OUTBOX_WORKER_ENABLED = 'false';
 process.env.DYNAMIC_QR_ENABLED = 'false';
 process.env.NODE_ENV = 'test';
+// Sin proveedor de correo el alta devuelve el enlace de activación una vez.
+process.env.ZEPTOMAIL_TOKEN = '';
+process.env.MAIL_FROM = '';
 
 import { createDb } from '@porteria/database';
 import {
@@ -35,7 +38,12 @@ let communityAdminMembershipId: string;
 let communityAdminToken: string;
 let multiAccountId: string;
 let anaAccountId: string;
+let carlaAccountId: string;
+let activationEmail = '';
+let activationAccountId = '';
+let activationToken = '';
 const personIds: string[] = [];
+const createdEmails: string[] = [];
 
 type Json = Record<string, any>;
 
@@ -43,7 +51,12 @@ function auth(token: string) {
   return { authorization: `Bearer ${token}` };
 }
 
-async function request(method: 'GET' | 'PATCH', url: string, token: string, payload?: unknown) {
+async function request(
+  method: 'GET' | 'POST' | 'PATCH',
+  url: string,
+  token: string,
+  payload?: unknown,
+) {
   return app.inject({
     method,
     url,
@@ -193,7 +206,7 @@ describe('users list filters integration', () => {
       communityId: communityAId,
     });
 
-    await createUserFixture({
+    const carla = await createUserFixture({
       suffix,
       key: 'carla',
       email: `carla.ruiz-${suffix}@test.local`,
@@ -205,6 +218,7 @@ describe('users list filters integration', () => {
       role: 'resident',
       communityId: communityBId,
     });
+    carlaAccountId = carla.account.id;
 
     const multi = await createUserFixture({
       suffix,
@@ -258,6 +272,10 @@ describe('users list filters integration', () => {
   });
 
   after(async () => {
+    if (createdEmails.length) {
+      await db.delete(accounts).where(inArray(accounts.email, createdEmails));
+      await db.delete(people).where(inArray(people.contactEmail, createdEmails));
+    }
     await db.delete(memberships).where(eq(memberships.organizationId, organizationId));
     if (personIds.length) {
       await db.delete(people).where(inArray(people.id, personIds));
@@ -418,5 +436,130 @@ describe('users list filters integration', () => {
     );
     assert.equal(search.statusCode, 200, search.body);
     assert.equal(parse(search).total, 1);
+  });
+
+  it('creates a user without password and returns the activation link once', async () => {
+    activationEmail = `activation-${randomUUID().slice(0, 8)}@test.local`;
+    createdEmails.push(activationEmail);
+
+    const response = await request(
+      'POST',
+      '/api/users',
+      orgAdminToken,
+      {
+        email: activationEmail,
+        firstName: 'Activo',
+        lastName: 'Prueba',
+        role: 'staff',
+        communityId: communityAId,
+        // El servidor ignora cualquier contraseña enviada por el administrador.
+        password: 'ignored-password-123',
+      },
+    );
+    assert.equal(response.statusCode, 201, response.body);
+    const body = parse(response);
+    activationAccountId = body.id;
+    assert.equal(body.email, activationEmail);
+    assert.equal(body.emailSent, false);
+    assert.equal(body.pendingActivation, true);
+    assert.equal('passwordHash' in body, false);
+    assert.equal(typeof body.activationUrl, 'string');
+    assert.match(body.activationUrl, /motivo=activacion/);
+
+    const url = new URL(body.activationUrl);
+    activationToken = url.searchParams.get('token') ?? '';
+    assert.ok(activationToken);
+  });
+
+  it('rejects login before the account is activated', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: activationEmail, password: 'cualquier-clave-123' },
+    });
+    assert.equal(response.statusCode, 401, response.body);
+  });
+
+  it('completes the activation and allows login with the chosen password', async () => {
+    const reset = await app.inject({
+      method: 'POST',
+      url: '/api/auth/password/reset',
+      payload: { token: activationToken, password: 'activada-123456' },
+    });
+    assert.equal(reset.statusCode, 200, reset.body);
+
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email: activationEmail, password: 'activada-123456' },
+    });
+    assert.equal(login.statusCode, 200, login.body);
+
+    const [account] = await db
+      .select({ activatedAt: accounts.activatedAt })
+      .from(accounts)
+      .where(eq(accounts.id, activationAccountId));
+    assert.ok(account.activatedAt);
+  });
+
+  it('rejects a resend for an account that already chose its password', async () => {
+    const response = await request(
+      'POST',
+      `/api/users/${activationAccountId}/activation`,
+      orgAdminToken,
+    );
+    assert.equal(response.statusCode, 409, response.body);
+    assert.equal(parse(response).code, 'already_active');
+  });
+
+  it('resends activation and invalidates the previous link', async () => {
+    const email = `resend-${randomUUID().slice(0, 8)}@test.local`;
+    createdEmails.push(email);
+
+    const created = await request(
+      'POST',
+      '/api/users',
+      orgAdminToken,
+      { email, firstName: 'Reenvío', role: 'staff', communityId: communityAId },
+    );
+    assert.equal(created.statusCode, 201, created.body);
+    const createdBody = parse(created);
+    const firstToken = new URL(createdBody.activationUrl).searchParams.get('token') ?? '';
+    assert.ok(firstToken);
+
+    const resent = await request(
+      'POST',
+      `/api/users/${createdBody.id}/activation`,
+      orgAdminToken,
+    );
+    assert.equal(resent.statusCode, 200, resent.body);
+    const resentBody = parse(resent);
+    assert.equal(resentBody.emailSent, false);
+    const secondToken = new URL(resentBody.activationUrl).searchParams.get('token') ?? '';
+    assert.ok(secondToken);
+    assert.notEqual(secondToken, firstToken);
+
+    const oldLink = await app.inject({
+      method: 'POST',
+      url: '/api/auth/password/reset',
+      payload: { token: firstToken, password: 'clave-1234567' },
+    });
+    assert.equal(oldLink.statusCode, 400, oldLink.body);
+
+    const newLink = await app.inject({
+      method: 'POST',
+      url: '/api/auth/password/reset',
+      payload: { token: secondToken, password: 'clave-1234567' },
+    });
+    assert.equal(newLink.statusCode, 200, newLink.body);
+  });
+
+  it('forbids a community admin from resending outside their community', async () => {
+    const response = await request(
+      'POST',
+      `/api/users/${carlaAccountId}/activation`,
+      communityAdminToken,
+    );
+    assert.equal(response.statusCode, 403, response.body);
   });
 });

@@ -235,6 +235,7 @@ export async function userRoutes(app: FastifyInstance) {
       const result = await usersService.createUser(
         { ...body, communityId, communityIds: requestedCommunityIds },
         u,
+        { ip: request.ip ?? null },
       );
       if (!result) {
         return reply.status(409).send({
@@ -245,6 +246,48 @@ export async function userRoutes(app: FastifyInstance) {
       }
 
       return reply.status(201).send(result);
+    },
+  );
+
+  app.post(
+    '/users/:id/activation',
+    { preHandler: [requireRole('org_admin', 'community_admin')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const u = getUser(request);
+      if (!can(u, 'people.write', { organizationId: u.orgId, communityId: u.communityId })) {
+        return reply
+          .status(403)
+          .send({ statusCode: 403, error: 'Forbidden', message: 'Insufficient permissions' });
+      }
+
+      const { id } = request.params as { id: string };
+      const result = await usersService.resendActivation(id, u, { ip: request.ip ?? null });
+
+      if (!result.ok) {
+        if (result.code === 'not_found') {
+          return reply
+            .status(404)
+            .send({ statusCode: 404, error: 'Not Found', message: 'User not found' });
+        }
+        if (result.code === 'already_active') {
+          return reply.status(409).send({
+            statusCode: 409,
+            error: 'Conflict',
+            message: 'La cuenta ya eligió su contraseña',
+            code: 'already_active',
+          });
+        }
+        return reply.status(403).send({
+          statusCode: 403,
+          error: 'Forbidden',
+          message: 'User out of scope',
+        });
+      }
+
+      return reply.send({
+        emailSent: result.emailSent,
+        ...(result.activationUrl ? { activationUrl: result.activationUrl } : {}),
+      });
     },
   );
 

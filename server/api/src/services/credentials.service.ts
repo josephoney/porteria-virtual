@@ -102,7 +102,12 @@ export async function setPassword(
   await getDb().transaction(async (tx) => {
     const [updated] = await tx
       .update(accounts)
-      .set({ passwordHash, mustChangePassword: false, updatedAt: new Date() })
+      .set({
+        passwordHash,
+        mustChangePassword: false,
+        activatedAt: new Date(),
+        updatedAt: new Date(),
+      })
       .where(eq(accounts.id, accountId))
       .returning({ id: accounts.id });
 

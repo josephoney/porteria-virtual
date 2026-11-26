@@ -11,6 +11,13 @@ import {
 import { hashPassword, setPassword, verifyPassword } from './credentials.service.js';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
+import { randomToken } from '../lib/pass-tokens.js';
+import { insertEvent } from './events.service.js';
+import {
+  buildActivationUrl,
+  deliverActivationEmail,
+  issueResetToken,
+} from './password-reset.service.js';
 
 export interface Requester {
   sub: string;
@@ -48,6 +55,8 @@ export interface UserResult {
   active: boolean;
   /** La cuenta debe cambiar su contraseña en el próximo ingreso. */
   mustChangePassword: boolean;
+  /** Todavía no eligió contraseña: el alta fue hecha por el administrador. */
+  pendingActivation: boolean;
   memberships: MembershipView[];
   createdAt: Date;
   updatedAt: Date;
@@ -64,6 +73,7 @@ const accountPersonColumns = {
   active: accounts.active,
   isPlatformAdmin: accounts.isPlatformAdmin,
   mustChangePassword: accounts.mustChangePassword,
+  activatedAt: accounts.activatedAt,
   createdAt: accounts.createdAt,
   updatedAt: accounts.updatedAt,
   firstName: people.firstName,
@@ -79,6 +89,7 @@ interface AccountPersonRow {
   active: boolean;
   isPlatformAdmin: boolean;
   mustChangePassword: boolean;
+  activatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   firstName: string;
@@ -179,6 +190,7 @@ function toUserResult(
     isPlatformAdmin: row.isPlatformAdmin,
     active: row.active,
     mustChangePassword: row.mustChangePassword,
+    pendingActivation: row.activatedAt === null,
     memberships: membershipRows.map(toMembershipView),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -348,10 +360,16 @@ export async function listUsers(
   };
 }
 
+export interface CreateUserOutcome extends UserResult {
+  /** Si el correo de activación salió. */
+  emailSent: boolean;
+  /** Sólo cuando el envío falló: el enlace se muestra una única vez. */
+  activationUrl?: string;
+}
+
 export async function createUser(
   data: {
     email: string;
-    password: string;
     name?: string;
     firstName?: string;
     lastName?: string;
@@ -365,7 +383,8 @@ export async function createUser(
     locationUnitId?: string | null;
   },
   requester: Requester,
-): Promise<UserResult | null> {
+  options: { ip?: string | null } = {},
+): Promise<CreateUserOutcome | null> {
   const [existing] = await db
     .select({ id: accounts.id })
     .from(accounts)
@@ -376,7 +395,9 @@ export async function createUser(
   const communityIds = data.communityIds?.length
     ? [...new Set(data.communityIds)]
     : [requester.role === 'community_admin' ? requester.communityId : (data.communityId ?? null)];
-  const passwordHash = await hashPassword(data.password);
+  // La contraseña la define la persona: se guarda un hash de un valor aleatorio
+  // que nadie conoce, así que las credenciales son inutilizables hasta activar.
+  const passwordHash = await hashPassword(randomToken(32));
   const displayName =
     data.name?.trim() ||
     [data.firstName, data.lastName].filter(Boolean).join(' ').trim() ||
@@ -442,7 +463,130 @@ export async function createUser(
     return account;
   });
 
-  return getUserById(result.id, requester);
+  const created = await getUserById(result.id, requester);
+  if (!created) return null;
+
+  const { token } = await issueResetToken(result.id, options.ip ?? null);
+  const firstName = displayName.split(/\s+/)[0] || data.email;
+  const delivery = await deliverActivationEmail(data.email, firstName, token);
+  const activationUrl = delivery.sent ? undefined : buildActivationUrl(token);
+
+  await insertEvent({
+    eventType: 'user.activation.sent',
+    actorId: requester.sub,
+    actorRole: requester.role,
+    organizationId: requester.orgId,
+    communityId: communityIds.length === 1 ? (communityIds[0] ?? null) : null,
+    metadata: {
+      accountId: result.id,
+      email: data.email,
+      result: delivery.sent ? 'sent' : 'failed',
+      mailReason: delivery.reason ?? null,
+    },
+  });
+
+  return {
+    ...created,
+    emailSent: delivery.sent,
+    ...(activationUrl ? { activationUrl } : {}),
+  };
+}
+
+export type ActivationResult =
+  | { ok: true; emailSent: boolean; activationUrl?: string }
+  | { ok: false; code: 'not_found' | 'forbidden' | 'already_active' };
+
+/**
+ * Reenvía el enlace de activación de una cuenta creada por el administrador.
+ *
+ * El alcance es el mismo que el del alta: nadie fuera de su organización o
+ * comunidad, y un `org_admin` no reenvía a otro administrador de organización.
+ */
+export async function resendActivation(
+  accountId: string,
+  requester: Requester,
+  options: { ip?: string | null } = {},
+): Promise<ActivationResult> {
+  const [row] = await db
+    .select({
+      accountId: accounts.id,
+      email: accounts.email,
+      firstName: people.firstName,
+      isPlatformAdmin: accounts.isPlatformAdmin,
+      activatedAt: accounts.activatedAt,
+      personId: accounts.personId,
+    })
+    .from(accounts)
+    .innerJoin(people, eq(people.id, accounts.personId))
+    .where(eq(accounts.id, accountId))
+    .limit(1);
+
+  if (!row) return { ok: false, code: 'not_found' };
+  if (row.isPlatformAdmin && !requester.isPlatformAdmin) {
+    return { ok: false, code: 'forbidden' };
+  }
+
+  const membershipRows = await db
+    .select({
+      role: memberships.role,
+      organizationId: memberships.organizationId,
+      communityId: memberships.communityId,
+    })
+    .from(memberships)
+    .where(eq(memberships.personId, row.personId));
+
+  if (!requester.isPlatformAdmin) {
+    if (
+      membershipRows.length === 0 ||
+      membershipRows.some((membership) => membership.organizationId !== requester.orgId)
+    ) {
+      return { ok: false, code: 'forbidden' };
+    }
+    if (requester.role === 'org_admin') {
+      if (membershipRows.some((membership) => membership.role === 'org_admin')) {
+        return { ok: false, code: 'forbidden' };
+      }
+    } else if (requester.role === 'community_admin') {
+      if (
+        membershipRows.some(
+          (membership) =>
+            membership.communityId !== requester.communityId ||
+            membership.role === 'org_admin' ||
+            membership.role === 'community_admin',
+        )
+      ) {
+        return { ok: false, code: 'forbidden' };
+      }
+    } else {
+      return { ok: false, code: 'forbidden' };
+    }
+  }
+
+  if (row.activatedAt !== null) return { ok: false, code: 'already_active' };
+
+  const { token } = await issueResetToken(row.accountId, options.ip ?? null);
+  const delivery = await deliverActivationEmail(row.email, row.firstName, token);
+  const activationUrl = delivery.sent ? undefined : buildActivationUrl(token);
+
+  await insertEvent({
+    eventType: 'user.activation.resent',
+    actorId: requester.sub,
+    actorRole: requester.role,
+    organizationId: requester.orgId,
+    communityId: membershipRows[0]?.communityId ?? null,
+    metadata: {
+      accountId: row.accountId,
+      email: row.email,
+      result: delivery.sent ? 'sent' : 'failed',
+      mailReason: delivery.reason ?? null,
+    },
+  });
+
+  return {
+    ok: true,
+    emailSent: delivery.sent,
+    ...(activationUrl ? { activationUrl } : {}),
+  };
 }
 
 export async function updateUser(

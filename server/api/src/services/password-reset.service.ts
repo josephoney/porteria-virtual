@@ -1,11 +1,18 @@
 import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 
 import { createDb } from '@porteria/database';
-import { accounts, passwordResetTokens, people, refreshTokens } from '@porteria/database/schema';
+import {
+  accounts,
+  memberships,
+  passwordResetTokens,
+  people,
+  refreshTokens,
+} from '@porteria/database/schema';
 
 import config from '../config.js';
 import { randomToken, sha256Hex } from '../lib/pass-tokens.js';
-import { sendPasswordResetEmail } from './mail.service.js';
+import { insertEvent } from './events.service.js';
+import { sendAccountActivationEmail, sendPasswordResetEmail } from './mail.service.js';
 
 const db = createDb();
 
@@ -32,8 +39,17 @@ async function accountForEmail(email: string) {
   return row ?? null;
 }
 
+function publicAppBase(): string {
+  return config.publicAppUrl.replace(/\/+$/, '');
+}
+
 function buildResetUrl(token: string): string {
-  return `${config.publicAppUrl.replace(/\/+$/, '')}/reset-password?token=${token}`;
+  return `${publicAppBase()}/reset-password?token=${token}`;
+}
+
+/** Enlace de activación: misma página, con el motivo para cambiar el copy. */
+export function buildActivationUrl(token: string): string {
+  return `${publicAppBase()}/reset-password?token=${encodeURIComponent(token)}&motivo=activacion`;
 }
 
 /**
@@ -62,9 +78,7 @@ export async function issueResetToken(
     await tx
       .update(passwordResetTokens)
       .set({ usedAt: new Date() })
-      .where(
-        and(eq(passwordResetTokens.accountId, accountId), isNull(passwordResetTokens.usedAt)),
-      );
+      .where(and(eq(passwordResetTokens.accountId, accountId), isNull(passwordResetTokens.usedAt)));
 
     await tx.insert(passwordResetTokens).values({
       accountId,
@@ -87,6 +101,23 @@ export async function deliverResetEmail(
     to,
     firstName,
     resetUrl: buildResetUrl(token),
+    expiresInMinutes: RESET_TOKEN_MINUTES,
+  });
+  return delivery.reason
+    ? { sent: delivery.sent, reason: delivery.reason }
+    : { sent: delivery.sent };
+}
+
+/** Envía el enlace de activación de una cuenta creada por el administrador. */
+export async function deliverActivationEmail(
+  to: string,
+  firstName: string,
+  token: string,
+): Promise<{ sent: boolean; reason?: string }> {
+  const delivery = await sendAccountActivationEmail({
+    to,
+    firstName,
+    activationUrl: buildActivationUrl(token),
     expiresInMinutes: RESET_TOKEN_MINUTES,
   });
   return delivery.reason
@@ -130,14 +161,19 @@ export async function resetPassword(
       accountId: passwordResetTokens.accountId,
       expiresAt: passwordResetTokens.expiresAt,
       usedAt: passwordResetTokens.usedAt,
+      personId: accounts.personId,
+      activatedAt: accounts.activatedAt,
     })
     .from(passwordResetTokens)
+    .innerJoin(accounts, eq(accounts.id, passwordResetTokens.accountId))
     .where(eq(passwordResetTokens.tokenHash, tokenHash))
     .orderBy(desc(passwordResetTokens.createdAt))
     .limit(1);
 
   if (!row || row.usedAt) return { ok: false, code: 'invalid_token' };
   if (row.expiresAt.getTime() <= now.getTime()) return { ok: false, code: 'expired_token' };
+
+  const wasPendingActivation = row.activatedAt === null;
 
   const consumed = await db.transaction(async (tx) => {
     const [updated] = await tx
@@ -149,7 +185,7 @@ export async function resetPassword(
 
     await tx
       .update(accounts)
-      .set({ passwordHash, mustChangePassword: false, updatedAt: now })
+      .set({ passwordHash, mustChangePassword: false, activatedAt: now, updatedAt: now })
       .where(eq(accounts.id, row.accountId));
 
     await tx
@@ -161,7 +197,31 @@ export async function resetPassword(
     return true;
   });
 
-  return consumed ? { ok: true, data: { sent: true } } : { ok: false, code: 'invalid_token' };
+  if (!consumed) return { ok: false, code: 'invalid_token' };
+
+  // Recién ahora la cuenta eligió su contraseña: queda registrado como
+  // activación completada, con la cuenta como actora del cambio.
+  if (wasPendingActivation) {
+    const [membership] = await db
+      .select({
+        organizationId: memberships.organizationId,
+        communityId: memberships.communityId,
+      })
+      .from(memberships)
+      .where(eq(memberships.personId, row.personId))
+      .limit(1);
+    if (membership) {
+      await insertEvent({
+        eventType: 'user.activation.completed',
+        actorId: row.accountId,
+        organizationId: membership.organizationId,
+        communityId: membership.communityId,
+        metadata: { accountId: row.accountId, result: 'completed' },
+      });
+    }
+  }
+
+  return { ok: true, data: { sent: true } };
 }
 
 /** Utilidad para los tests y el panel: ¿este token sigue sirviendo? */

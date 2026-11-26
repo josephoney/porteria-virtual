@@ -48,7 +48,12 @@ export async function resetAccountPassword(
     const passwordHash = await bcrypt.hash(password, 10);
     await db
       .update(accounts)
-      .set({ passwordHash, mustChangePassword: input.mustChange, updatedAt: now })
+      .set({
+        passwordHash,
+        mustChangePassword: input.mustChange,
+        activatedAt: now,
+        updatedAt: now,
+      })
       .where(eq(accounts.id, target.accountId));
     temporaryPassword = password;
   } else {

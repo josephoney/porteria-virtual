@@ -1,11 +1,4 @@
-import {
-  pgTable,
-  uuid,
-  varchar,
-  boolean,
-  timestamp,
-  uniqueIndex,
-} from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, boolean, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { people } from './people';
 
 export const accounts = pgTable(
@@ -25,6 +18,13 @@ export const accounts = pgTable(
      * cuenta no puede seguir usándola sin cambiarla.
      */
     mustChangePassword: boolean('must_change_password').notNull().default(false),
+    /**
+     * Cuándo la persona eligió su contraseña por primera vez.
+     *
+     * Un alta hecha por el administrador nace en `null`: la cuenta existe pero
+     * nadie puede entrar hasta consumir el enlace de activación.
+     */
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
     isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
