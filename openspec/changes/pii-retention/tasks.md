@@ -82,5 +82,5 @@
       cómo habilitar, qué hacer si se anonimizó por error.
 - [x] 7.3 Suites unitarias e integración en verde, `tsc` limpio y prettier en
       los archivos tocados.
-- [ ] 7.4 Smoke en staging: cambiar la ventana, correr en simulación y revisar
+- [x] 7.4 Smoke en staging: cambiar la ventana, correr en simulación y revisar
       el historial.
