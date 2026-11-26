@@ -101,7 +101,7 @@ mecanismo de token de un solo uso que el restablecimiento.
 - `POST /api/users` pierde `password` del esquema. La cuenta se crea con un hash
   aleatorio de 32 bytes, inutilizable, para que nadie pueda autenticarse hasta activar.
 - Después del commit se emite el token con `issueResetToken(accountId, ip)` (60 minutos,
-  invalida los anteriores) y se envía un correo «Activá tu cuenta» que reutiliza el
+  invalida los anteriores) y se envía un correo «Activa tu cuenta» que reutiliza el
   cuerpo del restablecimiento. Si el envío falla, la cuenta queda creada y la respuesta
   devuelve `emailSent: false` + `activationUrl` una sola vez, igual que las invitaciones.
 - Nuevo `POST /api/users/:id/activation` para reenviar: misma autorización que el alta

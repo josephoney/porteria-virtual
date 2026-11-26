@@ -1,32 +1,32 @@
 ## 1. Base de datos
 
-- [ ] 1.1 Crear `packages/database/src/schema/invitation-units.ts` con `invitationId`, `locationUnitId`, `createdAt`, PK compuesta y FKs con `on delete cascade`.
-- [ ] 1.2 Exportar `invitationUnits` y sus tipos desde el índice de schema.
-- [ ] 1.3 Agregar migración `0039_invitation_units.sql`: tabla puente, backfill desde `invitations.location_unit_id`, índice único parcial `memberships_person_location_unit_idx` y `invitations_pending_unit_idx`.
-- [ ] 1.4 Verificar que la migración sea idempotente (`on conflict do nothing`, `if not exists`) y que corra sobre una base con invitaciones existentes.
-- [ ] 1.5 Extender `schema-migration.integration.test.ts` para comprobar tabla, índices y backfill.
+- [x] 1.1 Crear `packages/database/src/schema/invitation-units.ts` con `invitationId`, `locationUnitId`, `createdAt`, PK compuesta y FKs con `on delete cascade`.
+- [x] 1.2 Exportar `invitationUnits` y sus tipos desde el índice de schema.
+- [x] 1.3 Agregar migración `0040_invitation_units.sql`: tabla puente, backfill desde `invitations.location_unit_id`, índice único parcial `memberships_person_location_unit_idx` y `invitations_pending_unit_idx`.
+- [x] 1.4 Verificar que la migración sea idempotente (`on conflict do nothing`, `if not exists`) y que corra sobre una base con invitaciones existentes.
+- [x] 1.5 Extender `schema-migration.integration.test.ts` para comprobar tabla, índices y backfill.
 
 ## 2. Servicio de invitaciones
 
-- [ ] 2.1 Agregar `locationUnitIds` a `CreateInvitationInput` y resolver la lista (con fallback a `locationUnitId`/`unitId`).
-- [ ] 2.2 Validar que cada unidad exista, sea hoja y pertenezca a la comunidad resuelta; devolver `400 unit_invalid` con el id en el primer fallo.
-- [ ] 2.3 Rechazar más de 50 unidades por invitación (`400 too_many_units`).
-- [ ] 2.4 Insertar la invitación y sus filas de `invitation_units` en una transacción.
-- [ ] 2.5 Corregir `findMembership` para aceptar `locationUnitId` y filtrar por esa columna cuando venga.
-- [ ] 2.6 Usar la variante corregida en la detección de duplicados de `createInvitation` (mismo email + misma unidad + rol).
-- [ ] 2.7 En `acceptInvitation`, leer las unidades del puente (fallback a `location_unit_id`) y crear una membresía por unidad con `onConflictDoNothing`.
-- [ ] 2.8 Crear un registro en `location_residents` por unidad aceptada (`validFrom` = hoy, `relationship` derivada del rol, `status` active, `onConflictDoNothing`).
+- [x] 2.1 Agregar `locationUnitIds` a `CreateInvitationInput` y resolver la lista (con fallback a `locationUnitId`/`unitId`).
+- [x] 2.2 Validar que cada unidad exista, sea hoja y pertenezca a la comunidad resuelta; devolver `400 unit_invalid` con el id en el primer fallo.
+- [x] 2.3 Rechazar más de 50 unidades por invitación (`400 too_many_units`).
+- [x] 2.4 Insertar la invitación y sus filas de `invitation_units` en una transacción.
+- [x] 2.5 Corregir `findMembership` para aceptar `locationUnitId` y filtrar por esa columna cuando venga.
+- [x] 2.6 Usar la variante corregida en la detección de duplicados de `createInvitation` (mismo email + misma unidad + rol).
+- [x] 2.7 En `acceptInvitation`, leer las unidades del puente (fallback a `location_unit_id`) y crear una membresía por unidad con `onConflictDoNothing`.
+- [x] 2.8 Crear un registro en `location_residents` por unidad aceptada (`validFrom` = hoy, `relationship` derivada del rol, `status` active, `onConflictDoNothing`).
 - [ ] 2.9 Devolver `409 already_member` solo si todas las membresías ya existían; si no, informar `membershipsCreated`.
-- [ ] 2.10 Devolver la membresía de la unidad primaria como contexto activo, para que `switchContext` no elija otra.
-- [ ] 2.11 Extender `previewInvitation` y `listInvitations` para devolver `units: [{ id, code, path }]`.
+- [x] 2.10 Devolver la membresía de la unidad primaria como contexto activo, para que `switchContext` no elija otra.
+- [x] 2.11 Extender `previewInvitation` y `listInvitations` para devolver `units: [{ id, code, path }]`.
 
 ## 3. API y esquemas
 
-- [ ] 3.1 Extender `createInvitationSchema` con `locationUnitIds` (array de uuid, 1..50) sin romper `locationUnitId`.
-- [ ] 3.2 Extender `acceptInvitationSchema` con `phone?` y `documentNumber?` opcionales y persistirlos en `people`.
-- [ ] 3.3 Crear `bulkInvitationRowSchema` (unit, email, name?) y `bulkInvitationsSchema` con máximo 500 filas.
-- [ ] 3.4 Implementar `POST /api/invitations/bulk/preview` con permisos `org_admin`/`community_admin` (y plataforma) y alcance por fila.
-- [ ] 3.5 Implementar `POST /api/invitations/bulk` con resultado parcial por fila y resumen.
+- [x] 3.1 Extender `createInvitationSchema` con `locationUnitIds` (array de uuid, 1..50) sin romper `locationUnitId`.
+- [x] 3.2 Extender `acceptInvitationSchema` con `phone?` y `documentNumber?` opcionales y persistirlos en `people`.
+- [x] 3.3 Crear `bulkInvitationRowSchema` (unit, email, name?) y `bulkInvitationsSchema` con máximo 500 filas.
+- [x] 3.4 Implementar `POST /api/invitations/bulk/preview` con permisos `org_admin`/`community_admin` (y plataforma) y alcance por fila.
+- [x] 3.5 Implementar `POST /api/invitations/bulk` con resultado parcial por fila y resumen.
 - [ ] 3.6 Mapear errores de dominio a códigos estables (`unit_invalid`, `unit_ambiguous`, `already_member`, `forbidden`, `invalid_email`, `duplicate_row`).
 - [ ] 3.7 Verificar que `community_admin` no pueda invitar fuera de su comunidad ni con roles operativos en este flujo.
 
@@ -41,8 +41,8 @@
 
 - [ ] 5.1 Crear `components/admin/ResidentInviteDialog.tsx` con correo, rol (resident por defecto) y lista de unidades removibles.
 - [ ] 5.2 Validar el correo con `emailError` y el mínimo de una unidad; mostrar errores inline con `fieldA11y`.
-- [ ] 5.3 Enviar `locationUnitIds` a `POST /api/invitations` y mostrar pending en el botón.
-- [ ] 5.4 En éxito, mostrar el link una sola vez, el estado del correo (`emailSent`) y un botón de copiar.
+- [x] 5.3 Enviar `locationUnitIds` a `POST /api/invitations` y mostrar pending en el botón.
+- [x] 5.4 En éxito, mostrar el link una sola vez, el estado del correo (`emailSent`) y un botón de copiar.
 - [ ] 5.5 Cubrir el error `already_member` con un mensaje que indique la unidad conflictiva.
 
 ## 6. Unidades y árbol
