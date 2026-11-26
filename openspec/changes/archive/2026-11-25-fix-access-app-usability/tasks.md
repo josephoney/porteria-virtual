@@ -2,12 +2,12 @@
 
 - [x] 1.1 El login adapta su altura al teclado en iOS y Android, y scrollea.
 - [x] 1.2 El primer toque sobre Ingresar actúa aunque el teclado esté abierto.
-- [ ] 1.3 El ingreso manual de documento scrollea para dejar visibles el campo y
+- [x] 1.3 El ingreso manual de documento scrollea para dejar visibles el campo y
       el botón de verificar.
 
 ## 2. Cámara
 
-- [ ] 2.1 Centrar la vista previa y el marco de apuntado en el escaneo.
+- [x] 2.1 Centrar la vista previa y el marco de apuntado en el escaneo.
 
 ## 3. Comunidad y unidad
 
@@ -19,5 +19,5 @@
 ## 4. Verificación
 
 - [x] 4.1 `typecheck` de la app limpio y suites de API en verde (259/259).
-- [ ] 4.2 Prueba en Android: ingreso con cuenta guardada, cédula manual,
-      escaneo y home con comunidad.
+- [x] 4.2 Prueba en Android: ingreso con cuenta guardada, cédula manual,
+      escaneo y home con comunidad. Verificado por el usuario.
