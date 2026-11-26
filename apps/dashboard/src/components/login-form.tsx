@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth, type ActiveMembership } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { cn } from '../lib/utils';
+import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from './ui/field';

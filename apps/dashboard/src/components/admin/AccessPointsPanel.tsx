@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { ApiError, del, get, patch, post } from '../../lib/apiClient';
+import { fieldA11y, hasErrors, requiredError } from '../../lib/form';
 import { PageHeader } from '../layout/PageHeader';
+import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { ConfirmDialog } from '../ui/confirm-dialog';
 import {
   Dialog,
   DialogContent,
@@ -85,6 +87,7 @@ export function AccessPointsPanel() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AccessPointRow | null>(null);
   const [form, setForm] = useState<AccessPointForm>(emptyForm);
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; gpioPin?: string }>({});
 
   useEffect(() => {
     setCommunityId(activeMembership?.communityId ?? null);
@@ -136,6 +139,7 @@ export function AccessPointsPanel() {
   function openCreate() {
     setEditing(null);
     setForm(emptyForm);
+    setFieldErrors({});
     setDialogOpen(true);
   }
 
@@ -148,11 +152,24 @@ export function AccessPointsPanel() {
       gpioPin: item.gpioPin === null ? '' : String(item.gpioPin),
       failPolicy: item.failPolicy as AccessPointForm['failPolicy'],
     });
+    setFieldErrors({});
     setDialogOpen(true);
   }
 
   async function save() {
     if (!communityId) return;
+
+    const gpioValue = form.gpioPin.trim();
+    const validation = {
+      name: requiredError(form.name, 'El nombre'),
+      gpioPin:
+        gpioValue !== '' && !/^\d+$/.test(gpioValue)
+          ? 'El GPIO debe ser un número entero mayor o igual a 0.'
+          : '',
+    };
+    setFieldErrors(validation);
+    if (hasErrors(validation)) return;
+
     setSaving(true);
     setError(null);
     try {
@@ -250,9 +267,9 @@ export function AccessPointsPanel() {
       )}
 
       {error && (
-        <div className="rounded-3xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {loading ? (
@@ -323,11 +340,18 @@ export function AccessPointsPanel() {
               <Input
                 id="access-point-name"
                 value={form.name}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, name: event.target.value }))
-                }
+                onChange={(event) => {
+                  setForm((current) => ({ ...current, name: event.target.value }));
+                  setFieldErrors((current) => ({ ...current, name: undefined }));
+                }}
                 placeholder="Portón Principal"
+                {...fieldA11y('access-point-name', fieldErrors.name)}
               />
+              {fieldErrors.name && (
+                <p id="access-point-name-error" role="alert" className="text-xs text-destructive">
+                  {fieldErrors.name}
+                </p>
+              )}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1">
@@ -378,11 +402,18 @@ export function AccessPointsPanel() {
                   id="access-point-gpio"
                   inputMode="numeric"
                   value={form.gpioPin}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, gpioPin: event.target.value }))
-                  }
+                  onChange={(event) => {
+                    setForm((current) => ({ ...current, gpioPin: event.target.value }));
+                    setFieldErrors((current) => ({ ...current, gpioPin: undefined }));
+                  }}
                   placeholder="17"
+                  {...fieldA11y('access-point-gpio', fieldErrors.gpioPin)}
                 />
+                {fieldErrors.gpioPin && (
+                  <p id="access-point-gpio-error" role="alert" className="text-xs text-destructive">
+                    {fieldErrors.gpioPin}
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label>Falla</Label>
@@ -410,7 +441,7 @@ export function AccessPointsPanel() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={save} disabled={saving || !form.name.trim()}>
+            <Button onClick={save} disabled={saving}>
               {saving ? 'Guardando…' : 'Guardar'}
             </Button>
           </DialogFooter>

@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { AuthShell } from '../components/auth/AuthShell';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { post } from '../lib/apiClient';
+import { emailError, fieldA11y } from '../lib/form';
 
 /**
  * Pide el enlace de recuperación.
@@ -19,9 +21,14 @@ export function ForgotPasswordPage() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [fieldError, setFieldError] = useState('');
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    const validation = emailError(email);
+    setFieldError(validation);
+    if (validation) return;
+
     setSending(true);
     setError('');
     try {
@@ -56,7 +63,7 @@ export function ForgotPasswordPage() {
             </Link>
           </div>
         ) : (
-          <form className="space-y-3" onSubmit={submit}>
+          <form className="space-y-3" onSubmit={submit} noValidate>
             <div className="space-y-1">
               <Label htmlFor="forgot-email">Correo</Label>
               <Input
@@ -64,11 +71,24 @@ export function ForgotPasswordPage() {
                 type="email"
                 autoComplete="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setFieldError('');
+                }}
                 required
+                {...fieldA11y('forgot-email', fieldError)}
               />
+              {fieldError && (
+                <p id="forgot-email-error" role="alert" className="text-xs text-destructive">
+                  {fieldError}
+                </p>
+              )}
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <Button type="submit" className="w-full" disabled={sending || !email.trim()}>
               {sending ? 'Enviando…' : 'Enviar enlace'}
             </Button>

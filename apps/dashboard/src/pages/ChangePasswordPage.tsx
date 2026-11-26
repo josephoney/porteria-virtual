@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../contexts/AuthContext';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { patch } from '../lib/apiClient';
+import { fieldA11y } from '../lib/form';
 
 const MIN_PASSWORD = 8;
 
@@ -69,9 +71,18 @@ export function ChangePasswordPage() {
                 value={next}
                 onChange={(event) => setNext(event.target.value)}
                 required
+                aria-invalid={tooShort}
+                aria-describedby={
+                  tooShort ? 'new-password-error new-password-hint' : 'new-password-hint'
+                }
               />
+              <p id="new-password-hint" className="text-xs text-muted-foreground">
+                Mínimo ocho caracteres.
+              </p>
               {tooShort && (
-                <p className="text-xs text-destructive">Debe tener al menos ocho caracteres.</p>
+                <p id="new-password-error" role="alert" className="text-xs text-destructive">
+                  Debe tener al menos ocho caracteres.
+                </p>
               )}
             </div>
             <div className="space-y-1">
@@ -83,10 +94,19 @@ export function ChangePasswordPage() {
                 value={repeat}
                 onChange={(event) => setRepeat(event.target.value)}
                 required
+                {...fieldA11y('repeat-password', mismatch ? 'mismatch' : undefined)}
               />
-              {mismatch && <p className="text-xs text-destructive">No coinciden.</p>}
+              {mismatch && (
+                <p id="repeat-password-error" role="alert" className="text-xs text-destructive">
+                  No coinciden.
+                </p>
+              )}
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <Button type="submit" className="w-full" disabled={saving || !canSubmit}>
               {saving ? 'Guardando…' : 'Cambiar contraseña'}
             </Button>

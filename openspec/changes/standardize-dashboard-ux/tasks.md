@@ -12,7 +12,7 @@
 - [x] 2.1 Document the shadcn components in `docs/design-system.md`
 - [x] 2.2 Document variants and do/don't for buttons, badges, alerts and cards
 - [x] 2.3 Standardize icon usage with Remixicon and `aria-label` on icon-only buttons
-- [ ] 2.4 Standardize `cn()` usage and avoid ad-hoc class strings
+- [x] 2.4 Standardize `cn()` usage and avoid ad-hoc class strings
 
 ## 3. Layout and navigation
 
@@ -24,10 +24,10 @@
 ## 4. Forms
 
 - [x] 4.1 Create a form pattern using Field/Label/Input/Select
-- [ ] 4.2 Standardize inline validation and error messages
-- [ ] 4.3 Add destructive confirmation dialogs
+- [x] 4.2 Standardize inline validation and error messages
+- [x] 4.3 Add destructive confirmation dialogs
 - [x] 4.4 Add loading/disabled states to submit buttons
-- [ ] 4.5 Add `aria-invalid` and `aria-describedby` to fields
+- [x] 4.5 Add `aria-invalid` and `aria-describedby` to fields
 
 ## 5. Tables and data states
 

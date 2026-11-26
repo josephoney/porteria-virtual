@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { patch, post } from '../../lib/apiClient';
+import { fieldA11y, hasErrors, requiredError } from '../../lib/form';
+import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { NativeSelect } from '../ui/native-select';
 
 interface CommunityOption {
   id: string;
@@ -36,9 +39,25 @@ export function StructureForm({
   const [level3Name, setLevel3Name] = useState(initial?.level3Name ?? 'Unidad');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{
+    communityId?: string;
+    level1Name?: string;
+    level2Name?: string;
+    level3Name?: string;
+  }>({});
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+
+    const validation = {
+      communityId: requiredError(communityId, 'La comunidad'),
+      level1Name: requiredError(level1Name, 'El nivel 1'),
+      level2Name: levelCount >= 2 ? requiredError(level2Name, 'El nivel 2') : '',
+      level3Name: levelCount >= 3 ? requiredError(level3Name, 'El nivel 3') : '',
+    };
+    setFieldErrors(validation);
+    if (hasErrors(validation)) return;
+
     setSaving(true);
     setError('');
     try {
@@ -68,16 +87,19 @@ export function StructureForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form onSubmit={submit} className="space-y-4" noValidate>
       <div className="space-y-1">
         <Label htmlFor="structure-community">Comunidad</Label>
-        <select
+        <NativeSelect
           id="structure-community"
-          className="h-9 w-full rounded border border-border bg-card px-2 text-sm disabled:opacity-60"
           value={communityId}
-          onChange={(event) => setCommunityId(event.target.value)}
+          onChange={(event) => {
+            setCommunityId(event.target.value);
+            setFieldErrors((current) => ({ ...current, communityId: undefined }));
+          }}
           disabled={Boolean(initial)}
           required
+          {...fieldA11y('structure-community', fieldErrors.communityId)}
         >
           <option value="">Elegir comunidad…</option>
           {communities.map((community) => (
@@ -85,21 +107,26 @@ export function StructureForm({
               {community.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
+        {fieldErrors.communityId && (
+          <p id="structure-community-error" role="alert" className="text-xs text-destructive">
+            {fieldErrors.communityId}
+          </p>
+        )}
       </div>
       <div className="space-y-1">
         <Label htmlFor="structure-levels">Cantidad de niveles</Label>
-        <select
+        <NativeSelect
           id="structure-levels"
-          className="h-9 w-full rounded border border-border bg-card px-2 text-sm"
           value={levelCount}
           onChange={(event) => setLevelCount(Number(event.target.value))}
+          aria-describedby="structure-levels-help"
         >
           <option value={1}>1 nivel</option>
           <option value={2}>2 niveles</option>
           <option value={3}>3 niveles</option>
-        </select>
-        <p className="text-xs text-muted-foreground">
+        </NativeSelect>
+        <p id="structure-levels-help" className="text-xs text-muted-foreground">
           El último nivel es la unidad. Para Torres → Apartamentos, usa 2 niveles.
         </p>
       </div>
@@ -109,9 +136,18 @@ export function StructureForm({
           <Input
             id="structure-level-1"
             value={level1Name}
-            onChange={(event) => setLevel1Name(event.target.value)}
+            onChange={(event) => {
+              setLevel1Name(event.target.value);
+              setFieldErrors((current) => ({ ...current, level1Name: undefined }));
+            }}
             required
+            {...fieldA11y('structure-level-1', fieldErrors.level1Name)}
           />
+          {fieldErrors.level1Name && (
+            <p id="structure-level-1-error" role="alert" className="text-xs text-destructive">
+              {fieldErrors.level1Name}
+            </p>
+          )}
         </div>
         {levelCount >= 2 && (
           <div className="space-y-1">
@@ -119,9 +155,18 @@ export function StructureForm({
             <Input
               id="structure-level-2"
               value={level2Name}
-              onChange={(event) => setLevel2Name(event.target.value)}
+              onChange={(event) => {
+                setLevel2Name(event.target.value);
+                setFieldErrors((current) => ({ ...current, level2Name: undefined }));
+              }}
               required
+              {...fieldA11y('structure-level-2', fieldErrors.level2Name)}
             />
+            {fieldErrors.level2Name && (
+              <p id="structure-level-2-error" role="alert" className="text-xs text-destructive">
+                {fieldErrors.level2Name}
+              </p>
+            )}
           </div>
         )}
         {levelCount >= 3 && (
@@ -130,18 +175,27 @@ export function StructureForm({
             <Input
               id="structure-level-3"
               value={level3Name}
-              onChange={(event) => setLevel3Name(event.target.value)}
+              onChange={(event) => {
+                setLevel3Name(event.target.value);
+                setFieldErrors((current) => ({ ...current, level3Name: undefined }));
+              }}
               required
+              {...fieldA11y('structure-level-3', fieldErrors.level3Name)}
             />
+            {fieldErrors.level3Name && (
+              <p id="structure-level-3-error" role="alert" className="text-xs text-destructive">
+                {fieldErrors.level3Name}
+              </p>
+            )}
           </div>
         )}
       </div>
       {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
-      <Button type="submit" disabled={saving || !communityId}>
+      <Button type="submit" disabled={saving}>
         {saving ? 'Guardando…' : initial ? 'Guardar cambios' : 'Crear estructura'}
       </Button>
     </form>

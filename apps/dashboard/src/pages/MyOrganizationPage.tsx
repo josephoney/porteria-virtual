@@ -2,13 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { assetObjectUrl, get, patch, post, upload } from '../lib/apiClient';
 import { COUNTRIES } from '../lib/countries';
 import { PageHeader } from '../components/layout/PageHeader';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { DetailField, DetailGrid } from '../components/ui/detail-field';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { LogoUpload } from '../components/ui/logo-upload';
+import { NativeSelect } from '../components/ui/native-select';
 import { Skeleton } from '../components/ui/skeleton';
 import { useWorkspace } from '../contexts/WorkspaceContext';
+import { fieldA11y, hasErrors, minLengthError, requiredError } from '../lib/form';
 
 interface OrganizationProfile {
   id: string;
@@ -66,6 +69,12 @@ export function MyOrganizationPage() {
   const [runs, setRuns] = useState<RetentionRun[]>([]);
   const [holds, setHolds] = useState<RetentionHold[]>([]);
   const [holdForm, setHoldForm] = useState({ fromDate: '', toDate: '', reason: '', expiresAt: '' });
+  const [holdFieldErrors, setHoldFieldErrors] = useState<{
+    fromDate?: string;
+    toDate?: string;
+    reason?: string;
+    expiresAt?: string;
+  }>({});
   const [creatingHold, setCreatingHold] = useState(false);
   const [holdError, setHoldError] = useState('');
   const [form, setForm] = useState({
@@ -195,6 +204,26 @@ export function MyOrganizationPage() {
 
   async function createHold(event: React.FormEvent) {
     event.preventDefault();
+
+    const validation = {
+      fromDate: requiredError(holdForm.fromDate, 'La fecha desde'),
+      toDate:
+        requiredError(holdForm.toDate, 'La fecha hasta') ||
+        (holdForm.fromDate && holdForm.toDate < holdForm.fromDate
+          ? 'La fecha hasta no puede ser anterior a la fecha desde.'
+          : ''),
+      reason:
+        requiredError(holdForm.reason, 'El motivo') ||
+        minLengthError(holdForm.reason, 5, 'El motivo'),
+      expiresAt:
+        requiredError(holdForm.expiresAt, 'La fecha de vencimiento') ||
+        (holdForm.expiresAt && holdForm.expiresAt < todayISO()
+          ? 'El vencimiento no puede estar en el pasado.'
+          : ''),
+    };
+    setHoldFieldErrors(validation);
+    if (hasErrors(validation)) return;
+
     setCreatingHold(true);
     setHoldError('');
     try {
@@ -205,6 +234,7 @@ export function MyOrganizationPage() {
         expiresAt: holdForm.expiresAt,
       });
       setHoldForm({ fromDate: '', toDate: '', reason: '', expiresAt: '' });
+      setHoldFieldErrors({});
       await load();
     } catch (err) {
       setHoldError(err instanceof Error ? err.message : 'No se pudo crear la preservación.');
@@ -245,12 +275,9 @@ export function MyOrganizationPage() {
       />
 
       {error && (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {error}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
       {saved && (
         <p role="status" className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
@@ -340,9 +367,8 @@ export function MyOrganizationPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="org-country">País</Label>
-            <select
+            <NativeSelect
               id="org-country"
-              className="h-9 w-full rounded border border-border bg-card px-2 text-sm"
               value={form.country}
               onChange={(event) => setForm({ ...form, country: event.target.value })}
             >
@@ -352,13 +378,12 @@ export function MyOrganizationPage() {
                   {country}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="org-legal-representative">Representante legal</Label>
-            <select
+            <NativeSelect
               id="org-legal-representative"
-              className="h-9 w-full rounded border border-border bg-card px-2 text-sm"
               value={form.legalRepresentativePersonId}
               onChange={(event) =>
                 setForm({
@@ -374,7 +399,7 @@ export function MyOrganizationPage() {
                   {person.documentNumber ? ` · ${person.documentNumber}` : ''}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="org-welcome">Mensaje de bienvenida</Label>
@@ -387,19 +412,19 @@ export function MyOrganizationPage() {
           </div>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="org-retention">Retención de datos</Label>
-            <select
+            <NativeSelect
               id="org-retention"
-              className="h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 py-1 text-base outline-none focus-visible:border-ring md:text-sm"
               value={form.retentionDays}
               onChange={(event) => setForm({ ...form, retentionDays: event.target.value })}
+              aria-describedby="org-retention-help"
             >
               {windowOptions.map((days) => (
                 <option key={days} value={String(days)}>
                   {days} días
                 </option>
               ))}
-            </select>
-            <p className="text-xs text-muted-foreground">
+            </NativeSelect>
+            <p id="org-retention-help" className="text-xs text-muted-foreground">
               Días que se conserva la identidad del visitante con nombre y documento legibles.
               Después de ese plazo la bitácora pierde al visitante completo y el pase conserva el
               nombre como constancia del residente, pero sin documento. El mínimo es 30 días porque
@@ -474,7 +499,7 @@ export function MyOrganizationPage() {
           </div>
         )}
 
-        <form className="grid gap-3 sm:grid-cols-2" onSubmit={createHold}>
+        <form className="grid gap-3 sm:grid-cols-2" onSubmit={createHold} noValidate>
           <div className="space-y-1">
             <Label htmlFor="hold-from">Desde</Label>
             <Input
@@ -482,8 +507,17 @@ export function MyOrganizationPage() {
               type="date"
               required
               value={holdForm.fromDate}
-              onChange={(event) => setHoldForm({ ...holdForm, fromDate: event.target.value })}
+              onChange={(event) => {
+                setHoldForm({ ...holdForm, fromDate: event.target.value });
+                setHoldFieldErrors((current) => ({ ...current, fromDate: undefined }));
+              }}
+              {...fieldA11y('hold-from', holdFieldErrors.fromDate)}
             />
+            {holdFieldErrors.fromDate && (
+              <p id="hold-from-error" role="alert" className="text-xs text-destructive">
+                {holdFieldErrors.fromDate}
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label htmlFor="hold-to">Hasta</Label>
@@ -492,8 +526,17 @@ export function MyOrganizationPage() {
               type="date"
               required
               value={holdForm.toDate}
-              onChange={(event) => setHoldForm({ ...holdForm, toDate: event.target.value })}
+              onChange={(event) => {
+                setHoldForm({ ...holdForm, toDate: event.target.value });
+                setHoldFieldErrors((current) => ({ ...current, toDate: undefined }));
+              }}
+              {...fieldA11y('hold-to', holdFieldErrors.toDate)}
             />
+            {holdFieldErrors.toDate && (
+              <p id="hold-to-error" role="alert" className="text-xs text-destructive">
+                {holdFieldErrors.toDate}
+              </p>
+            )}
           </div>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="hold-reason">Motivo</Label>
@@ -502,9 +545,18 @@ export function MyOrganizationPage() {
               required
               minLength={5}
               value={holdForm.reason}
-              onChange={(event) => setHoldForm({ ...holdForm, reason: event.target.value })}
+              onChange={(event) => {
+                setHoldForm({ ...holdForm, reason: event.target.value });
+                setHoldFieldErrors((current) => ({ ...current, reason: undefined }));
+              }}
               placeholder="Por ejemplo: incidente del 18 de noviembre, caso 2026-114"
+              {...fieldA11y('hold-reason', holdFieldErrors.reason)}
             />
+            {holdFieldErrors.reason && (
+              <p id="hold-reason-error" role="alert" className="text-xs text-destructive">
+                {holdFieldErrors.reason}
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label htmlFor="hold-expires">Vence</Label>
@@ -513,8 +565,17 @@ export function MyOrganizationPage() {
               type="date"
               required
               value={holdForm.expiresAt}
-              onChange={(event) => setHoldForm({ ...holdForm, expiresAt: event.target.value })}
+              onChange={(event) => {
+                setHoldForm({ ...holdForm, expiresAt: event.target.value });
+                setHoldFieldErrors((current) => ({ ...current, expiresAt: undefined }));
+              }}
+              {...fieldA11y('hold-expires', holdFieldErrors.expiresAt)}
             />
+            {holdFieldErrors.expiresAt && (
+              <p id="hold-expires-error" role="alert" className="text-xs text-destructive">
+                {holdFieldErrors.expiresAt}
+              </p>
+            )}
           </div>
           <div className="flex items-end">
             <Button type="submit" variant="outline" disabled={creatingHold}>
@@ -523,7 +584,11 @@ export function MyOrganizationPage() {
           </div>
         </form>
 
-        {holdError && <p className="mt-2 text-sm text-destructive">{holdError}</p>}
+        {holdError && (
+          <Alert variant="destructive" className="mt-2">
+            <AlertDescription>{holdError}</AlertDescription>
+          </Alert>
+        )}
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
@@ -565,6 +630,14 @@ export function MyOrganizationPage() {
       </div>
     </div>
   );
+}
+
+/** Today in `YYYY-MM-DD`, using the browser's local day (not UTC). */
+function todayISO(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 /** `YYYY-MM-DD` (or an ISO timestamp) to a local day, without shifting the date. */

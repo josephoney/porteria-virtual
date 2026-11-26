@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { AuthShell } from '../components/auth/AuthShell';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { post } from '../lib/apiClient';
+import { fieldA11y } from '../lib/form';
 
 const MIN_PASSWORD = 8;
 
@@ -79,9 +81,18 @@ export function ResetPasswordPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
+                aria-invalid={tooShort}
+                aria-describedby={
+                  tooShort ? 'reset-password-error reset-password-hint' : 'reset-password-hint'
+                }
               />
+              <p id="reset-password-hint" className="text-xs text-muted-foreground">
+                Mínimo ocho caracteres.
+              </p>
               {tooShort && (
-                <p className="text-xs text-destructive">Debe tener al menos ocho caracteres.</p>
+                <p id="reset-password-error" role="alert" className="text-xs text-destructive">
+                  Debe tener al menos ocho caracteres.
+                </p>
               )}
             </div>
             <div className="space-y-1">
@@ -93,10 +104,19 @@ export function ResetPasswordPage() {
                 value={repeat}
                 onChange={(event) => setRepeat(event.target.value)}
                 required
+                {...fieldA11y('reset-repeat', mismatch ? 'mismatch' : undefined)}
               />
-              {mismatch && <p className="text-xs text-destructive">No coinciden.</p>}
+              {mismatch && (
+                <p id="reset-repeat-error" role="alert" className="text-xs text-destructive">
+                  No coinciden.
+                </p>
+              )}
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <Button type="submit" className="w-full" disabled={saving || !canSubmit}>
               {saving ? 'Guardando…' : 'Guardar contraseña'}
             </Button>

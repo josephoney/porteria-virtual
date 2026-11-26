@@ -6,6 +6,7 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { ListToolbar } from '../components/layout/ListToolbar';
 import { Pagination } from '../components/layout/Pagination';
 import { FormDialog } from '../components/layout/FormDialog';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
@@ -28,6 +29,7 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { StructureTreeWorkspace } from '../components/admin/StructureTreeWorkspace';
+import { fieldA11y, hasErrors, requiredError } from '../lib/form';
 import { SECTION_TYPE_LABELS, sectionTypeLabel } from '../lib/section-types';
 import { queryKeys } from '../lib/query-keys';
 
@@ -106,6 +108,11 @@ export function SectionsPage() {
   const [editing, setEditing] = useState<SectionRow | null>(null);
   const [form, setForm] = useState<SectionFormState>(() => emptyForm());
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{
+    communityId?: string;
+    name?: string;
+    sectionTypeLabel?: string;
+  }>({});
   const [saving, setSaving] = useState(false);
 
   const communitiesQuery = useQuery({
@@ -162,6 +169,7 @@ export function SectionsPage() {
     setEditing(null);
     setForm(emptyForm(communities[0]?.id ?? ''));
     setFormError('');
+    setFieldErrors({});
     setFormOpen(true);
   }
 
@@ -175,6 +183,7 @@ export function SectionsPage() {
       sectionTypeLabel: section.sectionTypeLabel ?? '',
     });
     setFormError('');
+    setFieldErrors({});
     setFormOpen(true);
   }
 
@@ -182,10 +191,16 @@ export function SectionsPage() {
     event.preventDefault();
     setFormError('');
 
-    if (!editing && !form.communityId) {
-      setFormError('Selecciona una comunidad.');
-      return;
-    }
+    const validation = {
+      communityId: editing ? '' : requiredError(form.communityId, 'La comunidad'),
+      name: requiredError(form.name, 'El nombre'),
+      sectionTypeLabel:
+        form.sectionType === 'other'
+          ? requiredError(form.sectionTypeLabel, 'El nombre del tipo')
+          : '',
+    };
+    setFieldErrors(validation);
+    if (hasErrors(validation)) return;
 
     setSaving(true);
     const payload = {
@@ -263,15 +278,26 @@ export function SectionsPage() {
             }
             hideTrigger
           >
-            <form onSubmit={saveSection} className="space-y-4">
+            <form onSubmit={saveSection} className="space-y-4" noValidate>
               {!editing && (
                 <div className="space-y-1">
                   <Label htmlFor="section-community">Comunidad</Label>
                   <Select
                     value={form.communityId}
-                    onValueChange={(value) => setForm({ ...form, communityId: value })}
+                    onValueChange={(value) => {
+                      setForm({ ...form, communityId: value });
+                      setFieldErrors((current) => ({ ...current, communityId: undefined }));
+                    }}
                   >
-                    <SelectTrigger id="section-community" className="w-full" aria-label="Comunidad">
+                    <SelectTrigger
+                      id="section-community"
+                      className="w-full"
+                      aria-label="Comunidad"
+                      aria-invalid={Boolean(fieldErrors.communityId)}
+                      aria-describedby={
+                        fieldErrors.communityId ? 'section-community-error' : undefined
+                      }
+                    >
                       <SelectValue placeholder="Elige una comunidad" />
                     </SelectTrigger>
                     <SelectContent>
@@ -282,6 +308,15 @@ export function SectionsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {fieldErrors.communityId && (
+                    <p
+                      id="section-community-error"
+                      role="alert"
+                      className="text-xs text-destructive"
+                    >
+                      {fieldErrors.communityId}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -290,9 +325,18 @@ export function SectionsPage() {
                 <Input
                   id="section-name"
                   value={form.name}
-                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  onChange={(event) => {
+                    setForm({ ...form, name: event.target.value });
+                    setFieldErrors((current) => ({ ...current, name: undefined }));
+                  }}
                   required
+                  {...fieldA11y('section-name', fieldErrors.name)}
                 />
+                {fieldErrors.name && (
+                  <p id="section-name-error" role="alert" className="text-xs text-destructive">
+                    {fieldErrors.name}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -336,17 +380,30 @@ export function SectionsPage() {
                   <Input
                     id="section-type-label"
                     value={form.sectionTypeLabel}
-                    onChange={(event) => setForm({ ...form, sectionTypeLabel: event.target.value })}
+                    onChange={(event) => {
+                      setForm({ ...form, sectionTypeLabel: event.target.value });
+                      setFieldErrors((current) => ({ ...current, sectionTypeLabel: undefined }));
+                    }}
                     placeholder="Ej. Torre, manzana, zona común"
                     required
+                    {...fieldA11y('section-type-label', fieldErrors.sectionTypeLabel)}
                   />
+                  {fieldErrors.sectionTypeLabel && (
+                    <p
+                      id="section-type-label-error"
+                      role="alert"
+                      className="text-xs text-destructive"
+                    >
+                      {fieldErrors.sectionTypeLabel}
+                    </p>
+                  )}
                 </div>
               )}
 
               {formError && (
-                <p role="alert" className="text-sm text-destructive">
-                  {formError}
-                </p>
+                <Alert variant="destructive">
+                  <AlertDescription>{formError}</AlertDescription>
+                </Alert>
               )}
 
               <Button type="submit" disabled={saving}>

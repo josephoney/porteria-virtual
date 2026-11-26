@@ -2,6 +2,9 @@ import { Fragment, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, patch } from '../lib/apiClient';
+import { emailError, fieldA11y, hasErrors, requiredError } from '../lib/form';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import { NativeSelect } from '../components/ui/native-select';
 import { Tabs, TabsContent } from '../components/ui/tabs';
 import {
   Table,
@@ -375,6 +378,18 @@ export function PlatformPage() {
     communityId: '',
     unitId: '',
   });
+  const [orgFieldErrors, setOrgFieldErrors] = useState<{ name?: string; adminEmail?: string }>({});
+  const [communityFieldErrors, setCommunityFieldErrors] = useState<{
+    organizationId?: string;
+    name?: string;
+    address?: string;
+    timezone?: string;
+  }>({});
+  const [inviteFieldErrors, setInviteFieldErrors] = useState<{
+    email?: string;
+    organizationId?: string;
+  }>({});
+  const [communityInviteEmailError, setCommunityInviteEmailError] = useState('');
 
   const invalidate = (...keys: readonly (readonly unknown[])[]) =>
     Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
@@ -462,6 +477,7 @@ export function PlatformPage() {
     setOrgInviteUrl('');
     setOrgInviteEmailSent(false);
     setOrgInviteCopied(false);
+    setOrgFieldErrors({});
     setFormDialog('organizations');
   }
 
@@ -479,6 +495,7 @@ export function PlatformPage() {
     setOrgInviteUrl('');
     setOrgInviteEmailSent(false);
     setOrgInviteCopied(false);
+    setOrgFieldErrors({});
     setFormDialog('organizations');
     setOrgAdministratorLoading(true);
     try {
@@ -514,6 +531,17 @@ export function PlatformPage() {
 
   async function saveOrganization(e: React.FormEvent) {
     e.preventDefault();
+
+    const validation = {
+      name: requiredError(orgForm.name, 'El nombre'),
+      adminEmail:
+        editingOrganizationId && orgAdminEmail.trim() !== ''
+          ? emailError(orgAdminEmail, 'El correo del administrador')
+          : '',
+    };
+    setOrgFieldErrors(validation);
+    if (hasErrors(validation)) return;
+
     setError('');
     try {
       if (editingOrganizationId) {
@@ -571,6 +599,16 @@ export function PlatformPage() {
 
   async function createCommunity(e: React.FormEvent) {
     e.preventDefault();
+
+    const validation = {
+      organizationId: requiredError(communityForm.organizationId, 'La organización'),
+      name: requiredError(communityForm.name, 'El nombre'),
+      address: requiredError(communityForm.address, 'La dirección'),
+      timezone: requiredError(communityForm.timezone, 'La zona horaria'),
+    };
+    setCommunityFieldErrors(validation);
+    if (hasErrors(validation)) return;
+
     setError('');
     try {
       await post('/api/platform/communities', {
@@ -596,6 +634,14 @@ export function PlatformPage() {
 
   async function createInvitation(e: React.FormEvent) {
     e.preventDefault();
+
+    const validation = {
+      email: emailError(inviteForm.email),
+      organizationId: requiredError(inviteForm.organizationId, 'La organización'),
+    };
+    setInviteFieldErrors(validation);
+    if (hasErrors(validation)) return;
+
     setError('');
     setInviteLink('');
     setInviteEmailSent(false);
@@ -687,6 +733,7 @@ export function PlatformPage() {
     setCommunityInviteEmail('');
     setCommunityInviteSaving(false);
     setCommunityInviteError('');
+    setCommunityInviteEmailError('');
     setCommunityInviteResult(null);
     setCommunityInviteCopied(false);
   }
@@ -694,6 +741,11 @@ export function PlatformPage() {
   async function inviteCommunityAdmin(event: React.FormEvent) {
     event.preventDefault();
     if (!communityInviteTarget) return;
+
+    const validation = emailError(communityInviteEmail);
+    setCommunityInviteEmailError(validation);
+    if (validation) return;
+
     const email = communityInviteEmail;
     setCommunityInviteSaving(true);
     setCommunityInviteError('');
@@ -761,20 +813,19 @@ export function PlatformPage() {
       ) : (
         <>
           {errorMessage && (
-            <div
-              role="alert"
-              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            >
-              <p>{errorMessage}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => void queryClient.invalidateQueries()}
-              >
-                Reintentar
-              </Button>
-            </div>
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>
+                <p>{errorMessage}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => void queryClient.invalidateQueries()}
+                >
+                  Reintentar
+                </Button>
+              </AlertDescription>
+            </Alert>
           )}
 
           <Tabs value={section}>
@@ -826,15 +877,27 @@ export function PlatformPage() {
                 }
                 hideTrigger
               >
-                <form onSubmit={saveOrganization} className="space-y-4">
+                <form onSubmit={saveOrganization} className="space-y-4" noValidate>
                   <div className="space-y-1">
                     <Label htmlFor="platform-organization-name">Nombre</Label>
                     <Input
                       id="platform-organization-name"
                       value={orgForm.name}
-                      onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
-                      required
+                      onChange={(e) => {
+                        setOrgForm({ ...orgForm, name: e.target.value });
+                        setOrgFieldErrors((prev) => ({ ...prev, name: '' }));
+                      }}
+                      {...fieldA11y('platform-organization-name', orgFieldErrors.name)}
                     />
+                    {orgFieldErrors.name && (
+                      <p
+                        id="platform-organization-name-error"
+                        role="alert"
+                        className="text-xs text-destructive"
+                      >
+                        {orgFieldErrors.name}
+                      </p>
+                    )}
                   </div>
                   {editingOrganizationId ? (
                     <>
@@ -843,7 +906,7 @@ export function PlatformPage() {
                         <p className="font-mono text-sm text-muted-foreground">{orgForm.slug}</p>
                       </div>
                       <div className="space-y-1">
-                        <Label htmlFor="platform-organization-admin">Administrador actual</Label>
+                        <Label>Administrador actual</Label>
                         {orgAdministratorLoading ? (
                           <Skeleton className="h-9 w-full" />
                         ) : orgAdministrator ? (
@@ -866,9 +929,30 @@ export function PlatformPage() {
                           type="email"
                           placeholder="correo@ejemplo.com"
                           value={orgAdminEmail}
-                          onChange={(event) => setOrgAdminEmail(event.target.value)}
+                          onChange={(event) => {
+                            setOrgAdminEmail(event.target.value);
+                            setOrgFieldErrors((prev) => ({ ...prev, adminEmail: '' }));
+                          }}
+                          aria-describedby={
+                            orgFieldErrors.adminEmail
+                              ? 'platform-organization-admin-error platform-organization-admin-help'
+                              : 'platform-organization-admin-help'
+                          }
+                          aria-invalid={Boolean(orgFieldErrors.adminEmail)}
                         />
-                        <p className="text-xs text-muted-foreground">
+                        {orgFieldErrors.adminEmail && (
+                          <p
+                            id="platform-organization-admin-error"
+                            role="alert"
+                            className="text-xs text-destructive"
+                          >
+                            {orgFieldErrors.adminEmail}
+                          </p>
+                        )}
+                        <p
+                          id="platform-organization-admin-help"
+                          className="text-xs text-muted-foreground"
+                        >
                           Si el correo ya tiene cuenta, el cambio es inmediato. Si no, se envía una
                           invitación y el administrador actual sigue activo hasta que se acepte.
                         </p>
@@ -923,9 +1007,8 @@ export function PlatformPage() {
                         </div>
                         <div className="space-y-1">
                           <Label htmlFor="platform-organization-country">País</Label>
-                          <select
+                          <NativeSelect
                             id="platform-organization-country"
-                            className="h-9 w-full rounded border border-border bg-card px-2 text-sm"
                             value={orgForm.country}
                             onChange={(e) => setOrgForm({ ...orgForm, country: e.target.value })}
                           >
@@ -935,7 +1018,7 @@ export function PlatformPage() {
                                 {country}
                               </option>
                             ))}
-                          </select>
+                          </NativeSelect>
                         </div>
                       </div>
                     </>
@@ -1148,67 +1231,125 @@ export function PlatformPage() {
             <TabsContent value="communities" className="space-y-4">
               <FormDialog
                 open={formDialog === 'communities'}
-                onOpenChange={(open) => setFormDialog(open ? 'communities' : null)}
+                onOpenChange={(open) => {
+                  setFormDialog(open ? 'communities' : null);
+                  if (!open) setCommunityFieldErrors({});
+                }}
                 title="Nueva comunidad"
                 description="Asocia una comunidad a una organización existente."
                 triggerLabel="Crear comunidad"
                 hidden
               >
-                <form onSubmit={createCommunity} className="flex flex-wrap items-end gap-2">
-                  <div className="space-y-1">
-                    <Label>Organización</Label>
-                    <select
-                      className="h-9 rounded border border-border bg-card px-2 text-sm"
-                      value={communityForm.organizationId}
-                      onChange={(e) =>
-                        setCommunityForm({ ...communityForm, organizationId: e.target.value })
-                      }
-                      required
-                    >
-                      <option value="">Elegir…</option>
-                      {organizations.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.name}
-                        </option>
-                      ))}
-                    </select>
+                <form onSubmit={createCommunity} className="space-y-4" noValidate>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="platform-community-organization">Organización</Label>
+                      <NativeSelect
+                        id="platform-community-organization"
+                        value={communityForm.organizationId}
+                        onChange={(e) => {
+                          setCommunityForm({ ...communityForm, organizationId: e.target.value });
+                          setCommunityFieldErrors((prev) => ({ ...prev, organizationId: '' }));
+                        }}
+                        {...fieldA11y(
+                          'platform-community-organization',
+                          communityFieldErrors.organizationId,
+                        )}
+                      >
+                        <option value="">Elegir…</option>
+                        {organizations.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                      {communityFieldErrors.organizationId && (
+                        <p
+                          id="platform-community-organization-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {communityFieldErrors.organizationId}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="platform-community-name">Nombre</Label>
+                      <Input
+                        id="platform-community-name"
+                        value={communityForm.name}
+                        onChange={(e) => {
+                          setCommunityForm({ ...communityForm, name: e.target.value });
+                          setCommunityFieldErrors((prev) => ({ ...prev, name: '' }));
+                        }}
+                        {...fieldA11y('platform-community-name', communityFieldErrors.name)}
+                      />
+                      {communityFieldErrors.name && (
+                        <p
+                          id="platform-community-name-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {communityFieldErrors.name}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="platform-community-address">Dirección</Label>
+                      <Input
+                        id="platform-community-address"
+                        value={communityForm.address}
+                        onChange={(e) => {
+                          setCommunityForm({ ...communityForm, address: e.target.value });
+                          setCommunityFieldErrors((prev) => ({ ...prev, address: '' }));
+                        }}
+                        {...fieldA11y('platform-community-address', communityFieldErrors.address)}
+                      />
+                      {communityFieldErrors.address && (
+                        <p
+                          id="platform-community-address-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {communityFieldErrors.address}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="platform-community-timezone">Zona horaria</Label>
+                      <Input
+                        id="platform-community-timezone"
+                        value={communityForm.timezone}
+                        onChange={(e) => {
+                          setCommunityForm({ ...communityForm, timezone: e.target.value });
+                          setCommunityFieldErrors((prev) => ({ ...prev, timezone: '' }));
+                        }}
+                        {...fieldA11y('platform-community-timezone', communityFieldErrors.timezone)}
+                      />
+                      {communityFieldErrors.timezone && (
+                        <p
+                          id="platform-community-timezone-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {communityFieldErrors.timezone}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="platform-community-slug">Slug (opcional)</Label>
+                      <Input
+                        id="platform-community-slug"
+                        value={communityForm.slug}
+                        onChange={(e) =>
+                          setCommunityForm({ ...communityForm, slug: e.target.value })
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label>Nombre</Label>
-                    <Input
-                      value={communityForm.name}
-                      onChange={(e) => setCommunityForm({ ...communityForm, name: e.target.value })}
-                      required
-                    />
+                  <div className="flex justify-end">
+                    <Button type="submit">Crear comunidad</Button>
                   </div>
-                  <div className="space-y-1">
-                    <Label>Dirección</Label>
-                    <Input
-                      value={communityForm.address}
-                      onChange={(e) =>
-                        setCommunityForm({ ...communityForm, address: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Zona horaria</Label>
-                    <Input
-                      value={communityForm.timezone}
-                      onChange={(e) =>
-                        setCommunityForm({ ...communityForm, timezone: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Slug (opcional)</Label>
-                    <Input
-                      value={communityForm.slug}
-                      onChange={(e) => setCommunityForm({ ...communityForm, slug: e.target.value })}
-                    />
-                  </div>
-                  <Button type="submit">Crear comunidad</Button>
                 </form>
               </FormDialog>
               <ListToolbar
@@ -1216,8 +1357,8 @@ export function PlatformPage() {
                 onSearchChange={setCommunitySearch}
                 placeholder="Buscar comunidad…"
               >
-                <select
-                  className="h-9 rounded border border-border bg-card px-2 text-sm"
+                <NativeSelect
+                  className="h-9 w-auto"
                   value={communityOrganizationFilter}
                   onChange={(event) => setCommunityOrganizationFilter(event.target.value)}
                   aria-label="Filtrar por organización"
@@ -1228,7 +1369,7 @@ export function PlatformPage() {
                       {organization.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </ListToolbar>
               <Table>
                 <TableHeader>
@@ -1326,95 +1467,132 @@ export function PlatformPage() {
             <TabsContent value="invitations" className="space-y-4">
               <FormDialog
                 open={formDialog === 'invitations'}
-                onOpenChange={(open) => setFormDialog(open ? 'invitations' : null)}
+                onOpenChange={(open) => {
+                  setFormDialog(open ? 'invitations' : null);
+                  if (!open) setInviteFieldErrors({});
+                }}
                 title="Nueva invitación"
                 description="Invita a una persona a la plataforma."
                 triggerLabel="Invitar"
               >
-                <form onSubmit={createInvitation} className="flex flex-wrap items-end gap-2">
-                  <div className="space-y-1">
-                    <Label>Email</Label>
-                    <Input
-                      type="email"
-                      value={inviteForm.email}
-                      onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Rol</Label>
-                    <select
-                      className="h-9 rounded border border-border bg-card px-2 text-sm"
-                      value={inviteForm.role}
-                      onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Organización</Label>
-                    <select
-                      className="h-9 rounded border border-border bg-card px-2 text-sm"
-                      value={inviteForm.organizationId}
-                      onChange={(e) =>
-                        setInviteForm({
-                          ...inviteForm,
-                          organizationId: e.target.value,
-                          communityId: '',
-                          unitId: '',
-                        })
-                      }
-                      required
-                    >
-                      <option value="">Elegir…</option>
-                      {organizations.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Comunidad</Label>
-                    <select
-                      className="h-9 rounded border border-border bg-card px-2 text-sm"
-                      value={inviteForm.communityId}
-                      onChange={(e) =>
-                        setInviteForm({ ...inviteForm, communityId: e.target.value, unitId: '' })
-                      }
-                    >
-                      <option value="">Sin comunidad</option>
-                      {communities
-                        .filter((c) => c.organizationId === inviteForm.organizationId)
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
+                <form onSubmit={createInvitation} className="space-y-4" noValidate>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="platform-invite-email">Correo</Label>
+                      <Input
+                        id="platform-invite-email"
+                        type="email"
+                        value={inviteForm.email}
+                        onChange={(e) => {
+                          setInviteForm({ ...inviteForm, email: e.target.value });
+                          setInviteFieldErrors((prev) => ({ ...prev, email: '' }));
+                        }}
+                        {...fieldA11y('platform-invite-email', inviteFieldErrors.email)}
+                      />
+                      {inviteFieldErrors.email && (
+                        <p
+                          id="platform-invite-email-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {inviteFieldErrors.email}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="platform-invite-role">Rol</Label>
+                      <NativeSelect
+                        id="platform-invite-role"
+                        value={inviteForm.role}
+                        onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
                           </option>
                         ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Unidad</Label>
-                    <select
-                      className="h-9 rounded border border-border bg-card px-2 text-sm"
-                      value={inviteForm.unitId}
-                      onChange={(e) => setInviteForm({ ...inviteForm, unitId: e.target.value })}
-                    >
-                      <option value="">Sin unidad</option>
-                      {units
-                        .filter((u) => u.communityId === inviteForm.communityId)
-                        .map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.path || u.sectionName} · {u.code}
+                      </NativeSelect>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="platform-invite-organization">Organización</Label>
+                      <NativeSelect
+                        id="platform-invite-organization"
+                        value={inviteForm.organizationId}
+                        onChange={(e) => {
+                          setInviteForm({
+                            ...inviteForm,
+                            organizationId: e.target.value,
+                            communityId: '',
+                            unitId: '',
+                          });
+                          setInviteFieldErrors((prev) => ({ ...prev, organizationId: '' }));
+                        }}
+                        {...fieldA11y(
+                          'platform-invite-organization',
+                          inviteFieldErrors.organizationId,
+                        )}
+                      >
+                        <option value="">Elegir…</option>
+                        {organizations.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name}
                           </option>
                         ))}
-                    </select>
+                      </NativeSelect>
+                      {inviteFieldErrors.organizationId && (
+                        <p
+                          id="platform-invite-organization-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {inviteFieldErrors.organizationId}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="platform-invite-community">Comunidad</Label>
+                      <NativeSelect
+                        id="platform-invite-community"
+                        value={inviteForm.communityId}
+                        onChange={(e) =>
+                          setInviteForm({
+                            ...inviteForm,
+                            communityId: e.target.value,
+                            unitId: '',
+                          })
+                        }
+                      >
+                        <option value="">Sin comunidad</option>
+                        {communities
+                          .filter((c) => c.organizationId === inviteForm.organizationId)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                      </NativeSelect>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="platform-invite-unit">Unidad</Label>
+                      <NativeSelect
+                        id="platform-invite-unit"
+                        value={inviteForm.unitId}
+                        onChange={(e) => setInviteForm({ ...inviteForm, unitId: e.target.value })}
+                      >
+                        <option value="">Sin unidad</option>
+                        {units
+                          .filter((u) => u.communityId === inviteForm.communityId)
+                          .map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.path || u.sectionName} · {u.code}
+                            </option>
+                          ))}
+                      </NativeSelect>
+                    </div>
                   </div>
-                  <Button type="submit">Invitar</Button>
+                  <div className="flex justify-end">
+                    <Button type="submit">Invitar</Button>
+                  </div>
                 </form>
               </FormDialog>
 
@@ -1496,21 +1674,33 @@ export function PlatformPage() {
               Asigna un administrador a {communityInviteTarget?.name}.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={inviteCommunityAdmin} className="space-y-4">
+          <form onSubmit={inviteCommunityAdmin} className="space-y-4" noValidate>
             <div className="space-y-1">
-              <Label htmlFor="platform-community-admin-email">Email</Label>
+              <Label htmlFor="platform-community-admin-email">Correo</Label>
               <Input
                 id="platform-community-admin-email"
                 type="email"
                 value={communityInviteEmail}
-                onChange={(event) => setCommunityInviteEmail(event.target.value)}
-                required
+                onChange={(event) => {
+                  setCommunityInviteEmail(event.target.value);
+                  setCommunityInviteEmailError('');
+                }}
+                {...fieldA11y('platform-community-admin-email', communityInviteEmailError)}
               />
+              {communityInviteEmailError && (
+                <p
+                  id="platform-community-admin-email-error"
+                  role="alert"
+                  className="text-xs text-destructive"
+                >
+                  {communityInviteEmailError}
+                </p>
+              )}
             </div>
             {communityInviteError && (
-              <p role="alert" className="text-sm text-destructive">
-                {communityInviteError}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>{communityInviteError}</AlertDescription>
+              </Alert>
             )}
             {communityInviteResult && (
               <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">

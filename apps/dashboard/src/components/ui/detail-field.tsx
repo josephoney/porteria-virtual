@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { cn } from 'cn';
+import { cn } from '@/lib/utils';
 
 export function DetailGrid({ children, className }: { children: ReactNode; className?: string }) {
   return <dl className={cn('grid gap-x-6 gap-y-4 sm:grid-cols-2', className)}>{children}</dl>;

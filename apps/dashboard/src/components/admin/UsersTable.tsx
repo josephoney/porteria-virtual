@@ -17,7 +17,8 @@ import {
   RiUserFollowLine,
   RiUserUnfollowLine,
 } from '@remixicon/react';
-import { cn } from '../../lib/utils';
+import { cn } from '@/lib/utils';
+import { emailError, fieldA11y, hasErrors, minLengthError, requiredError } from '../../lib/form';
 
 interface MembershipView {
   id: string;
@@ -103,6 +104,10 @@ export function UsersTable() {
   const [resetMustChange, setResetMustChange] = useState(true);
   const [resetResult, setResetResult] = useState<string | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
+  const [resetFieldErrors, setResetFieldErrors] = useState<{
+    password?: string;
+    repeat?: string;
+  }>({});
 
   /**
    * Mismo alcance que aplica el servidor, para no ofrecer una acción que va a
@@ -135,15 +140,27 @@ export function UsersTable() {
     setResetMustChange(true);
     setResetResult(null);
     setActionError('');
+    setResetFieldErrors({});
   }
 
   async function submitReset(event: React.FormEvent) {
     event.preventDefault();
     if (!resetTarget) return;
-    if (resetMode === 'direct' && resetPassword !== resetRepeat) {
-      setActionError('Las contraseñas no coinciden.');
-      return;
-    }
+
+    const validation = {
+      password:
+        resetMode === 'direct'
+          ? requiredError(resetPassword, 'La contraseña') ||
+            minLengthError(resetPassword, 8, 'La contraseña')
+          : '',
+      repeat:
+        resetMode === 'direct' && resetPassword !== resetRepeat
+          ? 'Las contraseñas no coinciden.'
+          : '',
+    };
+    setResetFieldErrors(validation);
+    if (hasErrors(validation)) return;
+
     setResetBusy(true);
     try {
       await post(`/api/accounts/${resetTarget.id}/password`, {
@@ -184,6 +201,11 @@ export function UsersTable() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [createFieldErrors, setCreateFieldErrors] = useState<{
+    firstName?: string;
+    email?: string;
+    password?: string;
+  }>({});
   const [assignmentUser, setAssignmentUser] = useState<UserData | null>(null);
   const [assignmentUnits, setAssignmentUnits] = useState<UnitOption[]>([]);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
@@ -253,6 +275,17 @@ export function UsersTable() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+
+    const validation = {
+      firstName: requiredError(form.firstName, 'El nombre'),
+      email: emailError(form.email),
+      password:
+        requiredError(form.password, 'La contraseña') ||
+        minLengthError(form.password, 8, 'La contraseña'),
+    };
+    setCreateFieldErrors(validation);
+    if (hasErrors(validation)) return;
+
     setError('');
     setCreating(true);
     try {
@@ -397,7 +430,13 @@ export function UsersTable() {
             <p className="text-xs text-muted-foreground">{scopeDescription}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Dialog open={formOpen} onOpenChange={setFormOpen}>
+            <Dialog
+              open={formOpen}
+              onOpenChange={(open) => {
+                setFormOpen(open);
+                if (!open) setCreateFieldErrors({});
+              }}
+            >
               <DialogTrigger asChild>
                 <Button size="sm">+ Nuevo Usuario</Button>
               </DialogTrigger>
@@ -405,7 +444,7 @@ export function UsersTable() {
                 <DialogHeader>
                   <DialogTitle>Nuevo Usuario</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleCreate} className="flex flex-col gap-3">
+                <form onSubmit={handleCreate} className="flex flex-col gap-3" noValidate>
                   <div className="space-y-2 rounded-md border border-border p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Persona
@@ -416,9 +455,21 @@ export function UsersTable() {
                         <Input
                           id="new-first-name"
                           value={form.firstName}
-                          onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                          required
+                          onChange={(e) => {
+                            setForm({ ...form, firstName: e.target.value });
+                            setCreateFieldErrors((prev) => ({ ...prev, firstName: '' }));
+                          }}
+                          {...fieldA11y('new-first-name', createFieldErrors.firstName)}
                         />
+                        {createFieldErrors.firstName && (
+                          <p
+                            id="new-first-name-error"
+                            role="alert"
+                            className="text-xs text-destructive"
+                          >
+                            {createFieldErrors.firstName}
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-1">
                         <Label htmlFor="new-last-name">Apellido</Label>
@@ -453,14 +504,22 @@ export function UsersTable() {
                       Cuenta de acceso
                     </p>
                     <div className="space-y-1">
-                      <Label htmlFor="new-email">Email</Label>
+                      <Label htmlFor="new-email">Correo</Label>
                       <Input
                         id="new-email"
                         type="email"
                         value={form.email}
-                        onChange={(e) => setForm({ ...form, email: e.target.value })}
-                        required
+                        onChange={(e) => {
+                          setForm({ ...form, email: e.target.value });
+                          setCreateFieldErrors((prev) => ({ ...prev, email: '' }));
+                        }}
+                        {...fieldA11y('new-email', createFieldErrors.email)}
                       />
+                      {createFieldErrors.email && (
+                        <p id="new-email-error" role="alert" className="text-xs text-destructive">
+                          {createFieldErrors.email}
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="new-password">Contraseña</Label>
@@ -468,10 +527,29 @@ export function UsersTable() {
                         id="new-password"
                         type="password"
                         value={form.password}
-                        onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        required
-                        minLength={8}
+                        onChange={(e) => {
+                          setForm({ ...form, password: e.target.value });
+                          setCreateFieldErrors((prev) => ({ ...prev, password: '' }));
+                        }}
+                        aria-describedby={
+                          createFieldErrors.password
+                            ? 'new-password-error new-password-help'
+                            : 'new-password-help'
+                        }
+                        aria-invalid={Boolean(createFieldErrors.password)}
                       />
+                      {createFieldErrors.password && (
+                        <p
+                          id="new-password-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {createFieldErrors.password}
+                        </p>
+                      )}
+                      <p id="new-password-help" className="text-xs text-muted-foreground">
+                        Mínimo ocho caracteres.
+                      </p>
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -977,7 +1055,7 @@ export function UsersTable() {
               )}
             </div>
           ) : (
-            <form className="space-y-3" onSubmit={submitReset}>
+            <form className="space-y-3" onSubmit={submitReset} noValidate>
               <div className="space-y-1">
                 <Label htmlFor="reset-mode">Cómo se define</Label>
                 <Select
@@ -1008,11 +1086,27 @@ export function UsersTable() {
                     <Input
                       id="reset-temp-password"
                       value={resetPassword}
-                      onChange={(event) => setResetPassword(event.target.value)}
-                      minLength={8}
-                      required
+                      onChange={(event) => {
+                        setResetPassword(event.target.value);
+                        setResetFieldErrors((prev) => ({ ...prev, password: '' }));
+                      }}
+                      aria-describedby={
+                        resetFieldErrors.password
+                          ? 'reset-temp-password-error reset-temp-password-help'
+                          : 'reset-temp-password-help'
+                      }
+                      aria-invalid={Boolean(resetFieldErrors.password)}
                     />
-                    <p className="text-xs text-muted-foreground">
+                    {resetFieldErrors.password && (
+                      <p
+                        id="reset-temp-password-error"
+                        role="alert"
+                        className="text-xs text-destructive"
+                      >
+                        {resetFieldErrors.password}
+                      </p>
+                    )}
+                    <p id="reset-temp-password-help" className="text-xs text-muted-foreground">
                       Al menos ocho caracteres. Entrégasela a la persona por un canal directo.
                     </p>
                   </div>
@@ -1021,12 +1115,20 @@ export function UsersTable() {
                     <Input
                       id="reset-temp-repeat"
                       value={resetRepeat}
-                      onChange={(event) => setResetRepeat(event.target.value)}
-                      minLength={8}
-                      required
+                      onChange={(event) => {
+                        setResetRepeat(event.target.value);
+                        setResetFieldErrors((prev) => ({ ...prev, repeat: '' }));
+                      }}
+                      {...fieldA11y('reset-temp-repeat', resetFieldErrors.repeat)}
                     />
-                    {resetRepeat.length > 0 && resetPassword !== resetRepeat && (
-                      <p className="text-xs text-destructive">No coinciden.</p>
+                    {resetFieldErrors.repeat && (
+                      <p
+                        id="reset-temp-repeat-error"
+                        role="alert"
+                        className="text-xs text-destructive"
+                      >
+                        {resetFieldErrors.repeat}
+                      </p>
                     )}
                   </div>
                   <label className="flex items-start gap-2 text-sm">
@@ -1055,14 +1157,7 @@ export function UsersTable() {
                 >
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={
-                    resetBusy ||
-                    (resetMode === 'direct' &&
-                      (resetPassword.length < 8 || resetPassword !== resetRepeat))
-                  }
-                >
+                <Button type="submit" disabled={resetBusy}>
                   {resetBusy
                     ? 'Guardando…'
                     : resetMode === 'link'

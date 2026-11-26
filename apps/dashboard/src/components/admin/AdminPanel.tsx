@@ -14,6 +14,7 @@ import { ListToolbar } from '../layout/ListToolbar';
 import { Pagination } from '../layout/Pagination';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { Alert, AlertDescription } from '../ui/alert';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { SectionCards } from '../layout/SectionCards';
 import { ChartAreaInteractive } from '../layout/ChartAreaInteractive';
@@ -21,6 +22,7 @@ import { StructureTreeDialog } from '../layout/StructureTreeDialog';
 import { FormDialog } from '../layout/FormDialog';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { NativeSelect } from '../ui/native-select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
@@ -35,6 +37,7 @@ import { COUNTRIES, DEFAULT_COUNTRY } from '../../lib/countries';
 import { sectionTypeLabel } from '../../lib/section-types';
 import { invitationStatusLabel } from '../../lib/invitation-status';
 import { queryKeys } from '../../lib/query-keys';
+import { emailError, fieldA11y, hasErrors, requiredError } from '../../lib/form';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 
 interface Community {
@@ -410,6 +413,15 @@ export function AdminPanel() {
   const [overviewLoadingId, setOverviewLoadingId] = useState<string | null>(null);
   const [communityForm, setCommunityForm] = useState({ ...emptyCommunityForm });
   const [communitySaving, setCommunitySaving] = useState(false);
+  const [communityFieldErrors, setCommunityFieldErrors] = useState<{
+    name?: string;
+    address?: string;
+    typeLabel?: string;
+    latitude?: string;
+    longitude?: string;
+    passDailyLimit?: string;
+  }>({});
+  const [adminInviteEmailError, setAdminInviteEmailError] = useState('');
   const [adminInviteCommunity, setAdminInviteCommunity] = useState<Community | null>(null);
   const [adminInviteEmail, setAdminInviteEmail] = useState('');
   const [adminInviteLink, setAdminInviteLink] = useState('');
@@ -564,6 +576,11 @@ export function AdminPanel() {
   async function inviteCommunityAdmin(event: React.FormEvent) {
     event.preventDefault();
     if (!adminInviteCommunity) return;
+
+    const validation = emailError(adminInviteEmail);
+    setAdminInviteEmailError(validation);
+    if (validation) return;
+
     const email = adminInviteEmail;
     setAdminInviteSaving(true);
     setAdminInviteError('');
@@ -649,6 +666,33 @@ export function AdminPanel() {
 
   async function saveCommunity(event: React.FormEvent) {
     event.preventDefault();
+
+    const validation = {
+      name: requiredError(communityForm.name, 'El nombre'),
+      address: requiredError(communityForm.address, 'La dirección'),
+      typeLabel:
+        communityForm.type === 'otro'
+          ? requiredError(communityForm.typeLabel, 'El tipo personalizado')
+          : '',
+      latitude:
+        communityForm.latitude && !Number.isFinite(Number(communityForm.latitude))
+          ? 'La latitud debe ser un número.'
+          : '',
+      longitude:
+        communityForm.longitude && !Number.isFinite(Number(communityForm.longitude))
+          ? 'La longitud debe ser un número.'
+          : '',
+      passDailyLimit:
+        communityForm.passDailyLimitEnabled &&
+        (communityForm.passDailyLimit.trim() === '' ||
+          !/^\d+$/.test(communityForm.passDailyLimit) ||
+          Number(communityForm.passDailyLimit) < 1)
+          ? 'El límite debe ser un entero mayor o igual a 1.'
+          : '',
+    };
+    setCommunityFieldErrors(validation);
+    if (hasErrors(validation)) return;
+
     setError('');
     setCommunitySaving(true);
     const editedCommunityId = editingCommunityId;
@@ -847,28 +891,48 @@ export function AdminPanel() {
                 }
                 hideTrigger
               >
-                <form onSubmit={saveCommunity} className="space-y-4">
+                <form onSubmit={saveCommunity} className="space-y-4" noValidate>
                   <div className="space-y-1">
                     <Label htmlFor="admin-community-name">Nombre</Label>
                     <Input
                       id="admin-community-name"
                       value={communityForm.name}
-                      onChange={(event) =>
-                        setCommunityForm({ ...communityForm, name: event.target.value })
-                      }
-                      required
+                      onChange={(event) => {
+                        setCommunityForm({ ...communityForm, name: event.target.value });
+                        setCommunityFieldErrors((prev) => ({ ...prev, name: '' }));
+                      }}
+                      {...fieldA11y('admin-community-name', communityFieldErrors.name)}
                     />
+                    {communityFieldErrors.name && (
+                      <p
+                        id="admin-community-name-error"
+                        role="alert"
+                        className="text-xs text-destructive"
+                      >
+                        {communityFieldErrors.name}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="admin-community-address">Dirección</Label>
                     <Input
                       id="admin-community-address"
                       value={communityForm.address}
-                      onChange={(event) =>
-                        setCommunityForm({ ...communityForm, address: event.target.value })
-                      }
-                      required
+                      onChange={(event) => {
+                        setCommunityForm({ ...communityForm, address: event.target.value });
+                        setCommunityFieldErrors((prev) => ({ ...prev, address: '' }));
+                      }}
+                      {...fieldA11y('admin-community-address', communityFieldErrors.address)}
                     />
+                    {communityFieldErrors.address && (
+                      <p
+                        id="admin-community-address-error"
+                        role="alert"
+                        className="text-xs text-destructive"
+                      >
+                        {communityFieldErrors.address}
+                      </p>
+                    )}
                   </div>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <div className="space-y-1">
@@ -893,9 +957,8 @@ export function AdminPanel() {
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="admin-community-country">País</Label>
-                      <select
+                      <NativeSelect
                         id="admin-community-country"
-                        className="h-9 w-full rounded border border-border bg-card px-2 text-sm"
                         value={communityForm.country}
                         onChange={(event) =>
                           setCommunityForm({ ...communityForm, country: event.target.value })
@@ -907,7 +970,7 @@ export function AdminPanel() {
                             {country}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -922,9 +985,8 @@ export function AdminPanel() {
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="admin-community-type">Tipo</Label>
-                    <select
+                    <NativeSelect
                       id="admin-community-type"
-                      className="h-9 w-full rounded border border-border bg-card px-2 text-sm"
                       value={communityForm.type}
                       onChange={(event) =>
                         setCommunityForm({ ...communityForm, type: event.target.value })
@@ -936,7 +998,7 @@ export function AdminPanel() {
                       <option value="hotel">Hotel</option>
                       <option value="edificio">Edificio</option>
                       <option value="otro">Otro</option>
-                    </select>
+                    </NativeSelect>
                   </div>
                   {communityForm.type === 'otro' && (
                     <div className="space-y-1">
@@ -944,14 +1006,24 @@ export function AdminPanel() {
                       <Input
                         id="admin-community-type-label"
                         value={communityForm.typeLabel}
-                        onChange={(event) =>
+                        onChange={(event) => {
                           setCommunityForm({
                             ...communityForm,
                             typeLabel: event.target.value,
-                          })
-                        }
-                        required
+                          });
+                          setCommunityFieldErrors((prev) => ({ ...prev, typeLabel: '' }));
+                        }}
+                        {...fieldA11y('admin-community-type-label', communityFieldErrors.typeLabel)}
                       />
+                      {communityFieldErrors.typeLabel && (
+                        <p
+                          id="admin-community-type-label-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {communityFieldErrors.typeLabel}
+                        </p>
+                      )}
                     </div>
                   )}
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -962,14 +1034,25 @@ export function AdminPanel() {
                         type="number"
                         step="0.000001"
                         value={communityForm.latitude}
-                        onChange={(event) =>
+                        onChange={(event) => {
                           setCommunityForm({
                             ...communityForm,
                             latitude: event.target.value,
-                          })
-                        }
+                          });
+                          setCommunityFieldErrors((prev) => ({ ...prev, latitude: '' }));
+                        }}
                         placeholder="4.711"
+                        {...fieldA11y('admin-community-latitude', communityFieldErrors.latitude)}
                       />
+                      {communityFieldErrors.latitude && (
+                        <p
+                          id="admin-community-latitude-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {communityFieldErrors.latitude}
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="admin-community-longitude">Longitud</Label>
@@ -978,14 +1061,25 @@ export function AdminPanel() {
                         type="number"
                         step="0.000001"
                         value={communityForm.longitude}
-                        onChange={(event) =>
+                        onChange={(event) => {
                           setCommunityForm({
                             ...communityForm,
                             longitude: event.target.value,
-                          })
-                        }
+                          });
+                          setCommunityFieldErrors((prev) => ({ ...prev, longitude: '' }));
+                        }}
                         placeholder="-74.0721"
+                        {...fieldA11y('admin-community-longitude', communityFieldErrors.longitude)}
                       />
+                      {communityFieldErrors.longitude && (
+                        <p
+                          id="admin-community-longitude-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {communityFieldErrors.longitude}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -1033,14 +1127,30 @@ export function AdminPanel() {
                         max={500}
                         value={communityForm.passDailyLimit}
                         disabled={!communityForm.passDailyLimitEnabled}
-                        onChange={(event) =>
+                        onChange={(event) => {
                           setCommunityForm({
                             ...communityForm,
                             passDailyLimit: event.target.value,
-                          })
+                          });
+                          setCommunityFieldErrors((prev) => ({ ...prev, passDailyLimit: '' }));
+                        }}
+                        aria-describedby={
+                          communityFieldErrors.passDailyLimit
+                            ? 'admin-community-limit-error admin-community-limit-help'
+                            : 'admin-community-limit-help'
                         }
+                        aria-invalid={Boolean(communityFieldErrors.passDailyLimit)}
                       />
-                      <p className="text-xs text-muted-foreground">
+                      {communityFieldErrors.passDailyLimit && (
+                        <p
+                          id="admin-community-limit-error"
+                          role="alert"
+                          className="text-xs text-destructive"
+                        >
+                          {communityFieldErrors.passDailyLimit}
+                        </p>
+                      )}
+                      <p id="admin-community-limit-help" className="text-xs text-muted-foreground">
                         Entre 1 y 500. Desactiva el límite para no restringir.
                       </p>
                     </div>
@@ -1192,6 +1302,7 @@ export function AdminPanel() {
                                     setAdminInviteSentTo('');
                                     setAdminInviteCopied(false);
                                     setAdminInviteError('');
+                                    setAdminInviteEmailError('');
                                   }}
                                 >
                                   <RiUserAddLine />
@@ -1430,21 +1541,33 @@ export function AdminPanel() {
               Asigna un community admin a {adminInviteCommunity?.name}.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={inviteCommunityAdmin} className="space-y-4">
+          <form onSubmit={inviteCommunityAdmin} className="space-y-4" noValidate>
             <div className="space-y-1">
-              <Label htmlFor="community-admin-email">Email</Label>
+              <Label htmlFor="community-admin-email">Correo</Label>
               <Input
                 id="community-admin-email"
                 type="email"
                 value={adminInviteEmail}
-                onChange={(event) => setAdminInviteEmail(event.target.value)}
-                required
+                onChange={(event) => {
+                  setAdminInviteEmail(event.target.value);
+                  setAdminInviteEmailError('');
+                }}
+                {...fieldA11y('community-admin-email', adminInviteEmailError)}
               />
+              {adminInviteEmailError && (
+                <p
+                  id="community-admin-email-error"
+                  role="alert"
+                  className="text-xs text-destructive"
+                >
+                  {adminInviteEmailError}
+                </p>
+              )}
             </div>
             {adminInviteError && (
-              <p role="alert" className="text-sm text-destructive">
-                {adminInviteError}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>{adminInviteError}</AlertDescription>
+              </Alert>
             )}
             {adminInviteLink && (
               <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">

@@ -66,7 +66,12 @@ Catálogo en `src/components/ui`:
   tamaños `xs`, `sm`, `default`, `lg`, `icon*`.
 - `Badge`: variantes `default`, `secondary`, `destructive`, `outline`, `ghost`,
   `warning`, `link`.
-- `Field`, `Label`, `Input`, `Select`: estructura de formularios.
+- `Field`, `Label`, `Input`, `NativeSelect`, `Select`: estructura de formularios.
+  `NativeSelect` (`components/ui/native-select.tsx`) es un `<select>` nativo con los
+  mismos estilos que `Input`; usalo para listas cortas y fijas (país, tipo, días de
+  retención) donde no hace falta el popover de Radix.
+- `ConfirmDialog` (`components/ui/confirm-dialog.tsx`): confirmación accesible para
+  acciones destructivas, con `pending` y variante `destructive`.
 - `Card`, `Table`, `Tabs`, `Dialog`, `Sheet`, `Sidebar`, `Alert`, `Tooltip`, `Separator`,
   `Skeleton`, `Avatar`, `DropdownMenu`.
 - Iconos: Remixicon. Un botón icon-only SIEMPRE lleva `aria-label`.
@@ -81,11 +86,7 @@ Patrón:
 ```tsx
 <Field>
   <Label htmlFor="email">Email</Label>
-  <Input
-    id="email"
-    aria-invalid={Boolean(error)}
-    aria-describedby={error ? 'email-error' : undefined}
-  />
+  <Input id="email" {...fieldA11y('email', error)} />
   {error && (
     <p id="email-error" role="alert" className="text-xs text-destructive">
       {error}
@@ -99,6 +100,18 @@ Reglas:
 - Label siempre visible; no uses placeholder como único label.
 - Error inline debajo del campo y anunciado con `role="alert"` o `aria-live`.
 - `aria-invalid` y `aria-describedby` en el control.
+- Para no repetir el wiring de ARIA y las validaciones triviales, usá los helpers de
+  `src/lib/form.ts`:
+  - `fieldA11y(id, error)`: devuelve `aria-invalid` y `aria-describedby`
+    (`<id>-error`) listos para esparcir en el control.
+  - `requiredError(value, label)`, `emailError(value, label?)`,
+    `minLengthError(value, min, label)`: devuelven el mensaje o `''`.
+  - `hasErrors(errors)`: corta el submit cuando hay algún mensaje.
+- El `id` del error SIEMPRE es `<id-del-control>-error`; si hay texto de ayuda, el
+  `aria-describedby` concatena ambos ids separados por espacio.
+- Al escribir en el campo se limpia su error (`setErrors(prev => ({ ...prev, campo: '' }))`).
+- Validá en el cliente con `noValidate` en el `<form>` para que el mensaje inline
+  reemplace la burbuja nativa del navegador.
 - El botón de submit se deshabilita y muestra estado pendiente mientras corre.
 - Toda acción destructiva abre un `Dialog` de confirmación con copy explícito y botón
   `destructive`.

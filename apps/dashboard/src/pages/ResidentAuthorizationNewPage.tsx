@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PERMANENT_PASS_UNTIL, isPermanentPass, type PassCompanion } from '@porteria/shared';
-import { cn } from 'cn';
+import { cn } from '@/lib/utils';
 import { ApiError, get, post } from '../lib/apiClient';
 import { Button } from '../components/ui/button';
 import { DetailField, DetailGrid } from '../components/ui/detail-field';

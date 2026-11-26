@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { CONFIG } from '../config';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { fieldA11y, hasErrors, minLengthError, requiredError } from '../lib/form';
 
 interface Preview {
   communityName: string;
@@ -26,6 +28,7 @@ export function InvitePage() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({ name: '', password: '' });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -45,6 +48,15 @@ export function InvitePage() {
   async function handleNewAccount(e: React.FormEvent) {
     e.preventDefault();
     if (!token) return;
+
+    const validation = {
+      name: requiredError(name, 'El nombre'),
+      password:
+        requiredError(password, 'La contraseña') || minLengthError(password, 8, 'La contraseña'),
+    };
+    setFieldErrors(validation);
+    if (hasErrors(validation)) return;
+
     setError('');
     setLoading(true);
     try {
@@ -118,15 +130,24 @@ export function InvitePage() {
               </Button>
             </>
           ) : (
-            <form onSubmit={handleNewAccount} className="space-y-3">
+            <form onSubmit={handleNewAccount} className="space-y-3" noValidate>
               <div className="space-y-1">
                 <Label htmlFor="invite-name">Nombre</Label>
                 <Input
                   id="invite-name"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setFieldErrors((current) => ({ ...current, name: '' }));
+                  }}
                   required
+                  {...fieldA11y('invite-name', fieldErrors.name)}
                 />
+                {fieldErrors.name && (
+                  <p id="invite-name-error" role="alert" className="text-xs text-destructive">
+                    {fieldErrors.name}
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="invite-password">Contraseña</Label>
@@ -134,10 +155,20 @@ export function InvitePage() {
                   id="invite-password"
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setFieldErrors((current) => ({ ...current, password: '' }));
+                  }}
                   required
                   minLength={8}
+                  {...fieldA11y('invite-password', fieldErrors.password)}
                 />
+                <p className="text-xs text-muted-foreground">Mínimo ocho caracteres.</p>
+                {fieldErrors.password && (
+                  <p id="invite-password-error" role="alert" className="text-xs text-destructive">
+                    {fieldErrors.password}
+                  </p>
+                )}
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Creando cuenta…' : 'Crear cuenta y aceptar'}
@@ -146,9 +177,9 @@ export function InvitePage() {
           )}
 
           {error && (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
           <p className="text-xs text-muted-foreground text-center">

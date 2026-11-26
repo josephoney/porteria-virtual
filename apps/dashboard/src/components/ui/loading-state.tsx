@@ -1,4 +1,4 @@
-import { cn } from 'cn';
+import { cn } from '@/lib/utils';
 
 interface LoadingStateProps {
   /** Qué se está cargando, por ejemplo "Cargando invitaciones…". */

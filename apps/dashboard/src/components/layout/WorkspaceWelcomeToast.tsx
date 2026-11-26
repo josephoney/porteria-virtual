@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { cn } from 'cn';
+import { cn } from '@/lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 
