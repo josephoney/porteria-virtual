@@ -8,6 +8,7 @@ import {
 } from '@remixicon/react';
 import type { PassBatchResult, PassCompanion } from '@porteria/shared';
 import { ApiError, get, post } from '../lib/apiClient';
+import { indexHeaders, parseCsvTable } from '../lib/csv';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -90,10 +91,9 @@ interface BatchPreviewResponse {
   }>;
 }
 
-const HEADER_FIELDS: Record<
-  string,
-  'firstName' | 'lastName' | 'document' | 'plate' | 'companions'
-> = {
+type AuthorizationField = 'firstName' | 'lastName' | 'document' | 'plate' | 'companions';
+
+const HEADER_FIELDS: Record<string, AuthorizationField> = {
   nombre: 'firstName',
   nombres: 'firstName',
   apellido: 'lastName',
@@ -115,16 +115,6 @@ const FIELD_LABELS: Record<'firstName' | 'lastName' | 'document', string> = {
   lastName: 'apellido',
   document: 'documento',
 };
-
-/** Lowercases and strips accents so `Cédula`, `CEDULA` and ` cedula ` all match. */
-function normalizeHeader(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '');
-}
 
 function normalizeDocument(value: string): string {
   return value.trim().toLowerCase();
@@ -183,58 +173,11 @@ function parseCompanions(raw: string): { companions: PassCompanion[]; error: str
   return { companions, error: null };
 }
 
-/** Splits one CSV line, honouring double quotes and escaped quotes. */
-function splitLine(line: string, delimiter: string): string[] {
-  const cells: string[] = [];
-  let current = '';
-  let quoted = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-
-    if (quoted) {
-      if (char === '"' && line[index + 1] === '"') {
-        current += '"';
-        index += 1;
-      } else if (char === '"') {
-        quoted = false;
-      } else {
-        current += char;
-      }
-      continue;
-    }
-
-    if (char === '"') {
-      quoted = true;
-    } else if (char === delimiter) {
-      cells.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-
-  cells.push(current);
-  return cells.map((cell) => cell.trim());
-}
-
 function parseCsv(raw: string): ParsedCsv {
-  const text = raw.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
-  const lines = text.split('\n').filter((line) => line.trim().length > 0);
+  const table = parseCsvTable(raw);
+  if (table.header.length === 0) return { rows: [], error: null, limitError: null };
 
-  if (lines.length === 0) return { rows: [], error: null, limitError: null };
-
-  const headerLine = lines[0];
-  const commas = (headerLine.match(/,/g) ?? []).length;
-  const semicolons = (headerLine.match(/;/g) ?? []).length;
-  const delimiter = semicolons > commas ? ';' : ',';
-
-  const columns = new Map<string, number>();
-  splitLine(headerLine, delimiter).forEach((cell, index) => {
-    const field = HEADER_FIELDS[normalizeHeader(cell)];
-    if (field && !columns.has(field)) columns.set(field, index);
-  });
-
+  const columns = indexHeaders(table.header, HEADER_FIELDS);
   const missing = (['firstName', 'lastName', 'document'] as const).filter(
     (field) => !columns.has(field),
   );
@@ -248,16 +191,15 @@ function parseCsv(raw: string): ParsedCsv {
     };
   }
 
-  const rows = lines.slice(1).map((line, index) => {
-    const cells = splitLine(line, delimiter);
-    const read = (field: string) => {
+  const rows = table.rows.map((row) => {
+    const read = (field: AuthorizationField) => {
       const position = columns.get(field);
-      return position === undefined ? '' : (cells[position] ?? '').trim();
+      return position === undefined ? '' : (row.cells[position] ?? '').trim();
     };
     const parsedCompanions = parseCompanions(read('companions'));
 
     return {
-      line: index + 2,
+      line: row.line,
       firstName: read('firstName'),
       lastName: read('lastName'),
       document: read('document'),

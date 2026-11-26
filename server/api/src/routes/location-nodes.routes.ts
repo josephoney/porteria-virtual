@@ -166,6 +166,7 @@ export async function locationNodeRoutes(app: FastifyInstance) {
           code: locationUnits.code,
           sectionType: locationUnits.sectionType,
           sectionTypeLabel: locationUnits.sectionTypeLabel,
+          metadata: locationUnits.metadata,
           status: locationUnits.status,
         })
         .from(locationUnits)

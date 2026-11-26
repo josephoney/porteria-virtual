@@ -63,7 +63,11 @@ export type InvitationErrorCode =
   | 'email_mismatch'
   | 'gone';
 
-export type InvitationResult<T> = { ok: true; data: T } | { ok: false; code: InvitationErrorCode };
+export type InvitationResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; code: InvitationErrorCode; unitId?: string };
+
+export type AcceptInvitationResult = authService.AuthResult & { membershipsCreated: number };
 
 export interface InvitationDelivery {
   invitation: typeof invitations.$inferSelect;
@@ -304,7 +308,7 @@ export async function createInvitation(
       ),
     );
     if (found.every(Boolean)) {
-      return { ok: false, code: 'conflict' };
+      return { ok: false, code: 'conflict', unitId: found[0]?.locationUnitId ?? unitIds[0] };
     }
   } else if (existingAccount) {
     const existingMembership = await findMembership(
@@ -619,6 +623,8 @@ export interface BulkInvitationRowResult {
   reason?: string;
   unitId?: string;
   unitPath?: string;
+  /** Paths that matched when the unit reference was ambiguous. */
+  candidates?: string[];
 }
 
 export interface BulkInvitationSummary {
@@ -687,7 +693,7 @@ async function communityUnitIndex(communityId: string) {
 
 type UnitResolution =
   | { ok: true; unitId: string; unitPath: string }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; candidates?: string[] };
 
 function resolveBulkUnit(
   index: Awaited<ReturnType<typeof communityUnitIndex>>,
@@ -704,11 +710,18 @@ function resolveBulkUnit(
 
   const leaves = candidates.filter((unit) => !index.parentIds.has(unit.id));
   if (leaves.length === 0) return { ok: false, reason: 'unit_not_leaf' };
-  if (leaves.length > 1) return { ok: false, reason: 'unit_ambiguous' };
+  if (leaves.length > 1) {
+    const paths = [...new Set(leaves.map((unit) => index.pathOf(unit.id)))].sort((left, right) =>
+      left.localeCompare(right, 'es'),
+    );
+    return { ok: false, reason: 'unit_ambiguous', candidates: paths };
+  }
 
   const leaf = leaves[0]!;
   return { ok: true, unitId: leaf.id, unitPath: index.pathOf(leaf.id) };
 }
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function resolveBulkCommunity(
   communityId: string,
@@ -758,16 +771,26 @@ export async function previewBulkInvitations(
   const seen = new Set<string>();
 
   const rows = input.rows.map<BulkInvitationRowResult>((row, position) => {
+    const email = row.email.trim().toLowerCase();
     const base = {
       index: position,
       unit: row.unit,
-      email: row.email.trim().toLowerCase(),
+      email,
       name: row.name?.trim() || undefined,
     };
 
+    if (!EMAIL_PATTERN.test(email)) {
+      return { ...base, status: 'failed', reason: 'invalid_email' };
+    }
+
     const resolution = resolveBulkUnit(index, row.unit);
     if (!resolution.ok) {
-      return { ...base, status: 'failed', reason: resolution.reason };
+      return {
+        ...base,
+        status: 'failed',
+        reason: resolution.reason,
+        ...(resolution.candidates ? { candidates: resolution.candidates } : {}),
+      };
     }
 
     const duplicateKey = `${resolution.unitId}|${base.email}`;
@@ -838,7 +861,7 @@ export async function acceptInvitation(
   token: string,
   body: { name?: string; password?: string; phone?: string; documentNumber?: string },
   authenticatedAccountId?: string,
-): Promise<InvitationResult<authService.AuthResult>> {
+): Promise<InvitationResult<AcceptInvitationResult>> {
   const [invitation] = await db
     .select()
     .from(invitations)
@@ -933,7 +956,7 @@ export async function acceptInvitation(
 
     const tokens = await authService.switchContext(existingAccount.id, membership.id);
     if (!tokens) return { ok: false, code: 'conflict' };
-    return { ok: true, data: tokens };
+    return { ok: true, data: { ...tokens, membershipsCreated: createdCount } };
   }
 
   if (!body.name || !body.password || body.password.length < 8) {
@@ -971,6 +994,7 @@ export async function acceptInvitation(
 
       const unitIds = await invitationUnitIds(invitation);
       let primaryMembership: typeof memberships.$inferSelect | null = null;
+      let createdCount = 0;
 
       for (const unitId of unitIds.length > 0 ? unitIds : [null]) {
         const [created] = await tx
@@ -987,8 +1011,9 @@ export async function acceptInvitation(
           .onConflictDoNothing()
           .returning();
 
-        if (created && unitId === (unitIds[0] ?? null)) {
-          primaryMembership = created;
+        if (created) {
+          createdCount += 1;
+          if (unitId === (unitIds[0] ?? null)) primaryMembership = created;
         }
 
         const relationship = RESIDENT_RELATIONSHIP_BY_ROLE[invitation.role];
@@ -1023,12 +1048,12 @@ export async function acceptInvitation(
           .where(otherOrgAdminsCondition(invitation.organizationId, membership.id));
       }
 
-      return { accountId: account.id, membershipId: membership.id };
+      return { accountId: account.id, membershipId: membership.id, membershipsCreated: createdCount };
     });
 
     const auth = await authService.switchContext(tokens.accountId, tokens.membershipId);
     if (!auth) return { ok: false, code: 'conflict' };
-    return { ok: true, data: auth };
+    return { ok: true, data: { ...auth, membershipsCreated: tokens.membershipsCreated } };
   } catch (err) {
     const code = (err as { code?: string }).code;
     if (code === '23505') return { ok: false, code: 'conflict' };

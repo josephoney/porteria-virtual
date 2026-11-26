@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   RiArrowDownSLine,
   RiArrowRightSLine,
+  RiFileUploadLine,
   RiNodeTree,
   RiPencilLine,
   RiUserAddLine,
@@ -30,6 +31,8 @@ import { LoadingState } from '../ui/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { UsersTable } from './UsersTable';
 import { CallHistoryTable } from './CallHistoryTable';
+import { BulkInvitationsDialog } from './BulkInvitationsDialog';
+import { InvitationUnitChips } from './InvitationUnitChips';
 import { DetailField, DetailGrid } from '../ui/detail-field';
 import { LogoUpload } from '../ui/logo-upload';
 import { expandableRowProps, useExpandedRow } from '../../lib/use-expanded-row';
@@ -175,6 +178,7 @@ interface Invitation {
   communityId: string | null;
   unitId: string | null;
   expiresAt: string;
+  units: { id: string; code: string; path: string }[];
 }
 
 // Referencias estables para que los `useMemo` no se recalculen mientras la
@@ -440,6 +444,7 @@ export function AdminPanel() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
+  const [bulkInvitationsOpen, setBulkInvitationsOpen] = useState(false);
   const [revokePending, setRevokePending] = useState(false);
 
   /**
@@ -819,6 +824,15 @@ export function AdminPanel() {
         destructive
         pending={revokePending}
         onConfirm={() => void confirmRevokeInvitation()}
+      />
+      <BulkInvitationsDialog
+        open={bulkInvitationsOpen}
+        onOpenChange={setBulkInvitationsOpen}
+        communities={communities}
+        defaultCommunityId={communities.length === 1 ? communities[0]?.id : undefined}
+        onCreated={() => {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.invitations });
+        }}
       />
       <PageHeader
         title={meta.title}
@@ -1460,6 +1474,14 @@ export function AdminPanel() {
                     <SelectItem value="expired">Vencida</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBulkInvitationsOpen(true)}
+                >
+                  <RiFileUploadLine className="size-4" aria-hidden="true" />
+                  Carga masiva
+                </Button>
               </ListToolbar>
               <div className="overflow-x-auto">
                 <Table>
@@ -1467,6 +1489,7 @@ export function AdminPanel() {
                     <TableRow>
                       <TableHead>Email</TableHead>
                       <TableHead>Rol</TableHead>
+                      <TableHead>Unidades</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Vence</TableHead>
                       <TableHead>Acciones</TableHead>
@@ -1475,7 +1498,7 @@ export function AdminPanel() {
                   <TableBody>
                     {invitationsPage.items.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                        <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                           No hay invitaciones para mostrar
                         </TableCell>
                       </TableRow>
@@ -1484,6 +1507,9 @@ export function AdminPanel() {
                       <TableRow key={invitation.id}>
                         <TableCell>{invitation.email}</TableCell>
                         <TableCell>{invitation.role}</TableCell>
+                        <TableCell>
+                          <InvitationUnitChips units={invitation.units ?? []} />
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline">
                             {invitationStatusLabel(invitation.status)}

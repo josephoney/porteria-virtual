@@ -152,7 +152,8 @@ export const createInvitationSchema = z.object({
 
 export const bulkInvitationRowSchema = z.object({
   unit: z.string().min(1).max(255),
-  email: z.string().email(),
+  /** Validated per row so one bad email does not reject the whole batch. */
+  email: z.string().trim().min(1).max(255),
   name: z.string().min(1).max(255).optional(),
 });
 

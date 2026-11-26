@@ -95,6 +95,7 @@ export async function invitationRoutes(app: FastifyInstance) {
           statusCode: errorStatus(result.code),
           error: 'Invitation rejected',
           message: result.code,
+          ...(result.unitId ? { unitId: result.unitId } : {}),
         });
       }
 

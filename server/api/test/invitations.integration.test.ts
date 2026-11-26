@@ -13,6 +13,10 @@ import {
   accounts,
   communities,
   invitations,
+  invitationUnits,
+  locationResidents,
+  locationStructures,
+  locationUnits,
   memberships,
   organizations,
   people,
@@ -47,6 +51,11 @@ let communityId: string;
 let orgAdminToken: string;
 let orgAdminPersonId: string;
 let platformAdminToken: string;
+let unitAId: string;
+let unitBId: string;
+let unitACode: string;
+let unitBCode: string;
+let otherUnitId: string;
 let mailConfig: MailConfig;
 let originalMailConfig: MailConfig;
 let originalFetch: typeof globalThis.fetch;
@@ -148,6 +157,40 @@ async function createPlatformAdminFixture(email: string) {
   return { person, account };
 }
 
+async function createCommunityAdminFixture(email: string) {
+  const [person] = await db
+    .insert(people)
+    .values({
+      firstName: 'Cami',
+      lastName: 'Comunidad',
+      documentType: 'CC',
+      documentNumber: `CMA-${randomUUID().slice(0, 12)}`,
+      contactEmail: email,
+      status: 'active',
+    })
+    .returning();
+  personIds.push(person.id);
+
+  const [account] = await db
+    .insert(accounts)
+    .values({ personId: person.id, email, passwordHash: 'x' })
+    .returning();
+  accountIds.push(account.id);
+
+  const [membership] = await db
+    .insert(memberships)
+    .values({
+      personId: person.id,
+      organizationId,
+      communityId,
+      role: 'community_admin',
+      status: 'active',
+    })
+    .returning();
+
+  return { person, account, membership };
+}
+
 describe('invitation email delivery integration', () => {
   before(async () => {
     const suffix = randomUUID().slice(0, 8);
@@ -169,6 +212,88 @@ describe('invitation email delivery integration', () => {
       })
       .returning();
     communityId = community.id;
+
+    const [structure] = await db
+      .insert(locationStructures)
+      .values({
+        communityId,
+        name: `Estructura ${suffix}`,
+        levelCount: 2,
+        level1Name: 'Torre',
+        level2Name: 'Unidad',
+      })
+      .returning();
+
+    const [tower] = await db
+      .insert(locationUnits)
+      .values({
+        communityId,
+        structureId: structure.id,
+        levelPosition: 1,
+        name: 'Torre A',
+        code: `TA-${suffix}`,
+        sectionType: 'tower',
+      })
+      .returning();
+
+    const [unitA, unitB] = await db
+      .insert(locationUnits)
+      .values([
+        {
+          communityId,
+          structureId: structure.id,
+          parentId: tower.id,
+          levelPosition: 2,
+          name: 'Apartamento 101',
+          code: `A-101-${suffix}`,
+        },
+        {
+          communityId,
+          structureId: structure.id,
+          parentId: tower.id,
+          levelPosition: 2,
+          name: 'Apartamento 102',
+          code: `A-102-${suffix}`,
+        },
+      ])
+      .returning();
+    unitAId = unitA.id;
+    unitBId = unitB.id;
+    unitACode = unitA.code!;
+    unitBCode = unitB.code!;
+
+    const [otherCommunity] = await db
+      .insert(communities)
+      .values({
+        organizationId,
+        name: `Comunidad Ajena ${suffix}`,
+        slug: `invitation-other-community-${suffix}`,
+        address: 'Calle 9 #9-9',
+        timezone: 'UTC',
+      })
+      .returning();
+
+    const [otherStructure] = await db
+      .insert(locationStructures)
+      .values({
+        communityId: otherCommunity.id,
+        name: `Estructura Ajena ${suffix}`,
+        levelCount: 1,
+        level1Name: 'Unidad',
+      })
+      .returning();
+
+    const [otherUnit] = await db
+      .insert(locationUnits)
+      .values({
+        communityId: otherCommunity.id,
+        structureId: otherStructure.id,
+        levelPosition: 1,
+        name: 'Unidad ajena',
+        code: `OT-${suffix}`,
+      })
+      .returning();
+    otherUnitId = otherUnit.id;
 
     const { buildApp } = await import('../src/index.js');
     app = (await buildApp()).app;
@@ -586,5 +711,299 @@ describe('invitation email delivery integration', () => {
     );
     assert.equal(revoked.statusCode, 200, revoked.body);
     assert.equal(parse(revoked).status, 'revoked');
+  });
+
+  it('creates an invitation for several units and lists them', async () => {
+    const email = `invite-multi-${randomUUID().slice(0, 8)}@test.local`;
+
+    const created = await request('POST', '/api/invitations', orgAdminToken, {
+      email,
+      role: 'resident',
+      communityId,
+      locationUnitIds: [unitAId, unitBId],
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const createdBody = parse(created) as { invitation: { id: string } };
+
+    const bridge = await db
+      .select()
+      .from(invitationUnits)
+      .where(eq(invitationUnits.invitationId, createdBody.invitation.id));
+    assert.equal(bridge.length, 2);
+    assert.deepEqual(
+      new Set(bridge.map((row) => row.locationUnitId)),
+      new Set([unitAId, unitBId]),
+    );
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/invitations',
+      headers: auth(orgAdminToken),
+    });
+    assert.equal(list.statusCode, 200, list.body);
+    const invitationsList = parse(list) as unknown as Array<{
+      id: string;
+      units: Array<{ id: string; path: string }>;
+    }>;
+    const found = invitationsList.find((row) => row.id === createdBody.invitation.id);
+    assert.ok(found);
+    assert.equal(found.units.length, 2);
+    assert.deepEqual(new Set(found.units.map((unit) => unit.id)), new Set([unitAId, unitBId]));
+    assert.ok(found.units.some((unit) => unit.path.includes('Torre A')));
+  });
+
+  it('rejects a duplicate invitation for the same email and unit', async () => {
+    const email = `invite-duplicate-${randomUUID().slice(0, 8)}@test.local`;
+
+    const first = await request('POST', '/api/invitations', orgAdminToken, {
+      email,
+      role: 'resident',
+      communityId,
+      locationUnitIds: [unitAId],
+    });
+    assert.equal(first.statusCode, 201, first.body);
+
+    const second = await request('POST', '/api/invitations', orgAdminToken, {
+      email,
+      role: 'resident',
+      communityId,
+      locationUnitIds: [unitAId],
+    });
+    assert.equal(second.statusCode, 409, second.body);
+
+    const rows = await db.select().from(invitations).where(eq(invitations.email, email));
+    assert.equal(rows.length, 1);
+  });
+
+  it('accepting a multi-unit invitation creates one membership and resident per unit', async () => {
+    const email = `invite-accept-multi-${randomUUID().slice(0, 8)}@test.local`;
+
+    const created = await request('POST', '/api/invitations', orgAdminToken, {
+      email,
+      role: 'resident',
+      communityId,
+      locationUnitIds: [unitAId, unitBId],
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const createdBody = parse(created) as { invitation: { id: string }; acceptUrl: string };
+    const token = createdBody.acceptUrl.split('/').filter(Boolean).pop();
+    assert.ok(token);
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: `/api/public/invitations/${token}/accept`,
+      payload: { name: 'Nueva Persona', password: 'ClaveSegura123' },
+    });
+    assert.equal(accepted.statusCode, 200, accepted.body);
+    assert.equal(parse(accepted).membershipsCreated, 2);
+
+    const [account] = await db.select().from(accounts).where(eq(accounts.email, email)).limit(1);
+    assert.ok(account);
+    accountIds.push(account.id);
+    personIds.push(account.personId);
+
+    const createdMemberships = await db
+      .select()
+      .from(memberships)
+      .where(eq(memberships.personId, account.personId));
+    assert.equal(createdMemberships.length, 2);
+    assert.deepEqual(
+      new Set(createdMemberships.map((row) => row.locationUnitId)),
+      new Set([unitAId, unitBId]),
+    );
+
+    const residents = await db
+      .select()
+      .from(locationResidents)
+      .where(eq(locationResidents.personId, account.personId));
+    assert.equal(residents.length, 2);
+    assert.deepEqual(
+      new Set(residents.map((row) => row.locationUnitId)),
+      new Set([unitAId, unitBId]),
+    );
+  });
+
+  it('rejects acceptance when every membership already exists without duplicating residents', async () => {
+    const email = `invite-already-member-${randomUUID().slice(0, 8)}@test.local`;
+
+    const created = await request('POST', '/api/invitations', orgAdminToken, {
+      email,
+      role: 'resident',
+      communityId,
+      locationUnitIds: [unitAId, unitBId],
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const createdBody = parse(created) as { invitation: { id: string }; acceptUrl: string };
+    const token = createdBody.acceptUrl.split('/').filter(Boolean).pop();
+    assert.ok(token);
+
+    const [person] = await db
+      .insert(people)
+      .values({
+        firstName: 'Elena',
+        lastName: 'Existente',
+        documentType: 'CC',
+        documentNumber: `EXI-${randomUUID().slice(0, 12)}`,
+        contactEmail: email,
+        status: 'active',
+      })
+      .returning();
+    personIds.push(person.id);
+
+    const [account] = await db
+      .insert(accounts)
+      .values({ personId: person.id, email, passwordHash: 'x' })
+      .returning();
+    accountIds.push(account.id);
+
+    const existingMemberships = await db
+      .insert(memberships)
+      .values([
+        {
+          personId: person.id,
+          organizationId,
+          communityId,
+          locationUnitId: unitAId,
+          role: 'resident',
+          status: 'active',
+        },
+        {
+          personId: person.id,
+          organizationId,
+          communityId,
+          locationUnitId: unitBId,
+          role: 'resident',
+          status: 'active',
+        },
+      ])
+      .returning();
+
+    await db.insert(locationResidents).values([
+      {
+        locationUnitId: unitAId,
+        personId: person.id,
+        relationship: 'resident',
+        validFrom: '2026-01-01',
+        status: 'active',
+      },
+      {
+        locationUnitId: unitBId,
+        personId: person.id,
+        relationship: 'resident',
+        validFrom: '2026-01-01',
+        status: 'active',
+      },
+    ]);
+
+    const sessionToken = app.jwt.sign({
+      sub: account.id,
+      email,
+      accountId: account.id,
+      personId: person.id,
+      orgId: organizationId,
+      membershipId: existingMemberships[0]?.id,
+      role: 'resident',
+      communityId,
+      unitId: null,
+      isPlatformAdmin: false,
+    });
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: `/api/public/invitations/${token}/accept`,
+      headers: auth(sessionToken),
+      payload: {},
+    });
+    assert.equal(accepted.statusCode, 409, accepted.body);
+
+    const keptMemberships = await db
+      .select()
+      .from(memberships)
+      .where(eq(memberships.personId, person.id));
+    assert.equal(keptMemberships.length, 2);
+
+    const keptResidents = await db
+      .select()
+      .from(locationResidents)
+      .where(eq(locationResidents.personId, person.id));
+    assert.equal(keptResidents.length, 2);
+  });
+
+  it('creates only the valid rows of a bulk invitation and reports the rest', async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const validA = `invite-bulk-a-${suffix}@test.local`;
+    const validB = `invite-bulk-b-${suffix}@test.local`;
+
+    const response = await request('POST', '/api/invitations/bulk', orgAdminToken, {
+      communityId,
+      rows: [
+        { unit: unitACode, email: validA, name: 'Ana Lote' },
+        { unit: `NO-EXISTE-${suffix}`, email: `invite-bulk-c-${suffix}@test.local` },
+        { unit: unitACode, email: validA, name: 'Ana Duplicada' },
+        { unit: unitBCode, email: validB, name: 'Beto Lote' },
+      ],
+    });
+    assert.equal(response.statusCode, 201, response.body);
+    const body = parse(response) as {
+      summary: { total: number; created: number; failed: number };
+      rows: Array<{ index: number; status: string; reason?: string }>;
+    };
+
+    assert.deepEqual(body.summary, {
+      total: 4,
+      valid: 0,
+      created: 2,
+      skipped: 0,
+      failed: 2,
+    });
+    assert.equal(body.rows[0]?.status, 'created');
+    assert.equal(body.rows[1]?.status, 'failed');
+    assert.equal(body.rows[1]?.reason, 'unit_not_found');
+    assert.equal(body.rows[2]?.status, 'failed');
+    assert.equal(body.rows[2]?.reason, 'duplicate_row');
+    assert.equal(body.rows[3]?.status, 'created');
+
+    const createdRows = await db
+      .select()
+      .from(invitations)
+      .where(inArray(invitations.email, [validA, validB]));
+    assert.equal(createdRows.length, 2);
+
+    for (const invitation of createdRows) {
+      const units = await db
+        .select()
+        .from(invitationUnits)
+        .where(eq(invitationUnits.invitationId, invitation.id));
+      assert.equal(units.length, 1);
+    }
+  });
+
+  it('blocks a community admin from inviting a unit of another community', async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const fixture = await createCommunityAdminFixture(`invite-community-admin-${suffix}@test.local`);
+    const communityAdminToken = app.jwt.sign({
+      sub: fixture.account.id,
+      email: fixture.account.email,
+      accountId: fixture.account.id,
+      personId: fixture.person.id,
+      orgId: organizationId,
+      membershipId: fixture.membership.id,
+      role: 'community_admin',
+      communityId,
+      unitId: null,
+      isPlatformAdmin: false,
+    });
+    const email = `invite-foreign-unit-${suffix}@test.local`;
+
+    const response = await request('POST', '/api/invitations', communityAdminToken, {
+      email,
+      role: 'resident',
+      communityId,
+      locationUnitIds: [otherUnitId],
+    });
+    assert.equal(response.statusCode, 400, response.body);
+
+    const rows = await db.select().from(invitations).where(eq(invitations.email, email));
+    assert.equal(rows.length, 0);
   });
 });

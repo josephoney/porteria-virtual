@@ -8,7 +8,11 @@ import { Pagination } from '../components/layout/Pagination';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { ResidentInviteDialog } from '../components/admin/ResidentInviteDialog';
-import { RiUserAddLine } from '@remixicon/react';
+import { UnitInviteSelectionBar } from '../components/admin/UnitInviteSelectionBar';
+import { BulkInvitationsDialog } from '../components/admin/BulkInvitationsDialog';
+import { useAuth } from '../contexts/AuthContext';
+import { unitInviteIssue } from '../lib/unit-invite';
+import { RiFileUploadLine, RiUserAddLine } from '@remixicon/react';
 import { LoadingState } from '../components/ui/loading-state';
 import {
   Select,
@@ -49,6 +53,8 @@ interface UnitApiRow {
   code: string | null;
   metadata: { legacyFloor?: number | null; legacyType?: string | null } | null;
   status: string;
+  levelPosition: number;
+  levelCount: number;
 }
 
 interface UnitListResponse {
@@ -101,7 +107,11 @@ function statusLabel(status: string): string {
  */
 export function UnitsPage() {
   const { pathname } = useLocation();
+  const { user, activeMembership } = useAuth();
   const isPlatformScope = pathname.startsWith('/platform');
+  const canInvite =
+    Boolean(user?.isPlatformAdmin) ||
+    ['org_admin', 'community_admin'].includes(activeMembership?.role ?? '');
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -109,7 +119,10 @@ export function UnitsPage() {
   const [communityFilter, setCommunityFilter] = useState('all');
   const [sectionFilter, setSectionFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [inviteTarget, setInviteTarget] = useState<UnitApiRow | null>(null);
+  const [selectedUnits, setSelectedUnits] = useState<UnitApiRow[]>([]);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [inviteError, setInviteError] = useState('');
 
   const communitiesQuery = useQuery({
     queryKey: isPlatformScope ? queryKeys.platformCommunities : queryKeys.tenantCommunities,
@@ -180,9 +193,41 @@ export function UnitsPage() {
   const units = unitsQuery.data?.data ?? EMPTY_UNITS;
   const total = unitsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const selectionCommunityId = selectedUnits[0]?.communityId ?? null;
+
+  function isSelected(unitId: string): boolean {
+    return selectedUnits.some((unit) => unit.id === unitId);
+  }
+
+  function toggleUnit(unit: UnitApiRow) {
+    if (isSelected(unit.id)) {
+      setSelectedUnits((current) => current.filter((item) => item.id !== unit.id));
+      setInviteError('');
+      return;
+    }
+    if (selectionCommunityId && selectionCommunityId !== unit.communityId) {
+      setInviteError(
+        'Una invitación sólo puede incluir unidades de la misma comunidad. Limpia la selección para cambiar de comunidad.',
+      );
+      return;
+    }
+    setSelectedUnits((current) => [...current, unit]);
+    setInviteError('');
+  }
+
+  function openInvite(unit?: UnitApiRow) {
+    if (unit) setSelectedUnits([unit]);
+    setInviteError('');
+    setInviteOpen(true);
+  }
+
+  function clearSelection() {
+    setSelectedUnits([]);
+    setInviteError('');
+  }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className={selectedUnits.length > 0 ? 'p-6 pb-28 space-y-6' : 'p-6 space-y-6'}>
       <PageHeader
         title="Unidades"
         description="Unidades de cada comunidad, con su sección, tipo y piso."
@@ -238,7 +283,23 @@ export function UnitsPage() {
             <SelectItem value="inactive">Inactiva</SelectItem>
           </SelectContent>
         </Select>
+
+        {canInvite && (
+          <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}>
+            <RiFileUploadLine className="size-4" aria-hidden="true" />
+            Carga masiva
+          </Button>
+        )}
       </ListToolbar>
+
+      {inviteError && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {inviteError}
+        </div>
+      )}
 
       {unitsQuery.isPending ? (
         <LoadingState label="Cargando unidades…" />
@@ -263,63 +324,111 @@ export function UnitsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  {canInvite && (
+                    <TableHead className="w-10">
+                      <span className="sr-only">Seleccionar</span>
+                    </TableHead>
+                  )}
                   <TableHead>Código</TableHead>
                   <TableHead>Unidad / sección</TableHead>
                   <TableHead>Comunidad</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Piso</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  {canInvite && <TableHead className="text-right">Acciones</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {units.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                    <TableCell
+                      colSpan={canInvite ? 8 : 6}
+                      className="py-8 text-center text-muted-foreground"
+                    >
                       No hay unidades para mostrar
                     </TableCell>
                   </TableRow>
                 )}
-                {units.map((unit) => (
-                  <TableRow key={unit.id}>
-                    <TableCell className="font-mono text-xs">{unit.code ?? '—'}</TableCell>
-                    <TableCell>
-                      <div className="font-medium">{unit.name}</div>
-                      {unit.sectionName && (
-                        <div className="text-xs text-muted-foreground">{unit.sectionName}</div>
+                {units.map((unit) => {
+                  const issue = unitInviteIssue(unit);
+                  const otherCommunity =
+                    Boolean(selectionCommunityId) &&
+                    selectionCommunityId !== unit.communityId &&
+                    !isSelected(unit.id);
+                  const checkboxDisabled = Boolean(issue) || otherCommunity;
+                  return (
+                    <TableRow key={unit.id}>
+                      {canInvite && (
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            className="size-4 accent-foreground"
+                            checked={isSelected(unit.id)}
+                            disabled={checkboxDisabled}
+                            title={
+                              issue ??
+                              (otherCommunity
+                                ? 'Sólo se pueden invitar unidades de la misma comunidad.'
+                                : `Seleccionar ${unit.name}`)
+                            }
+                            aria-label={`Seleccionar ${unit.name}`}
+                            onChange={() => toggleUnit(unit)}
+                          />
+                        </TableCell>
                       )}
-                    </TableCell>
-                    <TableCell>{unit.communityName}</TableCell>
-                    <TableCell>{unitTypeLabel(unit.metadata?.legacyType)}</TableCell>
-                    <TableCell>{unitFloorLabel(unit.metadata?.legacyFloor)}</TableCell>
-                    <TableCell>
-                      <Badge variant={unit.status === 'active' ? 'secondary' : 'outline'}>
-                        {statusLabel(unit.status)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Invitar residente a ${unit.name}`}
-                        onClick={() => setInviteTarget(unit)}
-                      >
-                        <RiUserAddLine className="size-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      <TableCell className="font-mono text-xs">{unit.code ?? '—'}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">{unit.name}</div>
+                        {unit.sectionName && (
+                          <div className="text-xs text-muted-foreground">{unit.sectionName}</div>
+                        )}
+                      </TableCell>
+                      <TableCell>{unit.communityName}</TableCell>
+                      <TableCell>{unitTypeLabel(unit.metadata?.legacyType)}</TableCell>
+                      <TableCell>{unitFloorLabel(unit.metadata?.legacyFloor)}</TableCell>
+                      <TableCell>
+                        <Badge variant={unit.status === 'active' ? 'secondary' : 'outline'}>
+                          {statusLabel(unit.status)}
+                        </Badge>
+                      </TableCell>
+                      {canInvite && (
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Invitar residente a ${unit.name}`}
+                            title={issue ?? `Invitar residente a ${unit.name}`}
+                            disabled={Boolean(issue)}
+                            onClick={() => openInvite(unit)}
+                          >
+                            <RiUserAddLine className="size-4" />
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
 
           <ResidentInviteDialog
-            open={inviteTarget !== null}
+            open={inviteOpen}
             onOpenChange={(open) => {
-              if (!open) setInviteTarget(null);
+              setInviteOpen(open);
+              if (!open) setInviteError('');
             }}
-            unit={inviteTarget}
-            onCreated={() => void unitsQuery.refetch()}
+            units={selectedUnits}
+            onCreated={() => {
+              setSelectedUnits([]);
+              void unitsQuery.refetch();
+            }}
+          />
+
+          <UnitInviteSelectionBar
+            count={selectedUnits.length}
+            onInvite={() => openInvite()}
+            onClear={clearSelection}
           />
 
           <Pagination
@@ -330,6 +439,17 @@ export function UnitsPage() {
           />
         </>
       )}
+
+      <BulkInvitationsDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        communities={communities}
+        defaultCommunityId={communityFilter !== 'all' ? communityFilter : undefined}
+        onCreated={() => {
+          clearSelection();
+          void unitsQuery.refetch();
+        }}
+      />
     </div>
   );
 }

@@ -21,6 +21,7 @@ function invitationErrorStatus(code: string): number {
     case 'forbidden':
       return 403;
     case 'conflict':
+    case 'already_member':
       return 409;
     default:
       return 400;

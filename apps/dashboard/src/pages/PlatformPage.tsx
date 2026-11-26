@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, post, patch } from '../lib/apiClient';
 import { emailError, fieldA11y, hasErrors, requiredError } from '../lib/form';
+import { RiFileUploadLine } from '@remixicon/react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { NativeSelect } from '../components/ui/native-select';
 import { Tabs, TabsContent } from '../components/ui/tabs';
@@ -38,6 +39,8 @@ import { DetailField, DetailGrid } from '../components/ui/detail-field';
 import { expandableRowProps, useExpandedRow } from '../lib/use-expanded-row';
 import { invitationStatusLabel } from '../lib/invitation-status';
 import { queryKeys } from '../lib/query-keys';
+import { BulkInvitationsDialog } from '../components/admin/BulkInvitationsDialog';
+import { InvitationUnitChips } from '../components/admin/InvitationUnitChips';
 
 interface Organization {
   id: string;
@@ -140,6 +143,7 @@ interface Invitation {
   unitId: string | null;
   locationUnitId: string | null;
   expiresAt: string;
+  units: { id: string; code: string; path: string }[];
 }
 
 interface PlatformUser {
@@ -326,6 +330,7 @@ export function PlatformPage() {
       : '');
   const [formDialog, setFormDialog] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
+  const [bulkInvitationsOpen, setBulkInvitationsOpen] = useState(false);
   const [revokePending, setRevokePending] = useState(false);
   const [organizationSearch, setOrganizationSearch] = useState('');
   const organizationRow = useExpandedRow();
@@ -1465,16 +1470,17 @@ export function PlatformPage() {
             </TabsContent>
 
             <TabsContent value="invitations" className="space-y-4">
-              <FormDialog
-                open={formDialog === 'invitations'}
-                onOpenChange={(open) => {
-                  setFormDialog(open ? 'invitations' : null);
-                  if (!open) setInviteFieldErrors({});
-                }}
-                title="Nueva invitación"
-                description="Invita a una persona a la plataforma."
-                triggerLabel="Invitar"
-              >
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <FormDialog
+                  open={formDialog === 'invitations'}
+                  onOpenChange={(open) => {
+                    setFormDialog(open ? 'invitations' : null);
+                    if (!open) setInviteFieldErrors({});
+                  }}
+                  title="Nueva invitación"
+                  description="Invita a una persona a la plataforma."
+                  triggerLabel="Invitar"
+                >
                 <form onSubmit={createInvitation} className="space-y-4" noValidate>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1">
@@ -1595,6 +1601,11 @@ export function PlatformPage() {
                   </div>
                 </form>
               </FormDialog>
+                <Button variant="outline" onClick={() => setBulkInvitationsOpen(true)}>
+                  <RiFileUploadLine className="size-4" aria-hidden="true" />
+                  Carga masiva
+                </Button>
+              </div>
 
               {inviteLink && (
                 <div className="space-y-2 rounded border border-border bg-muted/40 p-2">
@@ -1617,6 +1628,7 @@ export function PlatformPage() {
                   <TableRow>
                     <TableHead>Email</TableHead>
                     <TableHead>Rol</TableHead>
+                    <TableHead>Unidades</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Expira</TableHead>
                     <TableHead>Acciones</TableHead>
@@ -1624,12 +1636,15 @@ export function PlatformPage() {
                 </TableHeader>
                 <TableBody>
                   {invitations.length === 0 && (
-                    <EmptyRow colSpan={5}>No hay invitaciones para mostrar</EmptyRow>
+                    <EmptyRow colSpan={6}>No hay invitaciones para mostrar</EmptyRow>
                   )}
                   {invitations.map((i) => (
                     <TableRow key={i.id}>
                       <TableCell>{i.email}</TableCell>
                       <TableCell>{i.role}</TableCell>
+                      <TableCell>
+                        <InvitationUnitChips units={i.units ?? []} />
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline">{invitationStatusLabel(i.status)}</Badge>
                       </TableCell>
@@ -1730,6 +1745,15 @@ export function PlatformPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <BulkInvitationsDialog
+        open={bulkInvitationsOpen}
+        onOpenChange={setBulkInvitationsOpen}
+        communities={communities}
+        onCreated={() => {
+          void invalidate(queryKeys.invitations);
+        }}
+      />
 
       {structureTarget && (
         <StructureTreeDialog

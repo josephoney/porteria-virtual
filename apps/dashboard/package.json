@@ -11,6 +11,7 @@
     "check:theme": "node scripts/check-theme.mjs",
     "theme:apply": "node scripts/apply-shadcn-theme.mjs",
     "lint": "eslint src/",
+    "test": "node --test src/lib/csv.test.mjs",
     "clean": "rimraf dist"
   },
   "dependencies": {

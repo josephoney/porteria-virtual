@@ -179,6 +179,7 @@ export async function unitRoutes(app: FastifyInstance) {
             metadata: locationUnits.metadata,
             status: locationUnits.status,
             levelPosition: locationUnits.levelPosition,
+            levelCount: locationStructures.levelCount,
           })
           .from(locationUnits)
           .innerJoin(communities, eq(locationUnits.communityId, communities.id))

@@ -81,6 +81,10 @@ Catálogo en `src/components/ui`:
 - `panel` (utilidad CSS en `src/index.css`): superficie de tablas y secciones
   (`rounded-4xl` + borde + `bg-card`) sin la sombra de `Card`. Usala en lugar de repetir
   `rounded-4xl border border-border bg-card`.
+- `InvitationUnitChips` (`components/admin/InvitationUnitChips.tsx`): chips compactos
+  de unidades para listados de invitaciones. Usa `Badge` y muestra la ruta en `title`.
+- `UnitInviteSelectionBar` (`components/admin/UnitInviteSelectionBar.tsx`): barra fija
+  de selección múltiple con conteo, acción principal y limpiar.
 - `Card`, `Table`, `Tabs`, `Dialog`, `Sheet`, `Sidebar`, `Alert`, `Tooltip`, `Separator`,
   `Skeleton`, `Avatar`, `DropdownMenu`.
 - Iconos: Remixicon. Un botón icon-only SIEMPRE lleva `aria-label`.

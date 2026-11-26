@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { RiFileUploadLine } from '@remixicon/react';
 import { get, del, patch, post } from '../../lib/apiClient';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -16,6 +17,9 @@ import {
   type LocationStructureInfo,
 } from './LocationTreeTable';
 import { ResidentAssignmentPanel } from './ResidentAssignmentPanel';
+import { ResidentInviteDialog, type InvitableUnit } from './ResidentInviteDialog';
+import { UnitInviteSelectionBar } from './UnitInviteSelectionBar';
+import { BulkInvitationsDialog } from './BulkInvitationsDialog';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface StructureRow extends LocationStructureInfo {
@@ -88,7 +92,7 @@ export function StructureTreeWorkspace({
   communities,
   onStructureChanged,
 }: StructureTreeWorkspaceProps) {
-  const { activeMembership } = useAuth();
+  const { user, activeMembership } = useAuth();
   // La comunidad elegida se recuerda por contexto: si la clave fuera global,
   // al entrar con otra organización se abriría el árbol de la anterior.
   const storageKey = `${STORAGE_KEY}:${activeMembership?.id ?? 'anonymous'}`;
@@ -115,7 +119,20 @@ export function StructureTreeWorkspace({
   const [confirmSaving, setConfirmSaving] = useState(false);
 
   const [residentsTarget, setResidentsTarget] = useState<LocationNode | null>(null);
+  const [inviteUnits, setInviteUnits] = useState<InvitableUnit[]>([]);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [selectedUnits, setSelectedUnits] = useState<LocationNode[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [structureFormOpen, setStructureFormOpen] = useState(false);
+
+  const canInvite =
+    Boolean(user?.isPlatformAdmin) ||
+    activeMembership?.role === 'org_admin' ||
+    activeMembership?.role === 'community_admin';
+  const selectedIds = useMemo(
+    () => new Set(selectedUnits.map((unit) => unit.id)),
+    [selectedUnits],
+  );
 
   const selectedCommunity = useMemo(
     () => communities.find((community) => community.id === communityId) ?? null,
@@ -158,6 +175,10 @@ export function StructureTreeWorkspace({
   }, [communityId, storageKey]);
 
   useEffect(() => {
+    setSelectedUnits([]);
+  }, [communityId]);
+
+  useEffect(() => {
     // Clave de versiones anteriores: no distinguía el contexto activo.
     localStorage.removeItem(STORAGE_KEY);
   }, []);
@@ -174,6 +195,26 @@ export function StructureTreeWorkspace({
     await load();
     onStructureChanged?.();
   }, [load, onStructureChanged]);
+
+  function toggleSelect(node: LocationNode) {
+    setSelectedUnits((current) =>
+      current.some((unit) => unit.id === node.id)
+        ? current.filter((unit) => unit.id !== node.id)
+        : [...current, node],
+    );
+  }
+
+  function openInvite(targets: LocationNode[]) {
+    setInviteUnits(
+      targets.map((unit) => ({
+        id: unit.id,
+        code: unit.code,
+        name: unit.name,
+        communityId: unit.communityId,
+      })),
+    );
+    setInviteOpen(true);
+  }
 
   function openCreate(parent: LocationNode | null, level: number) {
     setNodeDialog({ mode: 'create', parent, level });
@@ -288,7 +329,7 @@ export function StructureTreeWorkspace({
       : nodeDialog?.mode === 'create' && nodeDialog.level === 1;
 
   return (
-    <div className="space-y-4">
+    <div className={selectedUnits.length > 0 ? 'space-y-4 pb-24' : 'space-y-4'}>
       <div className="flex flex-wrap items-center gap-3">
         <Select value={communityId} onValueChange={setCommunityId}>
           <SelectTrigger className="w-64" aria-label="Comunidad">
@@ -350,6 +391,12 @@ export function StructureTreeWorkspace({
             <Button variant="outline" size="sm" onClick={() => setStructureFormOpen(true)}>
               Editar estructura
             </Button>
+            {canInvite && (
+              <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}>
+                <RiFileUploadLine className="size-4" aria-hidden="true" />
+                Carga masiva
+              </Button>
+            )}
           </div>
 
           <LocationTreeTable
@@ -357,16 +404,44 @@ export function StructureTreeWorkspace({
             structure={structure}
             nodes={nodes}
             mode="manage"
+            canInvite={canInvite}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
             onAdd={openCreate}
             onEdit={openEdit}
             onArchive={(node) =>
-              setConfirmTarget({ kind: node.status === 'archived' ? 'restore' : 'archive', node })
+              setConfirmTarget({ kind: node.status === 'inactive' ? 'restore' : 'archive', node })
             }
             onDelete={(node) => setConfirmTarget({ kind: 'delete', node })}
             onResidents={setResidentsTarget}
+            onInvite={(node) => openInvite([node])}
+          />
+
+          <UnitInviteSelectionBar
+            count={selectedUnits.length}
+            onInvite={() => openInvite(selectedUnits)}
+            onClear={() => setSelectedUnits([])}
           />
         </>
       )}
+
+      <ResidentInviteDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        units={inviteUnits}
+        onCreated={() => setSelectedUnits([])}
+      />
+
+      <BulkInvitationsDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        communities={communities}
+        defaultCommunityId={communityId || undefined}
+        onCreated={() => {
+          setSelectedUnits([]);
+          void refreshAll();
+        }}
+      />
 
       <FormDialog
         open={structureFormOpen}

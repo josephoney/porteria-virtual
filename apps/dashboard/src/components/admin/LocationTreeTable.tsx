@@ -8,11 +8,13 @@ import {
   RiInboxUnarchiveLine,
   RiPencilLine,
   RiTeamLine,
+  RiUserAddLine,
 } from '@remixicon/react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { sectionTypeLabel } from '../../lib/section-types';
+import { unitInviteIssue } from '../../lib/unit-invite';
 import { useExpandedTree } from '../../lib/use-expanded-tree';
 
 export interface LocationNode {
@@ -25,6 +27,7 @@ export interface LocationNode {
   code: string | null;
   sectionType: string | null;
   sectionTypeLabel: string | null;
+  metadata?: { legacyType?: string | null } | null;
   status: string;
 }
 
@@ -52,24 +55,33 @@ interface LocationTreeTableProps {
   structure: LocationStructureInfo;
   nodes: LocationNode[];
   mode: 'manage' | 'readonly';
+  canInvite?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelect?: (node: LocationNode) => void;
   onAdd?: (parent: LocationNode | null, level: number) => void;
   onEdit?: (node: LocationNode) => void;
   onArchive?: (node: LocationNode) => void;
   onDelete?: (node: LocationNode) => void;
   onResidents?: (node: LocationNode) => void;
+  onInvite?: (node: LocationNode) => void;
 }
 
 export function LocationTreeTable({
   structure,
   nodes,
   mode,
+  canInvite = false,
+  selectedIds,
+  onToggleSelect,
   onAdd,
   onEdit,
   onArchive,
   onDelete,
   onResidents,
+  onInvite,
 }: LocationTreeTableProps) {
   const manage = mode === 'manage';
+  const showSelection = manage && canInvite;
   const tree = useExpandedTree();
 
   const childrenByParent = useMemo(() => {
@@ -85,7 +97,7 @@ export function LocationTreeTable({
   }, [nodes]);
 
   const roots = childrenByParent.get(null) ?? [];
-  const columnCount = manage ? 4 : 3;
+  const columnCount = (manage ? 4 : 3) + (showSelection ? 1 : 0);
 
   function renderNode(node: LocationNode, depth: number): ReactNode[] {
     const children = childrenByParent.get(node.id) ?? [];
@@ -93,7 +105,15 @@ export function LocationTreeTable({
     const canExpand = hasChildren || (manage && node.levelPosition < structure.levelCount);
     const isExpanded = tree.isExpanded(node.id);
     const isLeaf = node.levelPosition >= structure.levelCount;
-    const isArchived = node.status === 'archived';
+    const isArchived = node.status !== 'active';
+    const inviteIssue = unitInviteIssue({
+      status: node.status,
+      levelPosition: node.levelPosition,
+      levelCount: structure.levelCount,
+      metadata: node.metadata,
+    });
+    const canSelect = showSelection && !inviteIssue;
+    const selected = selectedIds?.has(node.id) ?? false;
     const childLevelName =
       node.levelPosition < structure.levelCount
         ? structureLevelName(structure, node.levelPosition + 1)
@@ -105,12 +125,27 @@ export function LocationTreeTable({
         data-node-id={node.id}
         data-level={node.levelPosition}
         className={
-          canExpand ? 'cursor-pointer hover:bg-muted/50' : hasChildren ? '' : 'hover:bg-muted/50'
+          `${selected ? 'bg-muted/40 ' : ''}` +
+          (canExpand ? 'cursor-pointer hover:bg-muted/50' : hasChildren ? '' : 'hover:bg-muted/50')
         }
         onClick={() => {
           if (canExpand) tree.toggle(node.id);
         }}
       >
+        {showSelection && (
+          <TableCell>
+            <input
+              type="checkbox"
+              className="size-4 accent-foreground"
+              checked={selected}
+              disabled={!canSelect}
+              title={inviteIssue ?? `Seleccionar ${node.name}`}
+              aria-label={`Seleccionar ${node.name}`}
+              onClick={(event) => event.stopPropagation()}
+              onChange={() => onToggleSelect?.(node)}
+            />
+          </TableCell>
+        )}
         <TableCell>
           <div className="flex items-center gap-2" style={{ paddingLeft: depth * 16 }}>
             {canExpand ? (
@@ -199,19 +234,35 @@ export function LocationTreeTable({
                 <RiDeleteBinLine />
               </Button>
               {isLeaf && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  title={`Residentes de ${node.name}`}
-                  aria-label={`Residentes de ${node.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onResidents?.(node);
-                  }}
-                >
-                  <RiTeamLine />
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    title={inviteIssue ?? `Invitar residente a ${node.name}`}
+                    aria-label={`Invitar residente a ${node.name}`}
+                    disabled={Boolean(inviteIssue)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onInvite?.(node);
+                    }}
+                  >
+                    <RiUserAddLine />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    title={`Residentes de ${node.name}`}
+                    aria-label={`Residentes de ${node.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onResidents?.(node);
+                    }}
+                  >
+                    <RiTeamLine />
+                  </Button>
+                </>
               )}
             </div>
           </TableCell>
@@ -254,6 +305,11 @@ export function LocationTreeTable({
       <Table>
         <TableHeader>
           <TableRow>
+            {showSelection && (
+              <TableHead className="w-10">
+                <span className="sr-only">Seleccionar</span>
+              </TableHead>
+            )}
             <TableHead>Nombre</TableHead>
             <TableHead>Código</TableHead>
             <TableHead>Estado</TableHead>
