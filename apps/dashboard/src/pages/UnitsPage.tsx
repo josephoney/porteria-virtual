@@ -7,6 +7,8 @@ import { ListToolbar } from '../components/layout/ListToolbar';
 import { Pagination } from '../components/layout/Pagination';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { ResidentInviteDialog } from '../components/admin/ResidentInviteDialog';
+import { RiUserAddLine } from '@remixicon/react';
 import { LoadingState } from '../components/ui/loading-state';
 import {
   Select,
@@ -107,6 +109,7 @@ export function UnitsPage() {
   const [communityFilter, setCommunityFilter] = useState('all');
   const [sectionFilter, setSectionFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [inviteTarget, setInviteTarget] = useState<UnitApiRow | null>(null);
 
   const communitiesQuery = useQuery({
     queryKey: isPlatformScope ? queryKeys.platformCommunities : queryKeys.tenantCommunities,
@@ -266,12 +269,13 @@ export function UnitsPage() {
                   <TableHead>Tipo</TableHead>
                   <TableHead>Piso</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {units.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                       No hay unidades para mostrar
                     </TableCell>
                   </TableRow>
@@ -293,11 +297,30 @@ export function UnitsPage() {
                         {statusLabel(unit.status)}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Invitar residente a ${unit.name}`}
+                        onClick={() => setInviteTarget(unit)}
+                      >
+                        <RiUserAddLine className="size-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
+
+          <ResidentInviteDialog
+            open={inviteTarget !== null}
+            onOpenChange={(open) => {
+              if (!open) setInviteTarget(null);
+            }}
+            unit={inviteTarget}
+            onCreated={() => void unitsQuery.refetch()}
+          />
 
           <Pagination
             page={page}

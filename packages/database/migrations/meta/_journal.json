@@ -281,6 +281,13 @@
       "when": 1795583600000,
       "tag": "0039_must_change_password",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795670000000,
+      "tag": "0040_invitation_units",
+      "breakpoints": true
     }
   ]
 }

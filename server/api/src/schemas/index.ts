@@ -118,6 +118,8 @@ export const triggerRelaySchema = z.object({
 export const acceptInvitationSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   password: z.string().min(8).optional(),
+  phone: z.string().max(30).optional(),
+  documentNumber: z.string().max(50).optional(),
 });
 
 export const createInvitationSchema = z.object({
@@ -127,7 +129,19 @@ export const createInvitationSchema = z.object({
   communityId: z.string().uuid().nullable().optional(),
   unitId: z.string().uuid().nullable().optional(),
   locationUnitId: z.string().uuid().nullable().optional(),
+  locationUnitIds: z.array(z.string().uuid()).min(1).max(50).optional(),
   expiresInDays: z.coerce.number().int().min(1).max(30).optional(),
+});
+
+export const bulkInvitationRowSchema = z.object({
+  unit: z.string().min(1).max(255),
+  email: z.string().email(),
+  name: z.string().min(1).max(255).optional(),
+});
+
+export const bulkInvitationsSchema = z.object({
+  communityId: z.string().uuid(),
+  rows: z.array(bulkInvitationRowSchema).min(1).max(500),
 });
 
 export const geographySchema = z.object({

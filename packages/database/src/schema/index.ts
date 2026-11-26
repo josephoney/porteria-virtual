@@ -32,6 +32,7 @@ export { guardCheckpoints } from './guard-checkpoints';
 export { accessCodes } from './access-codes';
 export { relayOutputs, relayModeEnum } from './relay-outputs';
 export { invitations, invitationStatusEnum } from './invitations';
+export { invitationUnits } from './invitation-units';
 export { outboxEvents, outboxStatusEnum, ingestedEvents } from './outbox-events';
 export { accessPasses, passTypeEnum, passStatusEnum, presenceStateEnum } from './access-passes';
 export {

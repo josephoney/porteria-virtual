@@ -1,12 +1,14 @@
-import { and, eq, isNull, desc, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import crypto from 'crypto';
 import { hashPassword } from './credentials.service.js';
 import { createDb } from '@porteria/database';
 import {
   invitations,
+  invitationUnits,
   accounts,
   people,
   memberships,
+  locationResidents,
   communities,
   units,
   locationUnits,
@@ -45,6 +47,7 @@ export interface CreateInvitationInput {
   communityId?: string | null;
   unitId?: string | null;
   locationUnitId?: string | null;
+  locationUnitIds?: string[];
   expiresInDays?: number;
 }
 
@@ -53,6 +56,9 @@ export type InvitationErrorCode =
   | 'forbidden'
   | 'invalid_payload'
   | 'conflict'
+  | 'already_member'
+  | 'unit_invalid'
+  | 'too_many_units'
   | 'login_required'
   | 'email_mismatch'
   | 'gone';
@@ -159,7 +165,7 @@ function resolveScope(data: CreateInvitationInput, requester: InvitationRequeste
     return { error: 'community out of scope' as const };
   }
 
-  const locationUnitId = data.locationUnitId ?? data.unitId ?? null;
+  const locationUnitId = data.locationUnitId ?? data.unitId ?? data.locationUnitIds?.[0] ?? null;
   const scopeError = validateMembershipScope(data.role, communityId, locationUnitId);
   if (scopeError) return { error: scopeError };
 
@@ -167,7 +173,7 @@ function resolveScope(data: CreateInvitationInput, requester: InvitationRequeste
     organizationId,
     communityId,
     unitId: data.unitId ?? null,
-    locationUnitId: data.locationUnitId ?? null,
+    locationUnitId: data.locationUnitId ?? data.locationUnitIds?.[0] ?? null,
   };
 }
 
@@ -189,6 +195,7 @@ async function findMembership(
   communityId: string | null,
   unitId: string | null,
   role: string,
+  locationUnitId: string | null = null,
 ) {
   const conditions = [
     eq(memberships.personId, personId),
@@ -200,6 +207,11 @@ async function findMembership(
     communityId ? eq(memberships.communityId, communityId) : isNull(memberships.communityId),
   );
   conditions.push(unitId ? eq(memberships.unitId, unitId) : isNull(memberships.unitId));
+  conditions.push(
+    locationUnitId
+      ? eq(memberships.locationUnitId, locationUnitId)
+      : isNull(memberships.locationUnitId),
+  );
 
   const [membership] = await db
     .select()
@@ -207,6 +219,41 @@ async function findMembership(
     .where(and(...conditions))
     .limit(1);
   return membership ?? null;
+}
+
+const MAX_INVITATION_UNITS = 50;
+
+async function resolveInvitationUnitIds(
+  data: CreateInvitationInput,
+  scope: { communityId: string | null; locationUnitId: string | null },
+): Promise<InvitationResult<string[]>> {
+  const requested = data.locationUnitIds?.length
+    ? data.locationUnitIds
+    : scope.locationUnitId
+      ? [scope.locationUnitId]
+      : [];
+  const unitIds = [...new Set(requested)];
+
+  if (unitIds.length > MAX_INVITATION_UNITS) {
+    return { ok: false, code: 'too_many_units' };
+  }
+
+  if (unitIds.length === 0) {
+    return { ok: true, data: [] };
+  }
+
+  if (!scope.communityId) {
+    return { ok: false, code: 'unit_invalid' };
+  }
+
+  for (const unitId of unitIds) {
+    const unit = await validateLocationUnit(unitId, scope.communityId);
+    if (!unit.ok) {
+      return { ok: false, code: 'unit_invalid' };
+    }
+  }
+
+  return { ok: true, data: unitIds };
 }
 
 export async function createInvitation(
@@ -226,12 +273,11 @@ export async function createInvitation(
     return { ok: false, code: 'invalid_payload' };
   }
 
-  if (scope.locationUnitId && scope.communityId) {
-    const location = await validateLocationUnit(scope.locationUnitId, scope.communityId);
-    if (!location.ok) {
-      return { ok: false, code: 'invalid_payload' };
-    }
+  const unitsResult = await resolveInvitationUnitIds(data, scope);
+  if (!unitsResult.ok) {
+    return { ok: false, code: unitsResult.code };
   }
+  const unitIds = unitsResult.data;
 
   if (data.role === 'org_admin' && !requester.isPlatformAdmin) {
     return { ok: false, code: 'forbidden' };
@@ -244,7 +290,23 @@ export async function createInvitation(
     .from(accounts)
     .where(eq(accounts.email, email))
     .limit(1);
-  if (existingAccount) {
+  if (existingAccount && unitIds.length > 0) {
+    const found = await Promise.all(
+      unitIds.map((unitId) =>
+        findMembership(
+          existingAccount.personId,
+          scope.organizationId,
+          scope.communityId,
+          scope.unitId,
+          data.role,
+          unitId,
+        ),
+      ),
+    );
+    if (found.every(Boolean)) {
+      return { ok: false, code: 'conflict' };
+    }
+  } else if (existingAccount) {
     const existingMembership = await findMembership(
       existingAccount.personId,
       scope.organizationId,
@@ -258,21 +320,56 @@ export async function createInvitation(
   }
 
   const token = generateToken();
-  const [invitation] = await db
-    .insert(invitations)
-    .values({
-      tokenHash: hashToken(token),
-      email,
-      organizationId: scope.organizationId,
-      communityId: scope.communityId,
-      unitId: scope.unitId,
-      locationUnitId: scope.locationUnitId,
-      role: data.role,
-      status: 'pending',
-      expiresAt: expiryDate(data.expiresInDays),
-      invitedByPersonId: requester.personId,
+  const insertedInvitations = await db
+    .transaction(async (tx) => {
+    const inserted = await tx
+      .insert(invitations)
+      .values({
+        tokenHash: hashToken(token),
+        email,
+        organizationId: scope.organizationId,
+        communityId: scope.communityId,
+        unitId: scope.unitId,
+        locationUnitId: unitIds[0] ?? scope.locationUnitId,
+        role: data.role,
+        status: 'pending',
+        expiresAt: expiryDate(data.expiresInDays),
+        invitedByPersonId: requester.personId,
+      })
+      .returning();
+
+    const invitationRow = inserted[0];
+    if (!invitationRow) {
+      throw new Error('Invitation insert returned no rows');
+    }
+    if (unitIds.length > 0) {
+      await tx
+        .insert(invitationUnits)
+        .values(unitIds.map((locationUnitId) => ({ invitationId: invitationRow.id, locationUnitId })))
+        .onConflictDoNothing();
+    }
+
+      return inserted;
     })
-    .returning();
+    .catch((error: unknown) => {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === '23505'
+      ) {
+        return null;
+      }
+      throw error;
+    });
+
+  if (!insertedInvitations) {
+    return { ok: false, code: 'conflict' };
+  }
+  const invitation = insertedInvitations[0];
+  if (!invitation) {
+    return { ok: false, code: 'invalid_payload' };
+  }
 
   const acceptUrl = buildAcceptUrl(token);
   const emailSent = await deliverInvitationEmail({
@@ -287,10 +384,14 @@ export async function createInvitation(
   return { ok: true, data: { invitation, acceptUrl, emailSent } };
 }
 
+type InvitationWithUnits = (typeof invitations.$inferSelect) & {
+  units: { id: string; code: string; path: string }[];
+};
+
 export async function listInvitations(
   requester: InvitationRequester,
   filters: { status?: string; communityId?: string },
-): Promise<(typeof invitations.$inferSelect)[]> {
+): Promise<InvitationWithUnits[]> {
   const conditions = [];
   if (!requester.isPlatformAdmin) {
     conditions.push(eq(invitations.organizationId, requester.orgId));
@@ -304,12 +405,46 @@ export async function listInvitations(
     conditions.push(eq(invitations.status, filters.status as 'pending'));
   }
 
-  return db
+  const rows = await db
     .select()
     .from(invitations)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(invitations.createdAt))
     .limit(100);
+
+  if (rows.length === 0) return [];
+
+  const unitRows = await db
+    .select({
+      invitationId: invitationUnits.invitationId,
+      id: locationUnits.id,
+      code: locationUnits.code,
+      name: locationUnits.name,
+    })
+    .from(invitationUnits)
+    .innerJoin(locationUnits, eq(invitationUnits.locationUnitId, locationUnits.id))
+    .where(
+      inArray(
+        invitationUnits.invitationId,
+        rows.map((row) => row.id),
+      ),
+    );
+
+  const pathCache = new Map<string, string>();
+  const unitsByInvitation = new Map<string, { id: string; code: string; path: string }[]>();
+
+  for (const unit of unitRows) {
+    let path = pathCache.get(unit.id);
+    if (path === undefined) {
+      path = (await buildLocationPath(unit.id)) ?? unit.code ?? unit.name;
+      pathCache.set(unit.id, path);
+    }
+    const list = unitsByInvitation.get(unit.invitationId) ?? [];
+    list.push({ id: unit.id, code: unit.code ?? unit.name, path });
+    unitsByInvitation.set(unit.invitationId, list);
+  }
+
+  return rows.map((row) => ({ ...row, units: unitsByInvitation.get(row.id) ?? [] }));
 }
 
 export async function revokeInvitation(
@@ -380,6 +515,7 @@ async function buildLocationPath(locationUnitId: string): Promise<string | null>
 
 type InvitationPreviewWithPath = PublicInvitationPreview & {
   locationPath: string | null;
+  units: { id: string; code: string; path: string }[];
 };
 
 export async function previewInvitation(
@@ -409,12 +545,27 @@ export async function previewInvitation(
     ? await buildLocationPath(row.invitation.locationUnitId)
     : null;
 
+  const unitRows = await db
+    .select({ id: locationUnits.id, code: locationUnits.code, name: locationUnits.name })
+    .from(invitationUnits)
+    .innerJoin(locationUnits, eq(invitationUnits.locationUnitId, locationUnits.id))
+    .where(eq(invitationUnits.invitationId, row.invitation.id));
+
+  const unitList = await Promise.all(
+    unitRows.map(async (unit) => ({
+      id: unit.id,
+      code: unit.code ?? unit.name,
+      path: (await buildLocationPath(unit.id)) ?? unit.code ?? unit.name,
+    })),
+  );
+
   return {
     ok: true,
     data: {
       communityName: row.communityName ?? 'Comunidad',
       unitCode: row.locationUnitCode ?? row.unitCode ?? null,
       locationPath,
+      units: unitList,
       role: row.invitation.role,
       maskedEmail: maskEmail(row.invitation.email),
       expiresAt: row.invitation.expiresAt,
@@ -422,9 +573,268 @@ export async function previewInvitation(
   };
 }
 
+const RESIDENT_RELATIONSHIP_BY_ROLE: Partial<
+  Record<string, 'owner' | 'tenant' | 'resident'>
+> = {
+  owner: 'owner',
+  tenant: 'tenant',
+  resident: 'resident',
+};
+
+async function invitationUnitIds(invitation: {
+  id: string;
+  locationUnitId: string | null;
+}): Promise<string[]> {
+  const rows = await db
+    .select({ locationUnitId: invitationUnits.locationUnitId })
+    .from(invitationUnits)
+    .where(eq(invitationUnits.invitationId, invitation.id));
+  if (rows.length > 0) {
+    return rows.map((row) => row.locationUnitId);
+  }
+  return invitation.locationUnitId ? [invitation.locationUnitId] : [];
+}
+
+function todayDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+export interface BulkInvitationRowInput {
+  unit: string;
+  email: string;
+  name?: string;
+}
+
+export type BulkInvitationRowStatus = 'valid' | 'created' | 'skipped' | 'failed';
+
+export interface BulkInvitationRowResult {
+  index: number;
+  unit: string;
+  email: string;
+  name?: string;
+  status: BulkInvitationRowStatus;
+  reason?: string;
+  unitId?: string;
+  unitPath?: string;
+}
+
+export interface BulkInvitationSummary {
+  total: number;
+  valid: number;
+  created: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface BulkInvitationPreview {
+  rows: BulkInvitationRowResult[];
+  summary: BulkInvitationSummary;
+}
+
+async function communityUnitIndex(communityId: string) {
+  const rows = await db
+    .select({
+      id: locationUnits.id,
+      parentId: locationUnits.parentId,
+      name: locationUnits.name,
+      code: locationUnits.code,
+    })
+    .from(locationUnits)
+    .where(and(eq(locationUnits.communityId, communityId), eq(locationUnits.status, 'active')));
+
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const parentIds = new Set(
+    rows.map((row) => row.parentId).filter((value): value is string => Boolean(value)),
+  );
+  const pathCache = new Map<string, string>();
+
+  function pathOf(id: string): string {
+    const cached = pathCache.get(id);
+    if (cached) return cached;
+
+    const parts: string[] = [];
+    const visited = new Set<string>();
+    let current = byId.get(id);
+
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
+      parts.unshift(current.code?.trim() || current.name);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+
+    const path = parts.join(' > ');
+    pathCache.set(id, path);
+    return path;
+  }
+
+  const byCode = new Map<string, typeof rows>();
+  const byPath = new Map<string, typeof rows>();
+
+  for (const row of rows) {
+    if (row.code) {
+      const key = row.code.trim().toLowerCase();
+      byCode.set(key, [...(byCode.get(key) ?? []), row]);
+    }
+    const pathKey = pathOf(row.id).toLowerCase();
+    byPath.set(pathKey, [...(byPath.get(pathKey) ?? []), row]);
+  }
+
+  return { byCode, byPath, parentIds, pathOf };
+}
+
+type UnitResolution = { ok: true; unitId: string; unitPath: string } | { ok: false; reason: string };
+
+function resolveBulkUnit(
+  index: Awaited<ReturnType<typeof communityUnitIndex>>,
+  rawUnit: string,
+): UnitResolution {
+  const value = rawUnit.trim().replace(/\s+/g, ' ');
+  if (!value) return { ok: false, reason: 'unit_required' };
+
+  const key = value.toLowerCase();
+  const byCode = index.byCode.get(key) ?? [];
+  const candidates = byCode.length > 0 ? byCode : (index.byPath.get(key) ?? []);
+
+  if (candidates.length === 0) return { ok: false, reason: 'unit_not_found' };
+
+  const leaves = candidates.filter((unit) => !index.parentIds.has(unit.id));
+  if (leaves.length === 0) return { ok: false, reason: 'unit_not_leaf' };
+  if (leaves.length > 1) return { ok: false, reason: 'unit_ambiguous' };
+
+  const leaf = leaves[0]!;
+  return { ok: true, unitId: leaf.id, unitPath: index.pathOf(leaf.id) };
+}
+
+async function resolveBulkCommunity(
+  communityId: string,
+  requester: InvitationRequester,
+): Promise<InvitationResult<string>> {
+  if (!requester.isPlatformAdmin && requester.role !== 'org_admin') {
+    if (requester.communityId !== communityId) return { ok: false, code: 'forbidden' };
+  }
+
+  const [community] = await db
+    .select({ organizationId: communities.organizationId })
+    .from(communities)
+    .where(eq(communities.id, communityId))
+    .limit(1);
+
+  if (!community) return { ok: false, code: 'not_found' };
+
+  if (!requester.isPlatformAdmin && community.organizationId !== requester.orgId) {
+    return { ok: false, code: 'forbidden' };
+  }
+
+  return { ok: true, data: community.organizationId };
+}
+
+function summarizeBulk(rows: BulkInvitationRowResult[]): BulkInvitationSummary {
+  return rows.reduce<BulkInvitationSummary>(
+    (summary, row) => {
+      summary.total += 1;
+      if (row.status === 'valid') summary.valid += 1;
+      if (row.status === 'created') summary.created += 1;
+      if (row.status === 'skipped') summary.skipped += 1;
+      if (row.status === 'failed') summary.failed += 1;
+      return summary;
+    },
+    { total: 0, valid: 0, created: 0, skipped: 0, failed: 0 },
+  );
+}
+
+export async function previewBulkInvitations(
+  input: { communityId: string; rows: BulkInvitationRowInput[] },
+  requester: InvitationRequester,
+): Promise<InvitationResult<BulkInvitationPreview>> {
+  const scope = await resolveBulkCommunity(input.communityId, requester);
+  if (!scope.ok) return scope;
+
+  const index = await communityUnitIndex(input.communityId);
+  const seen = new Set<string>();
+
+  const rows = input.rows.map<BulkInvitationRowResult>((row, position) => {
+    const base = {
+      index: position,
+      unit: row.unit,
+      email: row.email.trim().toLowerCase(),
+      name: row.name?.trim() || undefined,
+    };
+
+    const resolution = resolveBulkUnit(index, row.unit);
+    if (!resolution.ok) {
+      return { ...base, status: 'failed', reason: resolution.reason };
+    }
+
+    const duplicateKey = `${resolution.unitId}|${base.email}`;
+    if (seen.has(duplicateKey)) {
+      return {
+        ...base,
+        status: 'failed',
+        reason: 'duplicate_row',
+        unitId: resolution.unitId,
+        unitPath: resolution.unitPath,
+      };
+    }
+    seen.add(duplicateKey);
+
+    return {
+      ...base,
+      status: 'valid',
+      unitId: resolution.unitId,
+      unitPath: resolution.unitPath,
+    };
+  });
+
+  return { ok: true, data: { rows, summary: summarizeBulk(rows) } };
+}
+
+export async function createBulkInvitations(
+  input: { communityId: string; rows: BulkInvitationRowInput[] },
+  requester: InvitationRequester,
+): Promise<InvitationResult<BulkInvitationPreview>> {
+  const preview = await previewBulkInvitations(input, requester);
+  if (!preview.ok) return preview;
+
+  const rows: BulkInvitationRowResult[] = [];
+
+  for (const row of preview.data.rows) {
+    if (row.status !== 'valid' || !row.unitId) {
+      rows.push(row);
+      continue;
+    }
+
+    const created = await createInvitation(
+      {
+        email: row.email,
+        role: 'resident',
+        communityId: input.communityId,
+        locationUnitIds: [row.unitId],
+      },
+      requester,
+    );
+
+    if (created.ok) {
+      rows.push({ ...row, status: 'created' });
+      continue;
+    }
+
+    if (created.code === 'conflict' || created.code === 'already_member') {
+      rows.push({ ...row, status: 'skipped', reason: 'already_member' });
+      continue;
+    }
+
+    rows.push({ ...row, status: 'failed', reason: created.code });
+  }
+
+  return { ok: true, data: { rows, summary: summarizeBulk(rows) } };
+}
+
 export async function acceptInvitation(
   token: string,
-  body: { name?: string; password?: string },
+  body: { name?: string; password?: string; phone?: string; documentNumber?: string },
   authenticatedAccountId?: string,
 ): Promise<InvitationResult<authService.AuthResult>> {
   const [invitation] = await db
@@ -459,18 +869,41 @@ export async function acceptInvitation(
     const personId = await authService.personIdForEmail(email);
     if (!personId) return { ok: false, code: 'not_found' };
 
-    await db
-      .insert(memberships)
-      .values({
-        personId,
-        organizationId: invitation.organizationId,
-        communityId: invitation.communityId,
-        unitId: invitation.unitId,
-        locationUnitId: invitation.locationUnitId,
-        role: invitation.role,
-        status: 'active',
-      })
-      .onConflictDoNothing();
+    const unitIds = await invitationUnitIds(invitation);
+    let createdCount = 0;
+
+    for (const unitId of unitIds.length > 0 ? unitIds : [null]) {
+      const inserted = await db
+        .insert(memberships)
+        .values({
+          personId,
+          organizationId: invitation.organizationId,
+          communityId: invitation.communityId,
+          unitId: invitation.unitId,
+          locationUnitId: unitId,
+          role: invitation.role,
+          status: 'active',
+        })
+        .onConflictDoNothing()
+        .returning({ id: memberships.id });
+      if (inserted.length > 0) createdCount += 1;
+
+      const relationship = RESIDENT_RELATIONSHIP_BY_ROLE[invitation.role];
+      if (unitId && relationship) {
+        await db
+          .insert(locationResidents)
+          .values({
+            locationUnitId: unitId,
+            personId,
+            relationship,
+            validFrom: todayDate(),
+            status: 'active',
+          })
+          .onConflictDoNothing();
+      }
+    }
+
+    if (createdCount === 0) return { ok: false, code: 'already_member' };
 
     const membership = await findMembership(
       personId,
@@ -478,6 +911,7 @@ export async function acceptInvitation(
       invitation.communityId,
       invitation.unitId,
       invitation.role,
+      unitIds[0] ?? null,
     );
     if (!membership) return { ok: false, code: 'conflict' };
 
@@ -515,6 +949,8 @@ export async function acceptInvitation(
           firstName: firstName || email,
           lastName: lastNameParts.join(' '),
           contactEmail: email,
+          phone: body.phone?.trim() || null,
+          documentNumber: body.documentNumber?.trim() || null,
           status: 'active',
         })
         .returning();
@@ -530,18 +966,47 @@ export async function acceptInvitation(
         })
         .returning({ id: accounts.id });
 
-      const [membership] = await tx
-        .insert(memberships)
-        .values({
-          personId: person.id,
-          organizationId: invitation.organizationId,
-          communityId: invitation.communityId,
-          unitId: invitation.unitId,
-          locationUnitId: invitation.locationUnitId,
-          role: invitation.role,
-          status: 'active',
-        })
-        .returning();
+      const unitIds = await invitationUnitIds(invitation);
+      let primaryMembership: typeof memberships.$inferSelect | null = null;
+
+      for (const unitId of unitIds.length > 0 ? unitIds : [null]) {
+        const [created] = await tx
+          .insert(memberships)
+          .values({
+            personId: person.id,
+            organizationId: invitation.organizationId,
+            communityId: invitation.communityId,
+            unitId: invitation.unitId,
+            locationUnitId: unitId,
+            role: invitation.role,
+            status: 'active',
+          })
+          .onConflictDoNothing()
+          .returning();
+
+        if (created && unitId === (unitIds[0] ?? null)) {
+          primaryMembership = created;
+        }
+
+        const relationship = RESIDENT_RELATIONSHIP_BY_ROLE[invitation.role];
+        if (unitId && relationship) {
+          await tx
+            .insert(locationResidents)
+            .values({
+              locationUnitId: unitId,
+              personId: person.id,
+              relationship,
+              validFrom: todayDate(),
+              status: 'active',
+            })
+            .onConflictDoNothing();
+        }
+      }
+
+      if (!primaryMembership) {
+        throw new Error('Membership insert returned no rows');
+      }
+      const membership = primaryMembership;
 
       await tx
         .update(invitations)

@@ -227,3 +227,54 @@ describe('schema migration 0008', () => {
     }
   });
 });
+
+describe('schema migration 0040', () => {
+  it('creates the invitation_units bridge table', async () => {
+    const columns = await db.execute<{ column_name: string }>(sql`
+      select column_name
+      from information_schema.columns
+      where table_schema = 'public' and table_name = 'invitation_units'
+    `);
+    const names = new Set(columns.rows.map((row) => row.column_name));
+    for (const expected of ['invitation_id', 'location_unit_id', 'created_at']) {
+      assert.equal(names.has(expected), true, expected);
+    }
+
+    const constraints = await db.execute<{ conname: string }>(sql`
+      select conname
+      from pg_constraint
+      where conrelid = 'invitation_units'::regclass
+    `);
+    const constraintNames = new Set(constraints.rows.map((row) => row.conname));
+    for (const expected of [
+      'invitation_units_invitation_id_location_unit_id_pk',
+      'invitation_units_invitation_id_fk',
+      'invitation_units_location_unit_id_fk',
+    ]) {
+      assert.equal(constraintNames.has(expected), true, expected);
+    }
+
+    const indexes = await db.execute<{ indexname: string }>(sql`
+      select indexname
+      from pg_indexes
+      where schemaname = 'public' and tablename = 'invitation_units'
+    `);
+    const indexNames = new Set(indexes.rows.map((row) => row.indexname));
+    assert.equal(indexNames.has('invitation_units_location_unit_idx'), true);
+  });
+
+  it('backfills every invitation with a primary location unit', async () => {
+    const result = await db.execute<{ count: number }>(sql`
+      select count(*)::int as count
+      from invitations i
+      where i.location_unit_id is not null
+        and not exists (
+          select 1
+          from invitation_units u
+          where u.invitation_id = i.id
+            and u.location_unit_id = i.location_unit_id
+        )
+    `);
+    assert.equal(result.rows[0]?.count, 0);
+  });
+});

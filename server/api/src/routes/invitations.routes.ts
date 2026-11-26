@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { requireRole } from '../middlewares/rbac.js';
 import * as invitationService from '../services/invitation.service.js';
 import * as eventsService from '../services/events.service.js';
-import { createInvitationSchema } from '../schemas/index.js';
+import { bulkInvitationsSchema, createInvitationSchema } from '../schemas/index.js';
 import type { MembershipRole } from '@porteria/shared';
 
 function getRequester(request: FastifyRequest): invitationService.InvitationRequester {
@@ -24,9 +24,13 @@ function errorStatus(code: string): number {
     case 'forbidden':
       return 403;
     case 'conflict':
+    case 'already_member':
       return 409;
     case 'gone':
       return 410;
+    case 'unit_invalid':
+    case 'too_many_units':
+      return 400;
     default:
       return 400;
   }
@@ -95,6 +99,59 @@ export async function invitationRoutes(app: FastifyInstance) {
       }
 
       audit('invitation.created', result.data.invitation, requester);
+      return reply.status(201).send(result.data);
+    },
+  );
+
+  app.post(
+    '/bulk/preview',
+    { preHandler: [requireRole('org_admin', 'community_admin')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const requester = getRequester(request);
+      const body = bulkInvitationsSchema.parse(request.body);
+      const result = await invitationService.previewBulkInvitations(body, requester);
+
+      if (!result.ok) {
+        return reply.status(errorStatus(result.code)).send({
+          statusCode: errorStatus(result.code),
+          error: 'Invitation rejected',
+          message: result.code,
+        });
+      }
+
+      return reply.send(result.data);
+    },
+  );
+
+  app.post(
+    '/bulk',
+    { preHandler: [requireRole('org_admin', 'community_admin')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const requester = getRequester(request);
+      const body = bulkInvitationsSchema.parse(request.body);
+      const result = await invitationService.createBulkInvitations(body, requester);
+
+      if (!result.ok) {
+        return reply.status(errorStatus(result.code)).send({
+          statusCode: errorStatus(result.code),
+          error: 'Invitation rejected',
+          message: result.code,
+        });
+      }
+
+      if (requester.orgId) {
+        eventsService
+          .insertEvent({
+            eventType: 'invitation.bulk.created',
+            actorId: requester.sub,
+            actorRole: requester.role,
+            organizationId: requester.orgId,
+            communityId: body.communityId,
+            metadata: { ...result.data.summary },
+          })
+          .catch(() => {});
+      }
+
       return reply.status(201).send(result.data);
     },
   );
