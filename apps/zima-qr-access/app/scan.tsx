@@ -355,6 +355,15 @@ export default function GuardScanScreen() {
           <Badge label={roleLabel(session.activeMembership.role)} tone="info" />
         </Row>
         <Text style={ui.muted}>{session.user.email}</Text>
+        {/*
+          Comunidad y unidad: el guardia que trabaja en varias comunidades
+          necesita confirmar de un vistazo dónde está operando.
+        */}
+        <Text style={ui.muted}>
+          {[session.activeMembership.communityName, session.activeMembership.unitName]
+            .filter(Boolean)
+            .join(' · ') || 'Sin comunidad asignada'}
+        </Text>
         {defaultAccessPoint ? (
           <Text style={ui.muted}>Acceso asignado: {defaultAccessPoint.name}</Text>
         ) : null}

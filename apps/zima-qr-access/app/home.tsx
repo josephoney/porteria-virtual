@@ -64,6 +64,13 @@ export default function ResidentHomeScreen() {
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={ui.title}>Hola, {session.user.name.split(' ')[0]}</Text>
+          {/* Comunidad y unidad: sin esto, el residente no sabe en qué conjunto
+              está viendo sus autorizaciones. */}
+          <Text style={ui.muted}>
+            {[session.activeMembership.communityName, session.activeMembership.unitName]
+              .filter(Boolean)
+              .join(' · ') || roleLabel(session.activeMembership.role)}
+          </Text>
           <Text style={ui.muted}>
             {roleLabel(session.activeMembership.role)} · {passes.length} pase
             {passes.length === 1 ? '' : 's'} activo{passes.length === 1 ? '' : 's'}

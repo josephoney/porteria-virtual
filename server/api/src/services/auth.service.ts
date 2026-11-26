@@ -5,6 +5,7 @@ import {
   memberships,
   refreshTokens,
   communities,
+  locationUnits,
   people,
 } from '@porteria/database/schema';
 import type {
@@ -112,10 +113,23 @@ function platformMembership(): MembershipSummary {
 
 async function getActiveMemberships(personId: string): Promise<MembershipSummary[]> {
   const rows = await db
-    .select()
+    .select({
+      membership: memberships,
+      // El nombre de la comunidad y de la unidad viajan con la sesión: la app
+      // los muestra en el home sin una consulta extra.
+      communityName: communities.name,
+      unitName: locationUnits.name,
+    })
     .from(memberships)
+    .leftJoin(communities, eq(communities.id, memberships.communityId))
+    .leftJoin(locationUnits, eq(locationUnits.id, memberships.locationUnitId))
     .where(and(eq(memberships.personId, personId), eq(memberships.status, 'active')));
-  return rows.map(toMembershipSummary);
+
+  return rows.map((row) => ({
+    ...toMembershipSummary(row.membership),
+    communityName: row.communityName ?? null,
+    unitName: row.unitName ?? null,
+  }));
 }
 
 interface AccountIdentity {

@@ -21,6 +21,10 @@ export interface MembershipSummary {
   unitId: string | null;
   locationUnitId: string | null;
   defaultAccessPointId: string | null;
+  /** Nombre legible de la comunidad; la app lo muestra en el home. */
+  communityName?: string | null;
+  /** Nombre legible de la unidad o vivienda asociada a la membresía. */
+  unitName?: string | null;
 }
 
 export interface LoginSuccessResponse {

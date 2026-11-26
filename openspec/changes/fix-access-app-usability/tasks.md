@@ -11,12 +11,13 @@
 
 ## 3. Comunidad y unidad
 
-- [ ] 3.1 Exponer en el contexto activo la unidad y su nombre (API).
-- [ ] 3.2 Mostrar comunidad y unidad en el home del guardia.
-- [ ] 3.3 Mostrar comunidad y unidad en el home del residente.
+- [x] 3.1 Exponer en el contexto activo la unidad y su nombre (API): la sesión
+      viaja con `communityName` y `unitName`.
+- [x] 3.2 Mostrar comunidad y unidad en el home del guardia.
+- [x] 3.3 Mostrar comunidad y unidad en el home del residente.
 
 ## 4. Verificación
 
-- [ ] 4.1 `typecheck` de la app limpio.
+- [x] 4.1 `typecheck` de la app limpio y suites de API en verde (259/259).
 - [ ] 4.2 Prueba en Android: ingreso con cuenta guardada, cédula manual,
       escaneo y home con comunidad.
