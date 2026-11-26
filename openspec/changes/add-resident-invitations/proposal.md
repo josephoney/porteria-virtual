@@ -28,6 +28,10 @@ unidad(es) que le corresponden.
   permite completar teléfono y documento antes de entrar.
 - **Seguimiento**: las invitaciones pendientes muestran las unidades incluidas y se
   pueden reenviar o revocar (el lifecycle ya existe).
+- **Cuentas creadas por un administrador**: cuando un admin da de alta un usuario
+  desde el menú de Usuarios, la persona recibe un correo para establecer su propia
+  contraseña. Es el mismo mecanismo de token de un solo uso que la invitación y el
+  restablecimiento; el admin ya no elige la contraseña.
 
 **Non-goals:**
 
@@ -48,6 +52,8 @@ unidad(es) que le corresponden.
 - `invitation-onboarding`: invitación por correo a personas sin cuenta, cobertura de
   varias unidades por invitación, entrada desde unidades y árbol de estructura, y
   aceptación con datos de perfil.
+- `user-management`: el alta directa deja de recibir contraseña y pasa a emitir un
+  enlace de activación de un solo uso, con reenvío.
 
 ## Impact
 
@@ -55,8 +61,11 @@ unidad(es) que le corresponden.
   integridad referencial) y migración asociada.
 - **API**: `POST /api/invitations` acepta `locationUnitIds`; nuevo endpoint de carga
   masiva; la aceptación crea una membresía por unidad; validaciones de alcance por rol.
+  `POST /api/users` deja de pedir `password` y emite un enlace de activación; nuevo
+  endpoint de reenvío de activación.
 - **Dashboard**: `UnitsPage`, `StructureTreeWorkspace`, `AdminPanel` (diálogo de
-  invitación), `InvitePage` y una pantalla nueva de carga masiva; tipos compartidos.
+  invitación), `UsersTable` (alta sin contraseña y reenvío), `InvitePage` y una pantalla
+  nueva de carga masiva; tipos compartidos.
 - **Specs**: delta de `invitation-onboarding` y capability nueva
   `resident-bulk-invitations`.
 - **Riesgos**: duplicados por carrera al aceptar, invitaciones parcialmente válidas en

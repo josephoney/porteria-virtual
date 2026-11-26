@@ -93,6 +93,28 @@ Se extrae el parser de `ResidentAuthorizationBulkPage` a `apps/dashboard/src/lib
 
 Se reutiliza `resolveScope` + `canManage`. Se agrega la verificación de que cada unidad pertenezca a la comunidad resuelta y que el actor pueda administrarla. `community_admin` no puede invitar fuera de su comunidad ni cambiar el rol a uno operativo (se restringe a roles ocupantes en este flujo).
 
+### 9. Activación de cuentas creadas por el administrador
+
+**Decisión:** el alta directa desde Usuarios deja de recibir contraseña y usa el mismo
+mecanismo de token de un solo uso que el restablecimiento.
+
+- `POST /api/users` pierde `password` del esquema. La cuenta se crea con un hash
+  aleatorio de 32 bytes, inutilizable, para que nadie pueda autenticarse hasta activar.
+- Después del commit se emite el token con `issueResetToken(accountId, ip)` (60 minutos,
+  invalida los anteriores) y se envía un correo «Activá tu cuenta» que reutiliza el
+  cuerpo del restablecimiento. Si el envío falla, la cuenta queda creada y la respuesta
+  devuelve `emailSent: false` + `activationUrl` una sola vez, igual que las invitaciones.
+- Nuevo `POST /api/users/:id/activation` para reenviar: misma autorización que el alta
+  (plataforma, `org_admin` de la organización o `community_admin` de la comunidad),
+  `409 already_active` si la cuenta ya eligió contraseña.
+- La página pública es la existente `/reset-password?token=…`; solo cambia el copy
+  cuando el token viene de una activación. No se agrega una ruta nueva.
+- `mail.service` gana `sendAccountActivationEmail`, reutilizando
+  `buildPasswordResetBodies` con asunto y texto de bienvenida.
+
+**Alternativa descartada:** que el admin elija y envíe la contraseña por correo (opción
+B). Queda una credencial en texto plano en dos lugares y obliga a cambiarla igual.
+
 ## Data model
 
 ```
