@@ -162,7 +162,7 @@ export function IncomingCallOverlay() {
     <>
       {/* ── Incoming call toast ── */}
       {toastCall && !activeCall && (
-        <div className="fixed top-20 right-6 z-[10000] bg-card border border-border rounded-lg shadow-lg p-5 min-w-[300px]">
+        <div className="fixed top-20 right-6 z-[10000] bg-card border border-border rounded-lg shadow-lg p-5 w-[min(20rem,calc(100vw-3rem))]">
           <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
             Llamada entrante
           </p>
@@ -196,7 +196,7 @@ export function IncomingCallOverlay() {
       {showOverlay && activeCall && (
         <div
           onMouseDown={onMouseDown}
-          className="fixed z-[9999] bg-card border border-border rounded-lg shadow-2xl overflow-hidden select-none"
+          className="fixed z-[9999] bg-card border border-border rounded-lg shadow-2xl overflow-hidden select-none max-w-[calc(100vw-2.5rem)]"
           style={{ left: pos.x, top: pos.y, width: 640, cursor: dragging ? 'grabbing' : 'grab' }}
         >
           <div className="flex items-center justify-between px-4 py-2 bg-muted/50">

@@ -45,10 +45,7 @@ interface QuickActionProps {
 
 function QuickAction({ to, icon, title, description }: QuickActionProps) {
   return (
-    <Link
-      to={to}
-      className="rounded-4xl border border-border bg-card p-5 transition-colors hover:bg-muted/40"
-    >
+    <Link to={to} className="panel p-5 transition-colors hover:bg-muted/40">
       <span className="inline-flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
         {icon}
       </span>
@@ -117,7 +114,7 @@ export function ResidentHomePage() {
       />
 
       {disabled && (
-        <div className="rounded-4xl border border-border bg-card p-6">
+        <div className="panel p-6">
           <p className="text-sm font-medium">Las autorizaciones con QR están desactivadas</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu administrador todavía no habilitó este módulo en la comunidad. Cuando lo haga, vas a
@@ -182,7 +179,7 @@ export function ResidentHomePage() {
               </Button>
             </div>
           ) : (
-            <ul className="divide-y divide-border overflow-hidden rounded-4xl border border-border bg-card">
+            <ul className="divide-y divide-border overflow-hidden panel">
               {passes.map((pass) => (
                 <li key={pass.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
                   <div className="min-w-0 flex-1">

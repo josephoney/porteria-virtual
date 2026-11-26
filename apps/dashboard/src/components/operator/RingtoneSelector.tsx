@@ -1,6 +1,7 @@
 import { useSocket } from '../../contexts/SocketContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { RINGTONE_DEFINITIONS } from '../../lib/ringtones';
+import { NativeSelect } from '../ui/native-select';
 
 export function RingtoneSelector() {
   const { user, activeMembership } = useAuth();
@@ -15,8 +16,9 @@ export function RingtoneSelector() {
   };
 
   return (
-    <select
-      className="px-2 py-1 rounded border border-border bg-card text-foreground font-mono text-[11px] cursor-pointer outline-none focus:border-ring"
+    <NativeSelect
+      aria-label="Tono de llamada"
+      className="h-7 py-0 font-mono text-[11px]"
       value={selectedRingtoneId}
       onChange={handleChange}
     >
@@ -25,6 +27,6 @@ export function RingtoneSelector() {
           {r.name}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }

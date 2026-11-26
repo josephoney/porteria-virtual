@@ -512,7 +512,7 @@ export function ResidentAuthorizationsPage() {
       />
 
       {disabled && (
-        <div className="rounded-4xl border border-border bg-card p-6">
+        <div className="panel p-6">
           <p className="text-sm font-medium">Las autorizaciones con QR están desactivadas</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu administrador todavía no habilitó este módulo en la comunidad.
@@ -700,7 +700,7 @@ export function ResidentAuthorizationsPage() {
           )}
 
           {!error && !loading && passes.length > 0 && (
-            <div className="min-h-0 flex-1 overflow-auto rounded-4xl border border-border bg-card [&_td]:h-12">
+            <div className="min-h-0 flex-1 overflow-auto panel [&_td]:h-12">
               <Table>
                 <TableHeader>
                   <TableRow>

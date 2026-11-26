@@ -852,7 +852,10 @@ export function AccessBitacoraView({
       </div>
 
       {error && (
-        <div className="rounded-3xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div
+          role="alert"
+          className="rounded-3xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
           {error}
         </div>
       )}
@@ -864,11 +867,11 @@ export function AccessBitacoraView({
           <Skeleton className="h-10 w-full" />
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-4xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+        <div className="panel p-8 text-center text-sm text-muted-foreground">
           No hay movimientos para los filtros seleccionados.
         </div>
       ) : (
-        <div className="max-h-[55vh] overflow-auto rounded-4xl border border-border bg-card">
+        <div className="max-h-[55vh] overflow-auto panel">
           <Table>
             <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
               <TableRow>
@@ -1023,7 +1026,11 @@ export function AccessBitacoraView({
                       {resolvingAlert ? 'Cerrando…' : 'Marcar salida resuelta'}
                     </Button>
                   </div>
-                  {alertError && <p className="text-sm text-destructive">{alertError}</p>}
+                  {alertError && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {alertError}
+                    </p>
+                  )}
                 </section>
               ) : null}
               <section className="space-y-1 rounded-3xl border border-border bg-muted/30 px-4 py-3">
@@ -1119,7 +1126,7 @@ export function AccessBitacoraView({
               <Label htmlFor="manual-details">Detalle JSON (opcional)</Label>
               <textarea
                 id="manual-details"
-                className="min-h-24 w-full rounded-3xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                className="min-h-24 w-full rounded-3xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring"
                 value={manualDetails}
                 onChange={(event) => setManualDetails(event.target.value)}
                 placeholder='{"paquete":"A-101","empresa":"Moto"}'

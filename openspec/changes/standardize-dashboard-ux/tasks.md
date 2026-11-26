@@ -38,24 +38,24 @@
 
 ## 6. Cards, metrics and overlays
 
-- [ ] 6.1 Standardize metric and content cards
-- [ ] 6.2 Standardize dialogs/sheets (focus, Escape, return focus)
-- [ ] 6.3 Standardize destructive dialog copy and button variant
-- [ ] 6.4 Standardize button variants and pending states
+- [x] 6.1 Standardize metric and content cards
+- [x] 6.2 Standardize dialogs/sheets (focus, Escape, return focus)
+- [x] 6.3 Standardize destructive dialog copy and button variant
+- [x] 6.4 Standardize button variants and pending states
 
 ## 7. Accessibility and responsive
 
-- [ ] 7.1 Verify keyboard navigation and visible focus
-- [ ] 7.2 Verify AA contrast in light/dark
-- [ ] 7.3 Add `aria-live` for errors/toasts
-- [ ] 7.4 Test at mobile, tablet and desktop breakpoints
+- [x] 7.1 Verify keyboard navigation and visible focus
+- [x] 7.2 Verify AA contrast in light/dark
+- [x] 7.3 Add `aria-live` for errors/toasts
+- [x] 7.4 Test at mobile, tablet and desktop breakpoints
 - [x] 7.5 Add a basic accessibility checklist to the docs
 
 ## 8. Verification
 
-- [ ] 8.1 Review every dashboard screen for token usage
+- [x] 8.1 Review every dashboard screen for token usage
 - [x] 8.2 Verify no hardcoded colors remain in dashboard components
-- [ ] 8.3 Verify dark mode in all screens
-- [ ] 8.4 Verify forms/tables have loading/empty/error states
-- [ ] 8.5 Verify mobile sidebar and responsive tables
+- [x] 8.3 Verify dark mode in all screens
+- [x] 8.4 Verify forms/tables have loading/empty/error states
+- [x] 8.5 Verify mobile sidebar and responsive tables
 - [x] 8.6 `pnpm lint` and `tsc --noEmit` pass

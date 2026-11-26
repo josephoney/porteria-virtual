@@ -592,7 +592,7 @@ export function ResidentAuthorizationBulkPage() {
         />
 
         <section className="space-y-4">
-          <div className="rounded-4xl border border-border bg-card p-6">
+          <div className="panel p-6">
             <h2 className="text-base font-semibold">
               {result.createdCount > 0 ? 'Lote creado' : 'No se creó ninguna autorización'}
             </h2>
@@ -619,7 +619,7 @@ export function ResidentAuthorizationBulkPage() {
           {result.rejected.length > 0 && (
             <div className="space-y-2">
               <h3 className="text-sm font-medium">Filas rechazadas</h3>
-              <div className="overflow-hidden rounded-4xl border border-border bg-card">
+              <div className="overflow-hidden panel">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -663,7 +663,7 @@ export function ResidentAuthorizationBulkPage() {
       />
 
       {disabled ? (
-        <div className="rounded-4xl border border-border bg-card p-6">
+        <div className="panel p-6">
           <p className="text-sm font-medium">Las autorizaciones con QR están desactivadas</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu administrador todavía no habilitó este módulo en la comunidad.
@@ -691,7 +691,7 @@ export function ResidentAuthorizationBulkPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <section className="max-w-3xl space-y-4 rounded-4xl border border-border bg-card p-6">
+          <section className="max-w-3xl space-y-4 panel p-6">
             <h2 className="font-heading text-lg font-semibold">Detalles del lote</h2>
 
             <div className="space-y-1">
@@ -827,7 +827,7 @@ export function ResidentAuthorizationBulkPage() {
             </div>
           </section>
 
-          <section className="max-w-3xl space-y-4 rounded-4xl border border-border bg-card p-6">
+          <section className="max-w-3xl space-y-4 panel p-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-heading text-lg font-semibold">Visitantes</h2>
               <Button type="button" variant="ghost" size="sm" onClick={downloadTemplate}>
@@ -884,7 +884,7 @@ export function ResidentAuthorizationBulkPage() {
                 placeholder={
                   'nombre,apellido,documento,placa,acompañantes\nAna,Torres,10203040,,Ana Pérez|123456;Luis Gómez|789012\nLuis,Gómez,55667788,ABC123,'
                 }
-                className="min-h-32 w-full rounded-3xl border border-transparent bg-input/50 px-3 py-2 font-mono text-sm outline-none transition-[color,box-shadow,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
+                className="min-h-32 w-full rounded-3xl border border-transparent bg-input/50 px-3 py-2 font-mono text-sm outline-none transition-[color,box-shadow,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
               />
             </div>
 
@@ -923,7 +923,7 @@ export function ResidentAuthorizationBulkPage() {
                 </p>
               </div>
 
-              <div className="overflow-hidden rounded-4xl border border-border bg-card">
+              <div className="overflow-hidden panel">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -968,7 +968,7 @@ export function ResidentAuthorizationBulkPage() {
                 </Table>
               </div>
 
-              <div className="space-y-2 rounded-4xl border border-border bg-card p-6">
+              <div className="space-y-2 panel p-6">
                 <p className="text-sm">
                   Destino: <span className="font-medium">{selectedDestination?.path ?? '—'}</span>
                 </p>

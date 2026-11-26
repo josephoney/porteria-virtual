@@ -57,6 +57,9 @@ overlays.
   (`porteria-theme`).
 - `NavUser` está en el footer del sidebar y permite abrir Cuenta, Notificaciones, cambiar contexto/tema y cerrar sesión.
 - Todo componente nuevo debe verse bien en claro y oscuro; no uses colores fijos.
+- El anillo de foco usa `--ring` a opacidad completa (`focus-visible:ring-ring`): azul
+  primario en claro, dorado en oscuro. No uses `ring-ring/30` ni `/50`, porque sobre el
+  fondo queda por debajo de 3:1 y el foco se vuelve invisible.
 
 ## Componentes permitidos
 
@@ -71,7 +74,13 @@ Catálogo en `src/components/ui`:
   mismos estilos que `Input`; usalo para listas cortas y fijas (país, tipo, días de
   retención) donde no hace falta el popover de Radix.
 - `ConfirmDialog` (`components/ui/confirm-dialog.tsx`): confirmación accesible para
-  acciones destructivas, con `pending` y variante `destructive`.
+  acciones destructivas, con `pending` y variante `destructive`. El foco inicial cae en
+  Cancelar para que Enter no confirme por accidente.
+- `SectionCards` (`components/layout/SectionCards.tsx`): grilla estándar de métricas.
+  No armes tarjetas de métrica a mano.
+- `panel` (utilidad CSS en `src/index.css`): superficie de tablas y secciones
+  (`rounded-4xl` + borde + `bg-card`) sin la sombra de `Card`. Usala en lugar de repetir
+  `rounded-4xl border border-border bg-card`.
 - `Card`, `Table`, `Tabs`, `Dialog`, `Sheet`, `Sidebar`, `Alert`, `Tooltip`, `Separator`,
   `Skeleton`, `Avatar`, `DropdownMenu`.
 - Iconos: Remixicon. Un botón icon-only SIEMPRE lleva `aria-label`.
@@ -139,12 +148,30 @@ Reglas:
 Checklist mínimo:
 
 - Navegación completa por teclado.
-- Foco visible con `ring`.
+- Foco visible con `ring` a opacidad completa (mínimo 3:1 contra el fondo).
 - Contraste AA en claro y oscuro.
 - `aria-label` en icon-only.
 - `aria-live`/`role="alert"` para errores y toasts.
 - Diálogos: foco entra al abrir, vuelve al cerrar y `Escape` cierra.
 - No transmitas información solo por color.
+
+### Contraste verificado (WCAG AA)
+
+Medido sobre los tokens de `src/styles/theme.css` (OKLCH → sRGB → luminancia relativa):
+
+| Par | Claro | Oscuro | Mínimo |
+| --- | --- | --- | --- |
+| `foreground` / `background` | 14.72 | 14.38 | 4.5 |
+| `muted-foreground` / `card` | 5.44 | 4.87 | 4.5 |
+| `primary-foreground` / `primary` | 6.34 | 5.06 | 4.5 |
+| `accent-foreground` / `accent` | 5.77 | 10.83 | 4.5 |
+| `destructive` / `card` | 12.94 | 5.35 | 4.5 |
+| `success-foreground` / `success` | 5.00 | 8.86 | 4.5 |
+| `ring` / `background` | 6.15 | 13.29 | 3 |
+
+`border` e `input` quedan por debajo de 3:1 y son decorativos: los controles se
+identifican por label, placeholder, relleno y anillo de foco. No los uses como única
+señal de estado.
 
 ## Do / Don't
 

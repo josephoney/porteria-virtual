@@ -279,11 +279,11 @@ export function AccessPointsPanel() {
           <Skeleton className="h-10 w-full" />
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-4xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+        <div className="panel p-8 text-center text-sm text-muted-foreground">
           Todavía no hay accesos. Crea el primero para poder iniciar turnos.
         </div>
       ) : (
-        <div className="rounded-4xl border border-border bg-card">
+        <div className="panel">
           <Table>
             <TableHeader>
               <TableRow>

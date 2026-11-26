@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Button } from './button';
 import {
   Dialog,
@@ -38,15 +39,25 @@ export function ConfirmDialog({
   pending = false,
   onConfirm,
 }: ConfirmDialogProps) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={(event) => {
+          // El foco arranca en Cancelar: Enter o Espacio no deben confirmar
+          // una acción que no se puede deshacer.
+          event.preventDefault();
+          cancelRef.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
         <DialogFooter>
           <Button
+            ref={cancelRef}
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -59,6 +70,7 @@ export function ConfirmDialog({
             variant={destructive ? 'destructive' : 'default'}
             onClick={onConfirm}
             disabled={pending}
+            aria-busy={pending}
           >
             {pending ? 'Procesando…' : confirmLabel}
           </Button>

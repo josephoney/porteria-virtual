@@ -678,7 +678,7 @@ export function ResidentAuthorizationNewPage() {
     return (
       <div className="p-6 space-y-3">
         <PageHeader title="Autorizar visita" />
-        <div className="rounded-4xl border border-border bg-card p-6">
+        <div className="panel p-6">
           <p className="text-sm font-medium">Las autorizaciones con QR están desactivadas</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu administrador todavía no habilitó este módulo en la comunidad.
@@ -713,7 +713,7 @@ export function ResidentAuthorizationNewPage() {
 
       {step === 'review' ? (
         <section className="max-w-2xl space-y-4">
-          <div className="rounded-4xl border border-border bg-card p-6">
+          <div className="panel p-6">
             <h2 className="text-base font-semibold">Revisa la autorización</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Si está todo bien, confirma. Puedes volver para cambiar cualquier dato.
@@ -791,10 +791,7 @@ export function ResidentAuthorizationNewPage() {
           </div>
         </section>
       ) : (
-        <form
-          onSubmit={handleReview}
-          className="max-w-2xl space-y-5 rounded-4xl border border-border bg-card p-6"
-        >
+        <form onSubmit={handleReview} className="max-w-2xl space-y-5 panel p-6">
           <div className="space-y-1">
             <Label htmlFor="resident-destination">Destino</Label>
             <Select

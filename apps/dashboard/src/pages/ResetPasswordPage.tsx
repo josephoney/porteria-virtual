@@ -54,7 +54,7 @@ export function ResetPasswordPage() {
         </div>
 
         {!token ? (
-          <p className="text-sm text-destructive">
+          <p role="alert" className="text-sm text-destructive">
             Falta el enlace. Ábrelo desde el correo o{' '}
             <Link className="underline underline-offset-4" to="/forgot-password">
               pide uno nuevo

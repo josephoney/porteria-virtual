@@ -8,7 +8,17 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ConfirmDialog } from '../ui/confirm-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
+import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { fieldA11y } from '../../lib/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -113,6 +123,10 @@ export function GuardPanel() {
   const [busy, setBusy] = useState(false);
   const [endShiftDialogOpen, setEndShiftDialogOpen] = useState(false);
   const [endShiftPending, setEndShiftPending] = useState(false);
+  const [forceCloseTarget, setForceCloseTarget] = useState<ShiftHistoryItem | null>(null);
+  const [forceCloseReason, setForceCloseReason] = useState('Cierre administrativo');
+  const [forceCloseError, setForceCloseError] = useState('');
+  const [forceClosePending, setForceClosePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bitacoraToken, setBitacoraToken] = useState(0);
   /** Last total seen by the poll, used to tell "nothing new" from "new row". */
@@ -422,19 +436,30 @@ export function GuardPanel() {
     }
   }
 
-  async function forceClose(shift: ShiftHistoryItem) {
-    if (!communityId) return;
-    const reason = window.prompt('Motivo del cierre forzado:', 'Cierre administrativo');
-    if (!reason) return;
-    setBusy(true);
-    setError(null);
+  function forceClose(shift: ShiftHistoryItem) {
+    setForceCloseReason('Cierre administrativo');
+    setForceCloseError('');
+    setForceCloseTarget(shift);
+  }
+
+  async function confirmForceClose() {
+    const target = forceCloseTarget;
+    if (!target || !communityId) return;
+    const reason = forceCloseReason.trim();
+    if (reason.length < 5) {
+      setForceCloseError('El motivo debe tener al menos 5 caracteres.');
+      return;
+    }
+    setForceClosePending(true);
+    setForceCloseError('');
     try {
-      await post(`/api/guard/shifts/${shift.id}/force-close`, { reason });
+      await post(`/api/guard/shifts/${target.id}/force-close`, { reason });
       await Promise.all([loadCurrent(), loadHistory()]);
+      setForceCloseTarget(null);
     } catch (err) {
-      setError(errorMessage(err));
+      setForceCloseError(errorMessage(err));
     } finally {
-      setBusy(false);
+      setForceClosePending(false);
     }
   }
 
@@ -450,6 +475,61 @@ export function GuardPanel() {
         pending={endShiftPending}
         onConfirm={() => void confirmEndShift()}
       />
+      <Dialog
+        open={forceCloseTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !forceClosePending) {
+            setForceCloseTarget(null);
+            setForceCloseError('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cerrar turno forzado</DialogTitle>
+            <DialogDescription>
+              Se cerrará este turno aunque el guardia no lo haya cerrado. El motivo queda registrado
+              en la bitácora y la acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="force-close-reason">Motivo</Label>
+            <Input
+              id="force-close-reason"
+              value={forceCloseReason}
+              onChange={(event) => {
+                setForceCloseReason(event.target.value);
+                setForceCloseError('');
+              }}
+              {...fieldA11y('force-close-reason', forceCloseError)}
+            />
+            {forceCloseError ? (
+              <p id="force-close-reason-error" role="alert" className="text-xs text-destructive">
+                {forceCloseError}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setForceCloseTarget(null)}
+              disabled={forceClosePending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void confirmForceClose()}
+              disabled={forceClosePending}
+              aria-busy={forceClosePending}
+            >
+              {forceClosePending ? 'Cerrando…' : 'Cerrar turno'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <PageHeader
         title="Guardia"
         description={
@@ -465,7 +545,10 @@ export function GuardPanel() {
       />
 
       {error && (
-        <div className="rounded-3xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div
+          role="alert"
+          className="rounded-3xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
           {error}
         </div>
       )}
@@ -598,7 +681,7 @@ export function GuardPanel() {
       </div>
 
       {isAdmin && currentAccessPointId && (
-        <div className="rounded-4xl border border-border bg-card p-4">
+        <div className="panel p-4">
           <p className="mb-2 text-sm font-medium">Guardias activos en este acceso</p>
           {activeGuards.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay guardias en turno.</p>
@@ -629,7 +712,7 @@ export function GuardPanel() {
               compact
             />
           ) : (
-            <div className="rounded-4xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            <div className="panel p-8 text-center text-sm text-muted-foreground">
               Selecciona un acceso para ver su bitácora.
             </div>
           )}
@@ -683,7 +766,7 @@ export function GuardPanel() {
               Todavía no hay turnos registrados.
             </p>
           ) : (
-            <div className="max-h-[55vh] overflow-auto rounded-4xl border border-border bg-card">
+            <div className="max-h-[55vh] overflow-auto panel">
               <Table>
                 <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
                   <TableRow>

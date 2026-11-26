@@ -8,6 +8,7 @@ import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { NativeSelect } from '../ui/native-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -240,10 +241,10 @@ export function ReportsPanel() {
         {isPlatformAdmin && (
           <div className="space-y-1">
             <Label htmlFor="report-organization">Organización</Label>
-            <select
+            <NativeSelect
               id="report-organization"
               aria-label="Organización"
-              className="h-9 w-56 rounded border border-border bg-card px-2 font-mono text-[11px] text-foreground outline-none focus:border-ring"
+              className="w-56 font-mono"
               value={organizationId}
               onChange={(event) => setOrganizationId(event.target.value)}
             >
@@ -253,16 +254,16 @@ export function ReportsPanel() {
                   {organization.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         )}
 
         <div className="space-y-1">
           <Label htmlFor="report-community">Comunidad</Label>
-          <select
+          <NativeSelect
             id="report-community"
             aria-label="Comunidad"
-            className="h-9 w-56 rounded border border-border bg-card px-2 font-mono text-[11px] text-foreground outline-none focus:border-ring disabled:opacity-50"
+            className="w-56 font-mono disabled:opacity-50"
             value={communityId}
             onChange={(event) => setCommunityId(event.target.value)}
             disabled={isPlatformAdmin && !organizationId}
@@ -273,7 +274,7 @@ export function ReportsPanel() {
                 {community.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
 
         <div className="space-y-1">
@@ -329,12 +330,16 @@ export function ReportsPanel() {
       )}
 
       {!periodValid && (
-        <p className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           La fecha inicial no puede ser posterior a la final.
         </p>
       )}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
 
       {hasScope && periodValid && loading && <ReportSkeleton />}
 
