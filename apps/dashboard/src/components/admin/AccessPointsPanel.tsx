@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 import {
   Dialog,
   DialogContent,
@@ -176,20 +177,45 @@ export function AccessPointsPanel() {
     }
   }
 
+  /** Acción destructiva pendiente de confirmación. */
+  const [confirmTarget, setConfirmTarget] = useState<AccessPointRow | null>(null);
+  const [confirmPending, setConfirmPending] = useState(false);
+
   async function deactivate(item: AccessPointRow) {
     if (!communityId) return;
-    if (!window.confirm(`¿Desactivar el acceso "${item.name}"?`)) return;
+    setConfirmTarget(item);
+  }
+
+  async function confirmDeactivate() {
+    const item = confirmTarget;
+    if (!communityId || !item) return;
+    setConfirmPending(true);
     setError(null);
     try {
       await del(`/api/communities/${communityId}/access-points/${item.id}`);
       await load();
+      setConfirmTarget(null);
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setConfirmPending(false);
     }
   }
 
   return (
     <div className="p-6 space-y-6 overflow-y-auto">
+      <ConfirmDialog
+        open={confirmTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmTarget(null);
+        }}
+        title="Desactivar acceso"
+        description={`El acceso "${confirmTarget?.name ?? ''}" dejará de aceptar registros. La bitácora ya escrita se conserva.`}
+        confirmLabel="Desactivar"
+        destructive
+        pending={confirmPending}
+        onConfirm={() => void confirmDeactivate()}
+      />
       <PageHeader
         title="Accesos"
         description="Porterías y portones de la comunidad. Cada lugar físico tiene su propia bitácora."
