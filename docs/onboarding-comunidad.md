@@ -29,7 +29,10 @@ Checklist para dejar una comunidad operativa con Portería Virtual: estructura f
    - **Dirección**: entrada, salida o ambas.
    - **GPIO**: opcional; se usa si hay relé físico.
 3. Dejar inactivo cualquier acceso que no esté operativo.
-4. Asignar un acceso por defecto a cada guardia desde **Admin → Usuarios** (campo `defaultAccessPointId`).
+4. Asignar el **puesto por defecto** a cada guardia desde **Admin → Usuarios**, con el botón
+   de puesto de su membresía. Para revisar quién cubre cada acceso, usar **Admin → Accesos
+   → Ver**. El puesto es un valor por defecto: no impide que el guardia cubra otro acceso
+   activo de la comunidad.
 
 > La bitácora es por lugar físico. El nombre del acceso queda congelado en cada entrada; si cambia el nombre, el historial conserva el anterior.
 

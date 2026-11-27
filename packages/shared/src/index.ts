@@ -7,6 +7,12 @@ export type { AuthContext } from './types/auth-context.js';
 export type { PublicOrganization, PublicCommunity } from './types/tenant.js';
 export type { Invitation, PublicInvitationPreview } from './types/invitation.js';
 export type { AccessPoint } from './types/access-point.js';
+export type {
+  WorkstationAssignment,
+  WorkstationAssignmentResult,
+  AccessPointGuard,
+  AccessPointGuardListResponse,
+} from './types/workstation.js';
 export type { User } from './types/user.js';
 export type { Call } from './types/call.js';
 export type { Event, EventMetadata } from './types/event.js';
@@ -114,6 +120,7 @@ export type {
   CreateAccessPointDto,
   UpdateAccessPointDto,
 } from './dto/access-points.js';
+export type { AssignWorkstationDto } from './dto/workstation.js';
 
 export type {
   ChangeAccessPointDto,

@@ -17,9 +17,11 @@ import {
   RiUserFollowLine,
   RiUserUnfollowLine,
   RiMailSendLine,
+  RiMapPinLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { emailError, fieldA11y, hasErrors, minLengthError, requiredError } from '../../lib/form';
+import { WorkstationDialog, type WorkstationTarget } from './WorkstationDialog';
 
 interface MembershipView {
   id: string;
@@ -32,6 +34,8 @@ interface MembershipView {
   locationUnitId: string | null;
   locationUnitName?: string | null;
   locationUnitCode?: string | null;
+  defaultAccessPointId?: string | null;
+  defaultAccessPointName?: string | null;
 }
 
 interface UserData {
@@ -267,6 +271,10 @@ export function UsersTable() {
     email?: string;
   }>({});
   const [assignmentUser, setAssignmentUser] = useState<UserData | null>(null);
+  const [workstationTarget, setWorkstationTarget] = useState<{
+    email: string;
+    target: WorkstationTarget;
+  } | null>(null);
   const [assignmentUnits, setAssignmentUnits] = useState<UnitOption[]>([]);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [assignmentForm, setAssignmentForm] = useState({
@@ -892,6 +900,11 @@ export function UsersTable() {
                                 Inactiva
                               </Badge>
                             )}
+                            {m.role === 'guard' && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                {m.defaultAccessPointName ?? 'Sin puesto'}
+                              </Badge>
+                            )}
                             {canManageMembership && (
                               <Button
                                 type="button"
@@ -919,6 +932,28 @@ export function UsersTable() {
                                 ) : (
                                   <RiUserFollowLine />
                                 )}
+                              </Button>
+                            )}
+                            {canManageMembership && m.role === 'guard' && !user?.isPlatformAdmin && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-xs"
+                                title="Puesto por defecto"
+                                aria-label={`Puesto por defecto de ${u.email} en ${m.communityName ?? 'la comunidad'}`}
+                                onClick={() =>
+                                  setWorkstationTarget({
+                                    email: u.email,
+                                    target: {
+                                      membershipId: m.id,
+                                      communityId: m.communityId,
+                                      communityName: m.communityName ?? null,
+                                      accessPointId: m.defaultAccessPointId ?? null,
+                                    },
+                                  })
+                                }
+                              >
+                                <RiMapPinLine />
                               </Button>
                             )}
                             {index === 0 && !u.isPlatformAdmin && assignableRoles.length > 0 && (
@@ -1006,6 +1041,16 @@ export function UsersTable() {
           </TableBody>
         </Table>
       )}
+
+      <WorkstationDialog
+        open={Boolean(workstationTarget)}
+        onOpenChange={(open) => {
+          if (!open) setWorkstationTarget(null);
+        }}
+        userEmail={workstationTarget?.email ?? ''}
+        target={workstationTarget?.target ?? null}
+        onSaved={fetchUsers}
+      />
 
       <Dialog
         open={Boolean(assignmentUser)}

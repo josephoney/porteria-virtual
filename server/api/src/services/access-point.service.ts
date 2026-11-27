@@ -1,6 +1,6 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, count, eq, isNotNull } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { accessPoints, communities } from '@porteria/database/schema';
+import { accessPoints, communities, memberships } from '@porteria/database/schema';
 import type { AccessPoint, CreateAccessPointDto, UpdateAccessPointDto } from '@porteria/shared';
 
 const db = createDb();
@@ -33,6 +33,33 @@ function toAccessPoint(row: AccessPointRow): AccessPoint {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+/**
+ * Guardias asignados por acceso, en una sola consulta agregada.
+ *
+ * Se calcula solo para el listado: las respuestas de una sola fila evitan la
+ * consulta extra y el panel usa el listado para pintar el conteo.
+ */
+async function assignedGuardCounts(communityId: string): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ accessPointId: memberships.defaultAccessPointId, total: count() })
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.communityId, communityId),
+        eq(memberships.role, 'guard'),
+        eq(memberships.status, 'active'),
+        isNotNull(memberships.defaultAccessPointId),
+      ),
+    )
+    .groupBy(memberships.defaultAccessPointId);
+
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (row.accessPointId) counts.set(row.accessPointId, Number(row.total));
+  }
+  return counts;
 }
 
 async function loadCommunity(communityId: string) {
@@ -91,7 +118,15 @@ export async function listAccessPoints(
     )
     .orderBy(asc(accessPoints.name));
 
-  return { ok: true, data: rows.map(toAccessPoint) };
+  const counts = await assignedGuardCounts(communityId);
+
+  return {
+    ok: true,
+    data: rows.map((row) => ({
+      ...toAccessPoint(row),
+      assignedGuards: counts.get(row.id) ?? 0,
+    })),
+  };
 }
 
 export async function createAccessPoint(
@@ -163,6 +198,12 @@ export async function updateAccessPoint(
   }
 }
 
+/**
+ * Desactiva un acceso sin tocar los puestos asignados.
+ *
+ * El guardia conserva el puesto y recibe el aviso de que está inactivo; la
+ * asignación vuelve a servir si el acceso se reactiva.
+ */
 export async function deactivateAccessPoint(
   requester: AccessPointRequester,
   communityId: string,

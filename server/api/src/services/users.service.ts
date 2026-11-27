@@ -7,6 +7,7 @@ import {
   communities,
   locationUnits,
   organizations,
+  accessPoints,
 } from '@porteria/database/schema';
 import { hashPassword, setPassword, verifyPassword } from './credentials.service.js';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
@@ -40,6 +41,8 @@ export interface MembershipView {
   locationUnitId: string | null;
   locationUnitName?: string | null;
   locationUnitCode?: string | null;
+  defaultAccessPointId?: string | null;
+  defaultAccessPointName?: string | null;
 }
 
 export interface UserResult {
@@ -113,6 +116,7 @@ function toMembershipView(row: typeof memberships.$inferSelect): MembershipView 
     communityId: row.communityId,
     unitId: row.unitId,
     locationUnitId: row.locationUnitId,
+    defaultAccessPointId: row.defaultAccessPointId,
   };
 }
 
@@ -124,7 +128,10 @@ async function enrichMembershipViews(views: MembershipView[]): Promise<Membershi
   const unitIds = [
     ...new Set(views.map((view) => view.locationUnitId).filter(Boolean)),
   ] as string[];
-  const [organizationRows, communityRows, unitRows] = await Promise.all([
+  const accessPointIds = [
+    ...new Set(views.map((view) => view.defaultAccessPointId).filter(Boolean)),
+  ] as string[];
+  const [organizationRows, communityRows, unitRows, accessPointRows] = await Promise.all([
     organizationIds.length
       ? db
           .select({ id: organizations.id, name: organizations.name })
@@ -147,10 +154,17 @@ async function enrichMembershipViews(views: MembershipView[]): Promise<Membershi
           .from(locationUnits)
           .where(inArray(locationUnits.id, unitIds))
       : Promise.resolve([]),
+    accessPointIds.length
+      ? db
+          .select({ id: accessPoints.id, name: accessPoints.name })
+          .from(accessPoints)
+          .where(inArray(accessPoints.id, accessPointIds))
+      : Promise.resolve([]),
   ]);
   const organizationNames = new Map(organizationRows.map((row) => [row.id, row.name]));
   const communityNames = new Map(communityRows.map((row) => [row.id, row.name]));
   const unitMap = new Map(unitRows.map((row) => [row.id, row]));
+  const accessPointNames = new Map(accessPointRows.map((row) => [row.id, row.name]));
   return views.map((view) => ({
     ...view,
     organizationName: view.organizationId
@@ -159,6 +173,9 @@ async function enrichMembershipViews(views: MembershipView[]): Promise<Membershi
     communityName: view.communityId ? (communityNames.get(view.communityId) ?? null) : null,
     locationUnitName: view.locationUnitId ? (unitMap.get(view.locationUnitId)?.name ?? null) : null,
     locationUnitCode: view.locationUnitId ? (unitMap.get(view.locationUnitId)?.code ?? null) : null,
+    defaultAccessPointName: view.defaultAccessPointId
+      ? (accessPointNames.get(view.defaultAccessPointId) ?? null)
+      : null,
   }));
 }
 

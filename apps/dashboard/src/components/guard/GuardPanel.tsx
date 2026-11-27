@@ -4,6 +4,7 @@ import { ApiError, get, post } from '../../lib/apiClient';
 import { useBitacoraStream } from '../../lib/use-bitacora-stream';
 import { PageHeader } from '../layout/PageHeader';
 import { AccessBitacoraView } from '../admin/AccessBitacoraView';
+import { GuardWorkstationInfo } from './GuardWorkstationInfo';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -588,9 +589,7 @@ export function GuardPanel() {
             <p className="font-medium">{user?.name}</p>
             <p className="text-muted-foreground">{user?.email}</p>
             <p className="text-muted-foreground">Rol: {role || '—'}</p>
-            <p className="text-muted-foreground">
-              Acceso default: {defaultAccessPoint?.name ?? 'Sin asignar'}
-            </p>
+            <GuardWorkstationInfo />
           </CardContent>
         </Card>
 

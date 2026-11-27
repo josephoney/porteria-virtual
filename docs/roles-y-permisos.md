@@ -114,6 +114,7 @@ Leyenda: ✅ puede escribir · 👁 solo lectura · ⚠️ parcial · ❌ no pue
 | Personas / Residentes               |            👁            |     ✅      |             ✅              |         ❌          |       ❌       |               ❌                |
 | Usuarios                            |     ⚠️ lista global      |     ✅      |             ✅              |         ❌          |       ❌       |               ❌                |
 | Memberships                         |            ⚠️            |     ✅      |    ✅ solo su comunidad     |         ❌          |       ❌       |               ❌                |
+| Puesto de trabajo (asignar)         |            ❌            |     ✅      |    ✅ solo su comunidad     |         ❌          |       ❌       |               ❌                |
 | Invitaciones                        |  ✅ invita `org_admin`   |     ✅      |             ✅              |         ❌          |       ❌       |               ❌                |
 | Llamadas                            |            ❌            |     ✅      |             ✅              | ✅ solo las propias |       ❌       |               ❌                |
 | Kiosks                              |            ❌            |     ✅      |             ✅              |         👁          |       ❌       |               ❌                |

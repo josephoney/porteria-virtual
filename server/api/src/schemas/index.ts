@@ -61,6 +61,11 @@ export const createMembershipSchema = z.object({
   defaultAccessPointId: z.string().uuid().nullable().optional(),
 });
 
+export const assignWorkstationSchema = z.object({
+  /** `null` desasigna el puesto y es idempotente. */
+  accessPointId: z.string().uuid().nullable(),
+});
+
 export const updateMembershipSchema = z.object({
   role: membershipRoleSchema.optional(),
   status: z.enum(['active', 'inactive']).optional(),

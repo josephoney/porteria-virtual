@@ -1,12 +1,22 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { AssignWorkstationDto } from '@porteria/shared';
 import { requireRole } from '../middlewares/rbac.js';
 import * as membershipsService from '../services/memberships.service.js';
-import { createMembershipSchema, updateMembershipSchema } from '../schemas/index.js';
+import type { WorkstationErrorCode } from '../services/workstation.service.js';
+import { assignWorkstation } from '../services/workstation.service.js';
+import {
+  assignWorkstationSchema,
+  createMembershipSchema,
+  updateMembershipSchema,
+} from '../schemas/index.js';
 
-function getRequester(request: FastifyRequest): membershipsService.Requester {
+function getRequester(request: FastifyRequest): membershipsService.Requester & {
+  personId: string | null;
+} {
   const u = request.user;
   return {
     sub: u.sub,
+    personId: u.personId ?? null,
     role: u.role,
     orgId: u.orgId,
     communityId: u.communityId ?? null,
@@ -14,8 +24,14 @@ function getRequester(request: FastifyRequest): membershipsService.Requester {
   };
 }
 
+function workstationStatus(code: WorkstationErrorCode): 400 | 403 | 404 {
+  if (code === 'not_found') return 404;
+  if (code === 'forbidden' || code === 'tenant_read_only') return 403;
+  return 400;
+}
+
 export async function membershipRoutes(app: FastifyInstance) {
-  app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.addHook('onRequest', async (request, reply) => {
     try {
       await request.jwtVerify();
     } catch (err) {
@@ -45,6 +61,40 @@ export async function membershipRoutes(app: FastifyInstance) {
 
 
       return reply.status(201).send(result.membership);
+    },
+  );
+
+  /**
+   * Puesto de trabajo del guardia.
+   *
+   * Es la única puerta de escritura del campo: el `PATCH` de la membresía delega
+   * acá, así que las reglas viven en un solo lugar.
+   */
+  app.put(
+    '/:id/workstation',
+    { preHandler: [requireRole('org_admin', 'community_admin')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const requester = getRequester(request);
+      const { id } = request.params as { id: string };
+      const body = assignWorkstationSchema.parse(request.body) as AssignWorkstationDto;
+
+      const result = await assignWorkstation({
+        requester,
+        membershipId: id,
+        accessPointId: body.accessPointId,
+      });
+
+      if (!result.ok) {
+        const status = workstationStatus(result.code);
+        return reply.status(status).send({
+          statusCode: status,
+          error: status === 404 ? 'Not Found' : status === 403 ? 'Forbidden' : 'Bad Request',
+          message: result.code,
+          code: result.code,
+        });
+      }
+
+      return reply.send(result.data);
     },
   );
 

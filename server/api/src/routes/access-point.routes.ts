@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { CreateAccessPointDto, UpdateAccessPointDto } from '@porteria/shared';
 import { requireRole } from '../middlewares/rbac.js';
 import { createAccessPointSchema, updateAccessPointSchema } from '../schemas/index.js';
+import type { WorkstationErrorCode } from '../services/workstation.service.js';
+import { listGuardsForAccessPoint } from '../services/workstation.service.js';
 import {
   createAccessPoint,
   deactivateAccessPoint,
@@ -42,6 +44,12 @@ function sendError<T>(reply: FastifyReply, result: Extract<AccessPointResult<T>,
   return reply.status(status).send({ statusCode: status, error, message: result.code });
 }
 
+function sendWorkstationError(reply: FastifyReply, code: WorkstationErrorCode) {
+  const status = code === 'not_found' ? 404 : code === 'forbidden' ? 403 : 400;
+  const error = status === 404 ? 'Not Found' : status === 403 ? 'Forbidden' : 'Bad Request';
+  return reply.status(status).send({ statusCode: status, error, message: code, code });
+}
+
 export async function accessPointRoutes(app: FastifyInstance) {
   app.addHook('onRequest', async (request, reply) => {
     try {
@@ -68,6 +76,25 @@ export async function accessPointRoutes(app: FastifyInstance) {
         query.includeInactive === 'true',
       );
       if (!result.ok) return sendError(reply, result);
+      return reply.send({ items: result.data });
+    },
+  );
+
+  /** Guardias que tienen este acceso como puesto por defecto. */
+  app.get(
+    '/:communityId/access-points/:accessPointId/guards',
+    { preHandler: [requireRole('org_admin', 'community_admin')] },
+    async (request, reply) => {
+      const { communityId, accessPointId } = request.params as {
+        communityId: string;
+        accessPointId: string;
+      };
+      const result = await listGuardsForAccessPoint({
+        requester: getRequester(request),
+        communityId,
+        accessPointId,
+      });
+      if (!result.ok) return sendWorkstationError(reply, result.code);
       return reply.send({ items: result.data });
     },
   );

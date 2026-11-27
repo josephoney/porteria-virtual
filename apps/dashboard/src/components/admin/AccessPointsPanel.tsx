@@ -20,6 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { AccessPointGuardsDialog } from './AccessPointGuardsDialog';
 
 interface CommunityOption {
   id: string;
@@ -35,6 +36,8 @@ interface AccessPointRow {
   gpioPin: number | null;
   failPolicy: string;
   active: boolean;
+  /** Guardias con este acceso como puesto por defecto. */
+  assignedGuards?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -88,6 +91,7 @@ export function AccessPointsPanel() {
   const [editing, setEditing] = useState<AccessPointRow | null>(null);
   const [form, setForm] = useState<AccessPointForm>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; gpioPin?: string }>({});
+  const [guardsTarget, setGuardsTarget] = useState<AccessPointRow | null>(null);
 
   useEffect(() => {
     setCommunityId(activeMembership?.communityId ?? null);
@@ -292,6 +296,7 @@ export function AccessPointsPanel() {
                 <TableHead>Dirección</TableHead>
                 <TableHead>GPIO</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Guardias</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -306,6 +311,19 @@ export function AccessPointsPanel() {
                     <Badge variant={item.active ? 'default' : 'secondary'}>
                       {item.active ? 'Activo' : 'Inactivo'}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm tabular-nums">{item.assignedGuards ?? 0}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Ver guardias de ${item.name}`}
+                        onClick={() => setGuardsTarget(item)}
+                      >
+                        Ver
+                      </Button>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -325,6 +343,17 @@ export function AccessPointsPanel() {
           </Table>
         </div>
       )}
+
+      <AccessPointGuardsDialog
+        open={Boolean(guardsTarget)}
+        onOpenChange={(open) => {
+          if (!open) setGuardsTarget(null);
+        }}
+        communityId={communityId}
+        accessPointId={guardsTarget?.id ?? null}
+        accessPointName={guardsTarget?.name ?? ''}
+        onChanged={() => void load()}
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

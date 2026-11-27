@@ -204,6 +204,10 @@ export function patch<T>(path: string, body?: unknown): Promise<ApiResponse<T>> 
   return request<T>('PATCH', path, body);
 }
 
+export function put<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {
+  return request<T>('PUT', path, body);
+}
+
 export function del<T>(path: string): Promise<ApiResponse<T>> {
   return request<T>('DELETE', path);
 }

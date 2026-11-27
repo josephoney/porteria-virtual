@@ -159,6 +159,18 @@ La bitácora es inmutable: no hay `PATCH` ni `DELETE`.
 | POST   | `/api/communities/:communityId/access-points`     | org_admin, community_admin               |
 | PATCH  | `/api/communities/:communityId/access-points/:id` | org_admin, community_admin               |
 | DELETE | `/api/communities/:communityId/access-points/:id` | org_admin, community_admin (baja lógica) |
+| GET    | `/api/communities/:communityId/access-points/:accessPointId/guards` | org_admin, community_admin |
+
+### 5.8.1 Puesto de trabajo del guardia
+
+| Método | Ruta                               | Rol                        |
+| ------ | ---------------------------------- | -------------------------- |
+| PUT    | `/api/memberships/:id/workstation` | org_admin, community_admin |
+| GET    | `/api/me/workstation`              | cualquier autenticado      |
+
+Body del `PUT`: `{ "accessPointId": "uuid" | null }`. Solo aplica a membresías `guard`
+con comunidad y a un acceso activo de esa comunidad; `null` desasigna y es idempotente.
+La asignación es informativa: no restringe en qué acceso inicia turno el guardia.
 
 ### 5.9 Administración de comunidad y ubicaciones
 

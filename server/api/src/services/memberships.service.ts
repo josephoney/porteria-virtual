@@ -1,10 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { memberships, accessPoints, accounts } from '@porteria/database/schema';
+import { memberships, accounts } from '@porteria/database/schema';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
 import { canAssignRole } from './role-policy.service.js';
 import { validateLocationUnit } from './location-unit.service.js';
+import { assignWorkstation, checkWorkstationTarget } from './workstation.service.js';
 
 const db = createDb();
 
@@ -67,26 +68,6 @@ function canManage(requester: Requester): boolean {
   );
 }
 
-async function validateDefaultAccessPoint(
-  accessPointId: string,
-  communityId: string | null,
-): Promise<string | null> {
-  if (!communityId) return 'Default access point requires a community';
-  const [accessPoint] = await db
-    .select({
-      id: accessPoints.id,
-      communityId: accessPoints.communityId,
-      active: accessPoints.active,
-    })
-    .from(accessPoints)
-    .where(eq(accessPoints.id, accessPointId))
-    .limit(1);
-  if (!accessPoint) return 'Access point not found';
-  if (accessPoint.communityId !== communityId) return 'Access point out of community';
-  if (!accessPoint.active) return 'Access point is inactive';
-  return null;
-}
-
 export async function createMembership(
   data: {
     userId: string;
@@ -145,11 +126,13 @@ export async function createMembership(
   }
 
   if (data.defaultAccessPointId) {
-    const accessPointError = await validateDefaultAccessPoint(
-      data.defaultAccessPointId,
+    const target = await checkWorkstationTarget({
+      requester,
+      role: data.role,
       communityId,
-    );
-    if (accessPointError) return { error: accessPointError };
+      accessPointId: data.defaultAccessPointId,
+    });
+    if (!target.ok) return { error: target.code };
   }
 
   const created = await db.transaction(async (tx) => {
@@ -226,10 +209,6 @@ export async function updateMembership(
   const nextUnitId = data.unitId !== undefined ? data.unitId : existing.unitId;
   const nextLocationUnitId =
     data.locationUnitId !== undefined ? data.locationUnitId : existing.locationUnitId;
-  const nextDefaultAccessPointId =
-    data.defaultAccessPointId !== undefined
-      ? data.defaultAccessPointId
-      : existing.defaultAccessPointId;
   const nextRole = data.role ?? existing.role;
 
   const scopeError = validateMembershipScope(
@@ -251,12 +230,23 @@ export async function updateMembership(
     }
   }
 
-  if (nextDefaultAccessPointId) {
-    const accessPointError = await validateDefaultAccessPoint(
-      nextDefaultAccessPointId,
-      nextCommunityId,
-    );
-    if (accessPointError) return { error: accessPointError };
+  // El puesto de trabajo tiene reglas propias y un solo dueño. El PATCH delega
+  // para no duplicar validaciones ni auditoría.
+  if (data.defaultAccessPointId !== undefined) {
+    const assignment = await assignWorkstation({
+      requester,
+      membershipId: id,
+      accessPointId: data.defaultAccessPointId,
+    });
+    if (!assignment.ok) return { error: assignment.code };
+  } else if (existing.defaultAccessPointId && nextRole !== 'guard') {
+    // Un rol que no hace turnos no puede conservar un puesto asignado.
+    const cleared = await assignWorkstation({
+      requester,
+      membershipId: id,
+      accessPointId: null,
+    });
+    if (!cleared.ok) return { error: cleared.code };
   }
 
   const updated = await db.transaction(async (tx) => {
@@ -268,7 +258,6 @@ export async function updateMembership(
         communityId: nextCommunityId,
         unitId: nextUnitId,
         locationUnitId: nextLocationUnitId,
-        defaultAccessPointId: nextDefaultAccessPointId,
         updatedAt: new Date(),
       })
       .where(eq(memberships.id, id))

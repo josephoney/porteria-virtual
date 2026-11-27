@@ -8,6 +8,7 @@ import { can } from '../services/admin-permissions.service.js';
 import type { MembershipRole } from '@porteria/shared';
 import { createUserSchema, updateUserSchema, changePasswordSchema } from '../schemas/index.js';
 import { PasswordPolicyError } from '../services/credentials.service.js';
+import { getWorkstationForAccount } from '../services/workstation.service.js';
 
 function getUser(request: FastifyRequest): usersService.Requester {
   const u = request.user;
@@ -58,6 +59,40 @@ export async function userRoutes(app: FastifyInstance) {
         unitId: request.user.unitId ?? null,
       },
     };
+  });
+
+  /**
+   * Puesto de trabajo de la sesión activa.
+   *
+   * La sesión puede quedar desactualizada cuando un administrador reasigna el
+   * puesto, así que el panel del guardia lee acá en vez de confiar en el token.
+   */
+  app.get('/me/workstation', async (request: FastifyRequest, reply: FastifyReply) => {
+    const u = getUser(request);
+    if (!u.accountId) {
+      return reply.status(401).send({
+        statusCode: 401,
+        error: 'Unauthorized',
+        message: 'Legacy token rejected; sign in again',
+      });
+    }
+
+    const assignment = await getWorkstationForAccount(
+      u.accountId,
+      request.user.membershipId ?? null,
+    );
+
+    return (
+      assignment ?? {
+        membershipId: request.user.membershipId ?? '',
+        communityId: u.communityId,
+        accessPointId: null,
+        name: null,
+        type: null,
+        direction: null,
+        active: null,
+      }
+    );
   });
 
   app.patch('/me/password', async (request: FastifyRequest, reply: FastifyReply) => {
