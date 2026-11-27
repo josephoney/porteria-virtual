@@ -1,16 +1,19 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
-import { memberships, accounts } from '@porteria/database/schema';
+import { memberships, accounts, guardShifts } from '@porteria/database/schema';
 import { createEventEnvelope, type MembershipRole } from '@porteria/shared';
 import { enqueueEvent } from './outbox.service.js';
-import { canAssignRole } from './role-policy.service.js';
+import { canAssignRole, canDeleteRole } from './role-policy.service.js';
 import { validateLocationUnit } from './location-unit.service.js';
 import { assignWorkstation, checkWorkstationTarget } from './workstation.service.js';
+import { insertEvent } from './events.service.js';
 
 const db = createDb();
 
 export interface Requester {
   sub: string;
+  /** Contexto activo del actor: sirve para impedir que se borre a sí mismo. */
+  membershipId?: string | null;
   role: string;
   orgId: string;
   communityId: string | null;
@@ -279,4 +282,99 @@ export async function updateMembership(
   });
 
   return { membership: toMembershipResult(updated) };
+}
+
+export type DeleteMembershipResult =
+  | { deleted: true }
+  | { error: string }
+  | { notFound: true };
+
+/**
+ * Borra una membresía de forma definitiva.
+ *
+ * La baja lógica sigue existiendo (`PATCH status`); esto es la salida para limpiar
+ * asignaciones que ya no deben seguir apareciendo. El historial no se pierde porque la
+ * bitácora y los pases cuelgan de la persona, no de la membresía.
+ */
+export async function deleteMembership(
+  id: string,
+  requester: Requester,
+): Promise<DeleteMembershipResult> {
+  if (requester.isPlatformAdmin) return { error: 'tenant_read_only' };
+  if (!canManage(requester)) return { error: 'Insufficient permissions' };
+
+  const [existing] = await db
+    .select()
+    .from(memberships)
+    .where(and(eq(memberships.id, id), eq(memberships.organizationId, requester.orgId)))
+    .limit(1);
+
+  if (!existing) return { notFound: true };
+
+  if (requester.role === 'community_admin' && existing.communityId !== requester.communityId) {
+    return { notFound: true };
+  }
+
+  if (requester.membershipId && existing.id === requester.membershipId) {
+    return { error: 'own_active_membership' };
+  }
+
+  if (existing.role === 'org_admin' && existing.status === 'active') {
+    const [other] = await db
+      .select({ id: memberships.id })
+      .from(memberships)
+      .where(
+        and(
+          eq(memberships.organizationId, existing.organizationId),
+          eq(memberships.role, 'org_admin'),
+          eq(memberships.status, 'active'),
+          ne(memberships.id, existing.id),
+        ),
+      )
+      .limit(1);
+    if (!other) return { error: 'last_org_admin' };
+  }
+
+  if (!canDeleteRole(requester, existing.role as MembershipRole)) {
+    return { error: 'Role out of scope' };
+  }
+
+  if (existing.communityId) {
+    // Un turno abierto quedaría sin membresía que lo respalde: se fuerza el cierre
+    // primero, que ya existe en la bitácora.
+    const [shift] = await db
+      .select({ id: guardShifts.id })
+      .from(guardShifts)
+      .where(
+        and(
+          eq(guardShifts.guardPersonId, existing.personId),
+          eq(guardShifts.communityId, existing.communityId),
+          eq(guardShifts.status, 'open'),
+        ),
+      )
+      .limit(1);
+    if (shift) return { error: 'open_shift' };
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(memberships).where(eq(memberships.id, id));
+    await insertEvent(
+      {
+        eventType: 'membership.deleted',
+        actorId: requester.sub,
+        actorRole: requester.role,
+        organizationId: existing.organizationId,
+        communityId: existing.communityId,
+        metadata: {
+          membershipId: id,
+          personId: existing.personId,
+          role: existing.role,
+          previousStatus: existing.status,
+        },
+      },
+      tx,
+    );
+  });
+
+  return { deleted: true };
 }

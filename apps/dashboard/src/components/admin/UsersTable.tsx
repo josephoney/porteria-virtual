@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { get, post, patch, ApiError } from '../../lib/apiClient';
+import { get, post, patch, del, ApiError } from '../../lib/apiClient';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../ui/table';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -18,9 +18,11 @@ import {
   RiUserUnfollowLine,
   RiMailSendLine,
   RiMapPinLine,
+  RiDeleteBinLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { emailError, fieldA11y, hasErrors, minLengthError, requiredError } from '../../lib/form';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 import { WorkstationDialog, type WorkstationTarget } from './WorkstationDialog';
 
 interface MembershipView {
@@ -83,6 +85,15 @@ const ROLE_LABELS: Record<string, string> = {
   tenant: 'Inquilino',
   resident: 'Residente',
   staff: 'Staff',
+};
+
+const DELETE_ERRORS: Record<string, string> = {
+  last_org_admin: 'No puedes eliminar la última asignación de administrador de la organización.',
+  own_active_membership: 'No puedes eliminar la asignación de tu propio contexto activo.',
+  open_shift:
+    'La persona tiene un turno abierto. Fuerza el cierre del turno y vuelve a intentar.',
+  'Role out of scope': 'No puedes eliminar una asignación con un rol que no puedes asignar.',
+  tenant_read_only: 'El administrador de plataforma no puede modificar datos del conjunto.',
 };
 
 export function UsersTable() {
@@ -275,6 +286,11 @@ export function UsersTable() {
     email: string;
     target: WorkstationTarget;
   } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    user: UserData;
+    membership: MembershipView;
+  } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [assignmentUnits, setAssignmentUnits] = useState<UnitOption[]>([]);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [assignmentForm, setAssignmentForm] = useState({
@@ -427,6 +443,24 @@ export function UsersTable() {
       fetchUsers();
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : 'Error al actualizar la asignación');
+    }
+  }
+
+  async function handleDeleteMembership() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setActionError('');
+    try {
+      await del(`/api/memberships/${deleteTarget.membership.id}`);
+      fetchUsers();
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : '';
+      setActionError(
+        DELETE_ERRORS[message] ?? 'No se pudo eliminar la asignación. Reintenta en unos segundos.',
+      );
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   }
 
@@ -795,13 +829,14 @@ export function UsersTable() {
               <TableHead>Documento</TableHead>
               <TableHead>Comunidad</TableHead>
               <TableHead>Membresía</TableHead>
+              <TableHead>Acciones</TableHead>
               <TableHead>Estado</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {fetchError && (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center">
+                <TableCell colSpan={7} className="py-8 text-center">
                   <p className="text-sm text-destructive" role="alert">
                     {fetchError}
                   </p>
@@ -814,7 +849,7 @@ export function UsersTable() {
 
             {!fetchError && users.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                   No hay usuarios para mostrar
                 </TableCell>
               </TableRow>
@@ -905,114 +940,121 @@ export function UsersTable() {
                                 {m.defaultAccessPointName ?? 'Sin puesto'}
                               </Badge>
                             )}
-                            {canManageMembership && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                title={
-                                  m.status === 'active'
-                                    ? 'Quitar asignación'
-                                    : 'Reactivar asignación'
-                                }
-                                aria-label={
-                                  m.status === 'active'
-                                    ? `Quitar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`
-                                    : `Reactivar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`
-                                }
-                                onClick={() =>
-                                  handleMembershipStatus(
-                                    m,
-                                    m.status === 'active' ? 'inactive' : 'active',
-                                  )
-                                }
-                              >
-                                {m.status === 'active' ? (
-                                  <RiUserUnfollowLine />
-                                ) : (
-                                  <RiUserFollowLine />
-                                )}
-                              </Button>
-                            )}
-                            {canManageMembership && m.role === 'guard' && !user?.isPlatformAdmin && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-xs"
-                                title="Puesto por defecto"
-                                aria-label={`Puesto por defecto de ${u.email} en ${m.communityName ?? 'la comunidad'}`}
-                                onClick={() =>
-                                  setWorkstationTarget({
-                                    email: u.email,
-                                    target: {
-                                      membershipId: m.id,
-                                      communityId: m.communityId,
-                                      communityName: m.communityName ?? null,
-                                      accessPointId: m.defaultAccessPointId ?? null,
-                                    },
-                                  })
-                                }
-                              >
-                                <RiMapPinLine />
-                              </Button>
-                            )}
-                            {index === 0 && !u.isPlatformAdmin && assignableRoles.length > 0 && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-xs"
-                                title="Agregar asignación"
-                                aria-label={`Agregar asignación a ${u.email}`}
-                                onClick={() => openAssignment(u)}
-                              >
-                                <RiUserAddLine />
-                              </Button>
-                            )}
-                            {index === 0 && canResetUser(u) && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-xs"
-                                title="Cambiar contraseña"
-                                aria-label={`Cambiar contraseña de ${u.email}`}
-                                onClick={() => openResetDialog(u)}
-                              >
-                                <RiLockPasswordLine />
-                              </Button>
-                            )}
-                            {index === 0 && canResendActivation(u) && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-xs"
-                                title="Reenviar activación"
-                                aria-label={`Reenviar activación de ${u.email}`}
-                                onClick={() => {
-                                  setActionError('');
-                                  setActivationTarget(u);
-                                }}
-                              >
-                                <RiMailSendLine />
-                              </Button>
-                            )}
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-muted-foreground">Sin membresías</span>
-                            {!u.isPlatformAdmin && assignableRoles.length > 0 && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon-xs"
-                                title="Agregar asignación"
-                                aria-label={`Agregar asignación a ${u.email}`}
-                                onClick={() => openAssignment(u)}
-                              >
-                                <RiUserAddLine />
-                              </Button>
-                            )}
-                          </div>
+                          <span className="text-xs text-muted-foreground">Sin membresías</span>
                         )}
+                      </TableCell>
+
+                      <TableCell className="py-2 align-top">
+                        <div className="flex flex-col items-start gap-1">
+                          {index === 0 && !u.isPlatformAdmin && assignableRoles.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-xs"
+                              title="Agregar asignación"
+                              aria-label={`Agregar asignación a ${u.email}`}
+                              onClick={() => openAssignment(u)}
+                            >
+                              <RiUserAddLine />
+                            </Button>
+                          )}
+                          {index === 0 && canResetUser(u) && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-xs"
+                              title="Cambiar contraseña"
+                              aria-label={`Cambiar contraseña de ${u.email}`}
+                              onClick={() => openResetDialog(u)}
+                            >
+                              <RiLockPasswordLine />
+                            </Button>
+                          )}
+                          {index === 0 && canResendActivation(u) && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-xs"
+                              title="Reenviar activación"
+                              aria-label={`Reenviar activación de ${u.email}`}
+                              onClick={() => {
+                                setActionError('');
+                                setActivationTarget(u);
+                              }}
+                            >
+                              <RiMailSendLine />
+                            </Button>
+                          )}
+                          {m && canManageMembership && m.role === 'guard' && !user?.isPlatformAdmin && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-xs"
+                              title="Puesto por defecto"
+                              aria-label={`Puesto por defecto de ${u.email} en ${m.communityName ?? 'la comunidad'}`}
+                              onClick={() =>
+                                setWorkstationTarget({
+                                  email: u.email,
+                                  target: {
+                                    membershipId: m.id,
+                                    communityId: m.communityId,
+                                    communityName: m.communityName ?? null,
+                                    accessPointId: m.defaultAccessPointId ?? null,
+                                  },
+                                })
+                              }
+                            >
+                              <RiMapPinLine />
+                            </Button>
+                          )}
+                          {m && canManageMembership && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              title={
+                                m.status === 'active'
+                                  ? 'Inactivar asignación'
+                                  : 'Reactivar asignación'
+                              }
+                              aria-label={
+                                m.status === 'active'
+                                  ? `Inactivar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`
+                                  : `Reactivar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`
+                              }
+                              onClick={() =>
+                                handleMembershipStatus(
+                                  m,
+                                  m.status === 'active' ? 'inactive' : 'active',
+                                )
+                              }
+                            >
+                              {m.status === 'active' ? (
+                                <RiUserUnfollowLine />
+                              ) : (
+                                <RiUserFollowLine />
+                              )}
+                            </Button>
+                          )}
+                          {m && canManageMembership && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="text-destructive hover:text-destructive"
+                              title="Eliminar asignación"
+                              aria-label={`Eliminar asignación de ${u.email} en ${m.communityName ?? 'la comunidad'}`}
+                              onClick={() => setDeleteTarget({ user: u, membership: m })}
+                            >
+                              <RiDeleteBinLine />
+                            </Button>
+                          )}
+                          {!m && (u.isPlatformAdmin || assignableRoles.length === 0) && (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </div>
                       </TableCell>
 
                       {index === 0 && (
@@ -1041,6 +1083,19 @@ export function UsersTable() {
           </TableBody>
         </Table>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title="Eliminar asignación"
+        description={`Se eliminará definitivamente la asignación de ${deleteTarget?.membership.role ?? ''} de ${deleteTarget?.user.email ?? ''} en ${deleteTarget?.membership.communityName ?? 'la organización'}. La persona, su cuenta y su historial se conservan.`}
+        confirmLabel="Eliminar"
+        destructive
+        pending={deleting}
+        onConfirm={() => void handleDeleteMembership()}
+      />
 
       <WorkstationDialog
         open={Boolean(workstationTarget)}

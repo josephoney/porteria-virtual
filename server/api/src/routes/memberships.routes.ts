@@ -17,6 +17,7 @@ function getRequester(request: FastifyRequest): membershipsService.Requester & {
   return {
     sub: u.sub,
     personId: u.personId ?? null,
+    membershipId: u.membershipId ?? null,
     role: u.role,
     orgId: u.orgId,
     communityId: u.communityId ?? null,
@@ -27,6 +28,20 @@ function getRequester(request: FastifyRequest): membershipsService.Requester & {
 function workstationStatus(code: WorkstationErrorCode): 400 | 403 | 404 {
   if (code === 'not_found') return 404;
   if (code === 'forbidden' || code === 'tenant_read_only') return 403;
+  return 400;
+}
+
+function deleteStatus(error: string): 400 | 403 | 409 {
+  if (error === 'last_org_admin' || error === 'own_active_membership' || error === 'open_shift') {
+    return 409;
+  }
+  if (
+    error === 'Role out of scope' ||
+    error === 'Insufficient permissions' ||
+    error === 'tenant_read_only'
+  ) {
+    return 403;
+  }
   return 400;
 }
 
@@ -95,6 +110,36 @@ export async function membershipRoutes(app: FastifyInstance) {
       }
 
       return reply.send(result.data);
+    },
+  );
+
+  app.delete(
+    '/:id',
+    { preHandler: [requireRole('org_admin', 'community_admin')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const requester = getRequester(request);
+      const { id } = request.params as { id: string };
+      const result = await membershipsService.deleteMembership(id, requester);
+
+      if ('notFound' in result) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Membership not found',
+        });
+      }
+      if ('error' in result) {
+        const status = deleteStatus(result.error);
+        const error = status === 403 ? 'Forbidden' : status === 409 ? 'Conflict' : 'Bad Request';
+        return reply.status(status).send({
+          statusCode: status,
+          error,
+          message: result.error,
+          code: result.error,
+        });
+      }
+
+      return reply.send({ deleted: true });
     },
   );
 

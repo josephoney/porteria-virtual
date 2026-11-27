@@ -181,7 +181,7 @@ La asignación es informativa: no restringe en qué acceso inicia turno el guard
 | Nodos de ubicación | `/api/location-units`, `/:id`, `/:id/archive`, `/:id/restore`, `/:id/move`      |
 | Secciones          | `/api/sections`, `/:id`                                                         |
 | Unidades legadas   | `/api/units`, `/:id`                                                            |
-| Membresías         | `/api/memberships`, `/:id`                                                      |
+| Membresías         | `/api/memberships`, `/:id` (PATCH inactiva, DELETE borra), `/:id/workstation` (PUT) |
 | Invitaciones       | `/api/invitations`, `/:id/revoke`, `/:id/resend`                                |
 | Personas           | `/api/people`, `/:id`                                                           |
 | Usuarios           | `/api/users`, `/:id`, `/api/me`, `/api/me/password`                             |

@@ -164,6 +164,11 @@ Regla: cada admin puede asignar hacia abajo, nunca su propio rol ni hacia arriba
 `org_admin` no puede delegar `org_admin` (el spec mencionaba "salvo que esté permitido
 delegarlo"; el código hoy lo prohíbe siempre).
 
+**Eliminar una asignación** sigue la misma política, con dos matices: un `org_admin` sí
+puede eliminar una membresía `org_admin` vieja (aunque no pueda crearla) y nunca se puede
+borrar la última `org_admin` activa de la organización, ni el propio contexto activo, ni
+una membresía con turno abierto.
+
 ## 5. Guards de la API por recurso
 
 | Recurso      | Endpoints                                             | Roles con acceso                                    | Notas                                                                                         |
