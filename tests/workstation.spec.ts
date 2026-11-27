@@ -22,7 +22,7 @@ test.describe('guard workstation assignment', () => {
     await workstationButton.click();
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText('Puesto por defecto', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Puesto por defecto' })).toBeVisible();
     await dialog.locator('#workstation-access-point').click();
     await page.getByRole('option', { name: ACCESS_POINT, exact: true }).click();
     await dialog.getByRole('button', { name: 'Guardar', exact: true }).click();
