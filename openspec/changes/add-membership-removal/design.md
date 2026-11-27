@@ -79,12 +79,14 @@ dice lo que hace, y eliminar exige confirmación explícita.
 
 ### 5. Columna Acciones después de Membresía
 
-**Decisión:** nueva columna con iconos apilados en orden fijo: agregar, cambiar
-contraseña, reenviar activación, puesto por defecto (solo guardias), inactivar/reactivar
-y eliminar al final. La celda de Membresía conserva el selector de rol y las insignias.
+**Decisión:** nueva columna con los iconos en una sola fila, en orden fijo: agregar,
+cambiar contraseña, reenviar activación, puesto por defecto (solo guardias),
+inactivar/reactivar y eliminar al final. La celda de Membresía conserva el selector de rol
+y las insignias.
 
-**Por qué:** separa "qué es esta asignación" de "qué puedo hacer con ella", y el
-apilado vertical mantiene alineados los botones aunque la persona tenga varias filas.
+**Por qué:** separa "qué es esta asignación" de "qué puedo hacer con ella", y una fila
+horizontal aprovecha el ancho del panel sin estirar la altura de cada fila cuando la
+persona tiene varias asignaciones.
 
 ## Risks / Trade-offs
 

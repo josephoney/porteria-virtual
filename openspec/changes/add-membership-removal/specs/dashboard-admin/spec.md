@@ -12,12 +12,12 @@ membership column.
   Estado
 - **THEN** the Membresía cell shows only the role selector and its badges
 
-#### Scenario: Vertical order of the actions
+#### Scenario: Order of the actions
 
 - **WHEN** the actions are rendered for a membership
-- **THEN** the icons are stacked vertically in a fixed order: agregar asignación, cambiar
-  contraseña, reenviar activación, puesto por defecto (guards only), inactivar o
-  reactivar, and eliminar asignación last
+- **THEN** the icons appear in a single row, one after another, in a fixed order: agregar
+  asignación, cambiar contraseña, reenviar activación, puesto por defecto (guards only),
+  inactivar o reactivar, and eliminar asignación last
 - **THEN** each icon keeps its accessible name
 
 #### Scenario: Delete action

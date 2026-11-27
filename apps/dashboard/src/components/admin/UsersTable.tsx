@@ -947,7 +947,7 @@ export function UsersTable() {
                       </TableCell>
 
                       <TableCell className="py-2 align-top">
-                        <div className="flex flex-col items-start gap-1">
+                        <div className="flex flex-nowrap items-center gap-1">
                           {index === 0 && !u.isPlatformAdmin && assignableRoles.length > 0 && (
                             <Button
                               type="button"

@@ -1,4 +1,4 @@
-﻿## 1. API: borrado de membresÃ­a
+## 1. API: borrado de membresÃ­a
 
 - [x] 1.1 Agregar `deleteMembership(id, requester)` en `memberships.service.ts` con `{ deleted: true } | { error } | { notFound }`.
 - [x] 1.2 Rechazar al platform admin con `tenant_read_only`.
@@ -19,7 +19,7 @@
 
 - [x] 3.1 Agregar la columna "Acciones" despuÃ©s de MembresÃ­a y ajustar el `colSpan` de los estados vacÃ­os.
 - [x] 3.2 Mover los iconos de la celda de MembresÃ­a a la nueva columna.
-- [x] 3.3 Apilar los iconos en orden vertical fijo, conservando `title` y `aria-label`.
+- [x] 3.3 Alinear los iconos en una sola fila horizontal, en orden fijo, conservando `title` y `aria-label`.
 - [x] 3.4 Rotular la baja lÃ³gica como "Inactivar asignaciÃ³n" / "Reactivar asignaciÃ³n".
 
 ## 4. Dashboard: eliminar asignaciÃ³n
