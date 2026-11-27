@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get } from '../lib/apiClient';
 import { PageHeader } from '../components/layout/PageHeader';
 import { ListToolbar } from '../components/layout/ListToolbar';
@@ -10,6 +10,7 @@ import { Badge } from '../components/ui/badge';
 import { ResidentInviteDialog } from '../components/admin/ResidentInviteDialog';
 import { UnitInviteSelectionBar } from '../components/admin/UnitInviteSelectionBar';
 import { BulkInvitationsDialog } from '../components/admin/BulkInvitationsDialog';
+import { CreateUnitDialog } from '../components/admin/CreateUnitDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { unitInviteIssue } from '../lib/unit-invite';
 import { RiFileUploadLine, RiUserAddLine } from '@remixicon/react';
@@ -112,6 +113,13 @@ export function UnitsPage() {
   const canInvite =
     Boolean(user?.isPlatformAdmin) ||
     ['org_admin', 'community_admin'].includes(activeMembership?.role ?? '');
+  // El platform admin es read-only sobre tenant: la creación solo se ofrece en el
+  // contexto de una comunidad.
+  const canManageStructure =
+    !isPlatformScope && ['org_admin', 'community_admin'].includes(activeMembership?.role ?? '');
+
+  const queryClient = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -232,11 +240,18 @@ export function UnitsPage() {
         title="Unidades"
         description="Unidades de cada comunidad, con su sección, tipo y piso."
         actions={
-          unitsQuery.isFetching && !unitsQuery.isPending ? (
-            <span role="status" className="text-xs text-muted-foreground">
-              Actualizando…
-            </span>
-          ) : null
+          <div className="flex items-center gap-3">
+            {canManageStructure && (
+              <Button type="button" onClick={() => setCreateOpen(true)}>
+                Nueva unidad
+              </Button>
+            )}
+            {unitsQuery.isFetching && !unitsQuery.isPending ? (
+              <span role="status" className="text-xs text-muted-foreground">
+                Actualizando…
+              </span>
+            ) : null}
+          </div>
         }
       />
 
@@ -439,6 +454,17 @@ export function UnitsPage() {
           />
         </>
       )}
+
+      <CreateUnitDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        communities={communities}
+        defaultCommunityId={communityFilter !== 'all' ? communityFilter : undefined}
+        onCreated={() => {
+          void queryClient.invalidateQueries({ queryKey: ['units'] });
+          void queryClient.invalidateQueries({ queryKey: ['sections'] });
+        }}
+      />
 
       <BulkInvitationsDialog
         open={bulkOpen}
