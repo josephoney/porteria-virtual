@@ -11,9 +11,11 @@ import { ResidentInviteDialog } from '../components/admin/ResidentInviteDialog';
 import { UnitInviteSelectionBar } from '../components/admin/UnitInviteSelectionBar';
 import { BulkInvitationsDialog } from '../components/admin/BulkInvitationsDialog';
 import { CreateUnitDialog } from '../components/admin/CreateUnitDialog';
+import { EditUnitDialog, type EditableUnit } from '../components/admin/EditUnitDialog';
+import { DeleteUnitDialog, type DeletableUnit } from '../components/admin/DeleteUnitDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { unitInviteIssue } from '../lib/unit-invite';
-import { RiFileUploadLine, RiUserAddLine } from '@remixicon/react';
+import { RiDeleteBinLine, RiFileUploadLine, RiPencilLine, RiUserAddLine } from '@remixicon/react';
 import { LoadingState } from '../components/ui/loading-state';
 import {
   Select,
@@ -120,6 +122,8 @@ export function UnitsPage() {
 
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<EditableUnit | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeletableUnit | null>(null);
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -202,6 +206,9 @@ export function UnitsPage() {
   const total = unitsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const selectionCommunityId = selectedUnits[0]?.communityId ?? null;
+  // Las acciones de estructura y las de invitación comparten la última columna.
+  const hasActions = canManageStructure || canInvite;
+  const columnCount = 6 + (canInvite ? 1 : 0) + (hasActions ? 1 : 0);
 
   function isSelected(unitId: string): boolean {
     return selectedUnits.some((unit) => unit.id === unitId);
@@ -350,14 +357,14 @@ export function UnitsPage() {
                   <TableHead>Tipo</TableHead>
                   <TableHead>Piso</TableHead>
                   <TableHead>Estado</TableHead>
-                  {canInvite && <TableHead className="text-right">Acciones</TableHead>}
+                  {hasActions && <TableHead className="text-right">Acciones</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {units.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={canInvite ? 8 : 6}
+                      colSpan={columnCount}
                       className="py-8 text-center text-muted-foreground"
                     >
                       No hay unidades para mostrar
@@ -406,18 +413,52 @@ export function UnitsPage() {
                           {statusLabel(unit.status)}
                         </Badge>
                       </TableCell>
-                      {canInvite && (
+                      {hasActions && (
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Invitar residente a ${unit.name}`}
-                            title={issue ?? `Invitar residente a ${unit.name}`}
-                            disabled={Boolean(issue)}
-                            onClick={() => openInvite(unit)}
-                          >
-                            <RiUserAddLine className="size-4" />
-                          </Button>
+                          <div className="flex justify-end gap-1">
+                            {canManageStructure && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Editar ${unit.name}`}
+                                title={`Editar ${unit.name}`}
+                                onClick={() =>
+                                  setEditTarget({
+                                    id: unit.id,
+                                    name: unit.name,
+                                    code: unit.code,
+                                    path: unit.path,
+                                  })
+                                }
+                              >
+                                <RiPencilLine className="size-4" />
+                              </Button>
+                            )}
+                            {canInvite && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Invitar residente a ${unit.name}`}
+                                title={issue ?? `Invitar residente a ${unit.name}`}
+                                disabled={Boolean(issue)}
+                                onClick={() => openInvite(unit)}
+                              >
+                                <RiUserAddLine className="size-4" />
+                              </Button>
+                            )}
+                            {canManageStructure && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive"
+                                aria-label={`Eliminar ${unit.name}`}
+                                title={`Eliminar ${unit.name}`}
+                                onClick={() => setDeleteTarget({ id: unit.id, name: unit.name, path: unit.path })}
+                              >
+                                <RiDeleteBinLine className="size-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -454,6 +495,29 @@ export function UnitsPage() {
           />
         </>
       )}
+
+      <EditUnitDialog
+        open={Boolean(editTarget)}
+        onOpenChange={(open) => {
+          if (!open) setEditTarget(null);
+        }}
+        unit={editTarget}
+        onSaved={() => {
+          void queryClient.invalidateQueries({ queryKey: ['units'] });
+        }}
+      />
+
+      <DeleteUnitDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        unit={deleteTarget}
+        onDeleted={() => {
+          void queryClient.invalidateQueries({ queryKey: ['units'] });
+          void queryClient.invalidateQueries({ queryKey: ['sections'] });
+        }}
+      />
 
       <CreateUnitDialog
         open={createOpen}

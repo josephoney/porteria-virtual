@@ -44,3 +44,82 @@ navigating to the structure tree.
 
 - **WHEN** the community has no structure, or the required parent level has no nodes
 - **THEN** the dialog explains it and disables saving
+
+### Requirement: Edit a unit from the units page
+
+The units workspace SHALL let an authorized admin edit the name and the code of a unit.
+
+#### Scenario: Edit action
+
+- **WHEN** an admin chooses the edit action on a unit row
+- **THEN** a dialog opens with the current name and code
+- **THEN** saving calls `PATCH /api/location-units/:id` and refreshes the list without a
+  page reload
+
+#### Scenario: Empty name
+
+- **WHEN** the name is blank
+- **THEN** the dialog blocks the save and explains it inline
+
+#### Scenario: Duplicate on edit
+
+- **WHEN** the new name or code already exists among the siblings
+- **THEN** the server responds `409`
+- **THEN** the dialog shows the reason and stays open
+
+### Requirement: Remove a unit with double confirmation
+
+The units workspace SHALL let an authorized admin delete a unit only after two explicit
+confirmations.
+
+#### Scenario: First confirmation
+
+- **WHEN** the admin chooses the delete action
+- **THEN** a dialog explains that the unit is removed and the action cannot be undone
+- **THEN** a "Continuar" action moves to the second step
+- **THEN** nothing is deleted yet
+
+#### Scenario: Second confirmation
+
+- **WHEN** the admin confirms in the second step
+- **THEN** `DELETE /api/location-units/:id` is called
+- **THEN** the list refreshes
+
+#### Scenario: Cancelling
+
+- **WHEN** the admin closes the dialog at either step
+- **THEN** the unit is not deleted
+
+#### Scenario: Unit with residents or authorizations
+
+- **WHEN** the server rejects the delete because the unit has residents, children or
+  authorizations
+- **THEN** the dialog shows the reason and suggests archiving instead
+
+### Requirement: Unique names and codes among siblings
+
+The system SHALL reject a node whose name or code repeats among its siblings.
+
+#### Scenario: Duplicate unit name
+
+- **WHEN** a unit is created or renamed with a name that already exists under the same
+  parent, ignoring case and surrounding spaces
+- **THEN** the response has status 409 with code `duplicate_name`
+- **THEN** no second unit is created
+
+#### Scenario: Duplicate section name
+
+- **WHEN** a level-1 node is created with a name that already exists at that level
+- **THEN** the response has status 409 with code `duplicate_name`
+
+#### Scenario: Duplicate code
+
+- **WHEN** the code already exists among the siblings
+- **THEN** the response has status 409 with code `duplicate_code`
+- **THEN** two nodes may still share a code in different sections
+
+#### Scenario: Editing keeps the check
+
+- **WHEN** a node is edited without changing its name or code
+- **THEN** the check ignores the node itself
+- **THEN** saving succeeds

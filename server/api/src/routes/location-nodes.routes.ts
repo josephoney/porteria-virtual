@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import {
   accessPasses,
@@ -101,6 +101,43 @@ async function getStructureNodes(structureId: string): Promise<LiteNode[]> {
     })
     .from(locationUnits)
     .where(eq(locationUnits.structureId, structureId));
+}
+
+/**
+ * Unicidad entre hermanos: mismo nombre o mismo código bajo el mismo padre.
+ *
+ * El índice único de la base solo cubre `(structure_id, parent_id, code)` y
+ * permite códigos NULL, así que dos "A-101" sin código entraban sin problema.
+ * Esta comprobación cubre el nombre y devuelve un código de error estable.
+ */
+async function findSiblingConflict(input: {
+  structureId: string;
+  parentId: string | null;
+  name?: string;
+  code?: string | null;
+  excludeId?: string;
+}): Promise<'duplicate_name' | 'duplicate_code' | null> {
+  const conditions = [
+    eq(locationUnits.structureId, input.structureId),
+    input.parentId ? eq(locationUnits.parentId, input.parentId) : isNull(locationUnits.parentId),
+  ];
+  if (input.excludeId) conditions.push(ne(locationUnits.id, input.excludeId));
+
+  const siblings = await db
+    .select({ name: locationUnits.name, code: locationUnits.code })
+    .from(locationUnits)
+    .where(and(...conditions));
+
+  const normalize = (value: string) => value.trim().toLowerCase();
+  const name = input.name?.trim() ? normalize(input.name) : null;
+  const code = input.code?.trim() ? normalize(input.code) : null;
+
+  for (const sibling of siblings) {
+    if (name && normalize(sibling.name) === name) return 'duplicate_name';
+    if (code && sibling.code && normalize(sibling.code) === code) return 'duplicate_code';
+  }
+
+  return null;
 }
 
 export async function locationNodeRoutes(app: FastifyInstance) {
@@ -342,6 +379,26 @@ export async function locationNodeRoutes(app: FastifyInstance) {
       const nodeName = body.name.trim();
       const resolvedStructureId = structureId;
 
+      // Nombre y código son únicos entre hermanos: dos "A-101" bajo la misma
+      // sección no pueden convivir, tengan o no código.
+      const duplicate = await findSiblingConflict({
+        structureId: resolvedStructureId,
+        parentId: body.parentId ?? null,
+        name: nodeName,
+        code: body.code?.trim() || null,
+      });
+      if (duplicate) {
+        return reply.status(409).send({
+          statusCode: 409,
+          error: 'Conflict',
+          message:
+            duplicate === 'duplicate_name'
+              ? 'Ya existe un elemento con ese nombre en este nivel.'
+              : 'Ya existe un elemento con ese código en este nivel.',
+          code: duplicate,
+        });
+      }
+
       try {
         const created = await db.transaction(async (tx) => {
           const [row] = await tx
@@ -518,6 +575,25 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         patch.levelPosition = newLevel;
         subtreeIds = descendants.map((node) => node.id);
         subtreeDelta = delta;
+      }
+
+      const duplicate = await findSiblingConflict({
+        structureId: existing.structureId,
+        parentId: patch.parentId !== undefined ? patch.parentId : existing.parentId,
+        name: patch.name ?? existing.name,
+        code: patch.code !== undefined ? patch.code : existing.code,
+        excludeId: id,
+      });
+      if (duplicate) {
+        return reply.status(409).send({
+          statusCode: 409,
+          error: 'Conflict',
+          message:
+            duplicate === 'duplicate_name'
+              ? 'Ya existe un elemento con ese nombre en este nivel.'
+              : 'Ya existe un elemento con ese código en este nivel.',
+          code: duplicate,
+        });
       }
 
       try {

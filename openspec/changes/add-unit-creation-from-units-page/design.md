@@ -63,8 +63,38 @@ la ve (es read-only sobre tenant) y el backend igual responde `403`.
 **Por qué:** la página ya usa esa librería; invalidar evita recargar y mantiene los
 filtros aplicados.
 
+### 6. Edición en línea con el mismo endpoint del árbol
+
+**Decisión:** `PATCH /api/location-units/:id` con `name` y `code`; el diálogo solo edita
+esos dos campos.
+
+**Por qué:** mover una unidad de sección ya se hace en Estructura → Árbol y arrastra reglas
+de profundidad del subárbol que no queremos duplicar en un diálogo plano.
+
+### 7. Borrado con dos confirmaciones, sin endpoint nuevo
+
+**Decisión:** el primer paso explica el alcance; el segundo ejecuta
+`DELETE /api/location-units/:id`.
+
+**Por qué:** el borrado es irreversible y el servidor puede rechazarlo por residentes,
+hijos o autorizaciones. Dos pasos evitan el clic accidental y dejan el motivo del rechazo
+en el mismo diálogo, con la sugerencia de archivar.
+
+### 8. Unicidad entre hermanos en el servidor, no en el formulario
+
+**Decisión:** `findSiblingConflict` compara nombre y código contra los hermanos (mismo
+`structureId` y `parentId`), ignorando mayúsculas y espacios, y se aplica en el alta y en
+la edición, excluyendo el propio nodo.
+
+**Por qué:** la base solo tiene un índice único de `code` y permite varios `NULL`, así que
+dos "A-101" sin código entraban sin problema. Validar solo en el cliente dejaría la puerta
+abierta a cualquier llamada directa al API.
+
 ## Risks / Trade-offs
 
+- **[Riesgo] Duplicados históricos ya cargados** → la comprobación aplica desde el
+  despliegue; no se limpian datos existentes ni se bloquea su edición (si no cambian el
+  nombre, el chequeo se excluye a sí mismo).
 - **[Riesgo] Estructura sin nodos previos** → los selects de nivel 2 quedan vacíos y el
   diálogo lo explica, con enlace a Estructura.
 - **[Riesgo] Código duplicado** → el servidor responde `409`; el diálogo muestra el
