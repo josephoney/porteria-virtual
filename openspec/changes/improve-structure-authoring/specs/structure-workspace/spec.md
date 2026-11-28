@@ -115,3 +115,23 @@ add button, the one for the level the administrator is standing on.
 - **WHEN** se vuelve a hacer click en el nodo expandido
 - **THEN** la rama se cierra
 - **THEN** el botón de agregar nivel 1 vuelve a mostrarse
+### Requirement: Level distinction
+
+The tree SHALL indent each level and SHALL tint it with a palette color so the hierarchy
+is readable at a glance.
+
+#### Scenario: Indentation
+
+- **WHEN** a node is nested one level below its parent
+- **THEN** it is indented 24 more pixels than the parent
+
+#### Scenario: Color per level
+
+- **WHEN** nodes of different levels are shown
+- **THEN** each level uses a different color from the chart tokens
+- **THEN** the row shows a dot and a level pill tinted with that color
+
+#### Scenario: Dark mode
+
+- **WHEN** the dashboard uses the dark theme
+- **THEN** the level colors follow the dark palette values

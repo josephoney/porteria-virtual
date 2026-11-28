@@ -83,6 +83,9 @@ export function LocationTreeTable({
   onResidents,
   onInvite,
 }: LocationTreeTableProps) {
+  /** Un color de la paleta por nivel, para leer la jerarquía de un vistazo. */
+const LEVEL_COLORS = ['var(--chart-1)', 'var(--chart-3)', 'var(--chart-2)'];
+
   const manage = mode === 'manage';
   const showSelection = manage && canInvite;
 
@@ -129,6 +132,7 @@ export function LocationTreeTable({
     const leafLevel = resolveLeafLevel(node.branchLevelCount, structure.levelCount);
     const canExpand = hasChildren || (manage && node.levelPosition < leafLevel);
     const isExpanded = expandedIds.has(node.id);
+    const levelColor = LEVEL_COLORS[(node.levelPosition - 1) % LEVEL_COLORS.length];
     const isLeaf = node.levelPosition >= leafLevel;
     const isArchived = node.status !== 'active';
     const inviteIssue = unitInviteIssue({
@@ -153,12 +157,12 @@ export function LocationTreeTable({
           `${selected ? 'bg-muted/40 ' : ''}` +
           (canExpand ? 'cursor-pointer hover:bg-muted/50' : hasChildren ? '' : 'hover:bg-muted/50')
         }
+        style={{ boxShadow: `inset 3px 0 0 ${levelColor}` }}
         onClick={() => {
           if (canExpand) setFocusedId((current) => (current === node.id ? null : node.id));
         }}
       >
-        {showSelection && (
-          <TableCell>
+        {showSelection && (          <TableCell>
             <input
               type="checkbox"
               className="size-4 accent-foreground"
@@ -172,7 +176,12 @@ export function LocationTreeTable({
           </TableCell>
         )}
         <TableCell>
-          <div className="flex items-center gap-2" style={{ paddingLeft: depth * 16 }}>
+          <div className="flex items-center gap-2" style={{ paddingLeft: depth * 24 }}>
+            <span
+              aria-hidden
+              className="size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: levelColor }}
+            />
             {canExpand ? (
               <Button
                 type="button"
@@ -192,6 +201,12 @@ export function LocationTreeTable({
             )}
             <span className={isArchived ? 'text-muted-foreground line-through' : undefined}>
               {node.name}
+            </span>
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+              style={{ backgroundColor: `color-mix(in oklab, ${levelColor} 18%, transparent)` }}
+            >
+              {structureLevelName(structure, node.levelPosition)}
             </span>
             {hasChildren && (
               <span className="text-xs text-muted-foreground">
@@ -307,7 +322,7 @@ export function LocationTreeTable({
       rows.push(
         <TableRow key={`add-${node.id}`} className="hover:bg-transparent">
           <TableCell colSpan={columnCount} className="py-1">
-            <div style={{ paddingLeft: (depth + 1) * 16 }}>
+            <div style={{ paddingLeft: (depth + 1) * 24 }}>
               <Button
                 type="button"
                 variant="ghost"
