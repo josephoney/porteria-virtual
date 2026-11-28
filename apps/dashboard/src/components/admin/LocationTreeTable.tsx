@@ -84,7 +84,7 @@ export function LocationTreeTable({
   onInvite,
 }: LocationTreeTableProps) {
   /** Un color de la paleta por nivel, para leer la jerarquía de un vistazo. */
-const LEVEL_COLORS = ['var(--chart-1)', 'var(--chart-3)', 'var(--chart-2)'];
+const LEVEL_COLORS = ['var(--chart-1)', 'var(--chart-5)', 'var(--chart-2)'];
 
   const manage = mode === 'manage';
   const showSelection = manage && canInvite;
@@ -341,21 +341,27 @@ const LEVEL_COLORS = ['var(--chart-1)', 'var(--chart-3)', 'var(--chart-2)'];
 
     // Solo el nodo enfocado ofrece agregar, y siempre el nivel siguiente.
     if (manage && childLevelName && node.id === focusedId) {
+      const childColor = LEVEL_COLORS[node.levelPosition % LEVEL_COLORS.length];
       rows.push(
         <TableRow key={`add-${node.id}`} className="hover:bg-transparent">
           <TableCell colSpan={columnCount} className="py-1">
             <div style={{ paddingLeft: (depth + 1) * 24 }}>
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="text-muted-foreground"
+                className="h-7 gap-1.5 rounded-full px-3 text-xs"
+                style={{
+                  borderColor: childColor,
+                  backgroundColor: `color-mix(in oklab, ${childColor} 14%, transparent)`,
+                }}
                 onClick={(event) => {
                   event.stopPropagation();
                   onAdd?.(node, node.levelPosition + 1);
                 }}
               >
-                <RiAddLine /> Agregar {childLevelName.toLowerCase()}
+                <RiAddLine style={{ color: childColor }} /> Agregar{' '}
+                {childLevelName.toLowerCase()}
               </Button>
             </div>
           </TableCell>
@@ -398,12 +404,17 @@ const LEVEL_COLORS = ['var(--chart-1)', 'var(--chart-3)', 'var(--chart-2)'];
               <TableCell colSpan={columnCount} className="py-1">
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="text-muted-foreground"
+                  className="h-7 gap-1.5 rounded-full px-3 text-xs"
+                  style={{
+                    borderColor: LEVEL_COLORS[0],
+                    backgroundColor: `color-mix(in oklab, ${LEVEL_COLORS[0]} 14%, transparent)`,
+                  }}
                   onClick={() => onAdd?.(null, 1)}
                 >
-                  <RiAddLine /> Agregar {structure.level1Name.toLowerCase()}
+                  <RiAddLine style={{ color: LEVEL_COLORS[0] }} /> Agregar{' '}
+                  {structure.level1Name.toLowerCase()}
                 </Button>
               </TableCell>
             </TableRow>

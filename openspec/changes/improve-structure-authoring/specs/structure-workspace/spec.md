@@ -131,6 +131,7 @@ is readable at a glance.
 - **WHEN** nodes of different levels are shown
 - **THEN** each level uses a different color from the chart tokens
 - **THEN** the row shows a dot and a level pill tinted with that color
+- **THEN** the add button is a rounded pill tinted with the color of the level it creates
 
 #### Scenario: Dark mode
 
