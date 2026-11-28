@@ -21,6 +21,7 @@ import {
   type PassQrResponse,
   type PassRuleSummary,
 } from '@porteria/shared';
+import { isLeafAt } from '@porteria/shared';
 import config from '../config.js';
 import { maskDocument } from '../lib/mask-document.js';
 import { decryptLinkToken, encryptLinkToken, randomToken, sha256Hex } from '../lib/pass-tokens.js';
@@ -302,7 +303,7 @@ async function resolveDestinationForRequester(
     return { ok: true, data: destination };
   }
 
-  if (destination.levelPosition !== destination.levelCount) {
+  if (!isLeafAt(destination.levelPosition, destination.branchLevelCount, destination.levelCount)) {
     return { ok: false, code: 'invalid' };
   }
 

@@ -3,6 +3,7 @@ import {
   uuid,
   varchar,
   integer,
+  smallint,
   timestamp,
   pgEnum,
   jsonb,
@@ -51,6 +52,8 @@ export const locationUnits = pgTable(
     /** Tipo del nodo según el catálogo de su nivel; reemplaza a `sectionType`. */
     nodeType: varchar('node_type', { length: 60 }),
     nodeTypeLabel: varchar('node_type_label', { length: 100 }),
+    /** Hasta qué nivel llega esta rama; null significa "el máximo de la estructura". */
+    branchLevelCount: smallint('branch_level_count'),
     metadata: jsonb('metadata').notNull().default({}),
     status: locationUnitStatusEnum('status').notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

@@ -152,19 +152,17 @@ export async function sectionRoutes(app: FastifyInstance) {
               SELECT count(*)::int
               FROM location_units AS leaf
               WHERE leaf.structure_id = ${locationUnits.structureId}
+                AND leaf.level_position = coalesce(
+                  leaf.branch_level_count,
+                  ${locationStructures.levelCount}
+                )
                 AND (
-                  (${locationStructures.levelCount} = 1 AND leaf.id = ${locationUnits.id})
-                  OR (
-                    ${locationStructures.levelCount} > 1
-                    AND leaf.level_position = ${locationStructures.levelCount}
-                    AND (
-                      leaf.parent_id = ${locationUnits.id}
-                      OR leaf.parent_id IN (
-                        SELECT child.id
-                        FROM location_units AS child
-                        WHERE child.parent_id = ${locationUnits.id}
-                      )
-                    )
+                  leaf.id = ${locationUnits.id}
+                  OR leaf.parent_id = ${locationUnits.id}
+                  OR leaf.parent_id IN (
+                    SELECT child.id
+                    FROM location_units AS child
+                    WHERE child.parent_id = ${locationUnits.id}
                   )
                 )
             )`,

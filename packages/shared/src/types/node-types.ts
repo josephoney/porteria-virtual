@@ -103,8 +103,24 @@ export function normalizeNodeType(type: string): string {
   return LEGACY_ALIASES[type] ?? type;
 }
 
+/** Valores del enum legado que solo tenían sentido en el nivel 1. */
+const LEGACY_LEVEL_1_TYPES = [
+  'tower',
+  'interior',
+  'building',
+  'zone',
+  'block',
+  'sector',
+  'floor',
+  'house',
+  'lot',
+  'commercial',
+  'common_area',
+];
+
 /** ¿El identificador pertenece al catálogo del nivel? Acepta alias legados. */
 export function isValidNodeType(type: string, levelPosition: number): boolean {
+  if (levelPosition === 1 && LEGACY_LEVEL_1_TYPES.includes(type)) return true;
   const normalized = normalizeNodeType(type);
   return nodeTypeOptionsForLevel(levelPosition).some((option) => option.id === normalized);
 }

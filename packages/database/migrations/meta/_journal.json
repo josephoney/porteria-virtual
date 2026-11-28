@@ -302,6 +302,13 @@
       "when": 1795830000000,
       "tag": "0042_node_types",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1795835000000,
+      "tag": "0043_branch_level_count",
+      "breakpoints": true
     }
   ]
 }

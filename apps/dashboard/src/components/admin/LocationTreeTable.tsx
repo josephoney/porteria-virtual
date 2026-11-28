@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
+import { resolveLeafLevel } from '@porteria/shared';
 import {
   RiAddLine,
   RiArrowDownSLine,
@@ -29,6 +30,7 @@ export interface LocationNode {
   sectionTypeLabel: string | null;
   nodeType?: string | null;
   nodeTypeLabel?: string | null;
+  branchLevelCount?: number | null;
   metadata?: { legacyType?: string | null } | null;
   status: string;
 }
@@ -104,20 +106,22 @@ export function LocationTreeTable({
   function renderNode(node: LocationNode, depth: number): ReactNode[] {
     const children = childrenByParent.get(node.id) ?? [];
     const hasChildren = children.length > 0;
-    const canExpand = hasChildren || (manage && node.levelPosition < structure.levelCount);
+    // La rama puede terminar antes que el máximo de la estructura.
+    const leafLevel = resolveLeafLevel(node.branchLevelCount, structure.levelCount);
+    const canExpand = hasChildren || (manage && node.levelPosition < leafLevel);
     const isExpanded = tree.isExpanded(node.id);
-    const isLeaf = node.levelPosition >= structure.levelCount;
+    const isLeaf = node.levelPosition >= leafLevel;
     const isArchived = node.status !== 'active';
     const inviteIssue = unitInviteIssue({
       status: node.status,
       levelPosition: node.levelPosition,
-      levelCount: structure.levelCount,
+      levelCount: leafLevel,
       metadata: node.metadata,
     });
     const canSelect = showSelection && !inviteIssue;
     const selected = selectedIds?.has(node.id) ?? false;
     const childLevelName =
-      node.levelPosition < structure.levelCount
+      node.levelPosition < leafLevel
         ? structureLevelName(structure, node.levelPosition + 1)
         : null;
 

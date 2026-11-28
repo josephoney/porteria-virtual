@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { createDb } from '@porteria/database';
 import { locationStructures, locationUnits, memberships } from '@porteria/database/schema';
 import type { DestinationKind, DestinationSummary } from '@porteria/shared';
+import { isLeafAt } from '@porteria/shared';
 
 const db = createDb();
 
@@ -15,6 +16,7 @@ export interface DestinationNodeRow {
   parentId: string | null;
   levelPosition: number;
   levelCount: number;
+  branchLevelCount: number | null;
   name: string;
   code: string | null;
   sectionType: string | null;
@@ -31,6 +33,7 @@ export interface ResolvedDestination extends DestinationSummary {
   structureId: string;
   levelPosition: number;
   levelCount: number;
+  branchLevelCount: number | null;
   active: boolean;
   childCount: number;
 }
@@ -45,6 +48,7 @@ export async function loadCommunityTree(communityId: string): Promise<CommunityT
       parentId: locationUnits.parentId,
       levelPosition: locationUnits.levelPosition,
       levelCount: locationStructures.levelCount,
+      branchLevelCount: locationUnits.branchLevelCount,
       name: locationUnits.name,
       code: locationUnits.code,
       sectionType: locationUnits.sectionType,
@@ -108,6 +112,7 @@ export function resolveDestinationFromTree(
     structureId: node.structureId,
     levelPosition: node.levelPosition,
     levelCount: node.levelCount,
+    branchLevelCount: node.branchLevelCount,
     active,
     childCount,
   };
@@ -173,7 +178,9 @@ export async function listAuthorizableDestinations(
     const destination = resolveDestinationFromTree(tree, row.locationUnitId);
     if (!destination || !destination.active) continue;
     if (destination.kind !== 'home') continue;
-    if (destination.levelPosition !== destination.levelCount) continue;
+    if (!isLeafAt(destination.levelPosition, destination.branchLevelCount, destination.levelCount)) {
+      continue;
+    }
     destinations.set(destination.id, toSummary(destination));
   }
 

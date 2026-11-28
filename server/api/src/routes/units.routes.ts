@@ -127,7 +127,7 @@ export async function unitRoutes(app: FastifyInstance) {
       }
 
       const conditions: SQL[] = [
-        eq(locationUnits.levelPosition, locationStructures.levelCount),
+        sql`${locationUnits.levelPosition} = coalesce(${locationUnits.branchLevelCount}, ${locationStructures.levelCount})`,
         ...(user.isPlatformAdmin ? [] : [eq(communities.organizationId, user.orgId)]),
       ];
       const scope = unitScope(user, query.communityId);

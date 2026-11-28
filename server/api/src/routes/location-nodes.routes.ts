@@ -52,6 +52,19 @@ function getUser(request: FastifyRequest) {
   };
 }
 
+/**
+ * Normaliza la profundidad pedida para una rama.
+ *
+ * Devuelve -1 cuando el valor no es un entero entre 1 y el máximo de la
+ * estructura; el llamador lo traduce a `400`.
+ */
+function resolveBranchLevelCount(value: unknown, structureLevelCount: number): number {
+  if (value === undefined || value === null || value === '') return structureLevelCount;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > structureLevelCount) return -1;
+  return parsed;
+}
+
 type NodeTypeResolution =
   | {
       ok: true;
@@ -92,8 +105,10 @@ function resolveNodeType(input: {
     return { ok: false, message: 'Tipo inválido para este nivel.' };
   }
 
-  // El enum legado se normaliza al identificador del catálogo (tower → torre).
-  const normalized = normalizeNodeType(raw);
+  // El enum legado se normaliza al identificador del catálogo (tower → torre)
+  // solo cuando el catálogo del nivel lo contiene; si no, se conserva el legado.
+  const candidate = normalizeNodeType(raw);
+  const normalized = isValidNodeType(candidate, input.levelPosition) ? candidate : raw;
   const label = typeof rawLabel === 'string' ? rawLabel.trim() : '';
   if (normalized === NODE_TYPE_OTHER && !label) {
     return { ok: false, message: 'Escribe el nombre del tipo.' };
@@ -111,12 +126,14 @@ function resolveNodeType(input: {
     };
   }
 
-  const legacy = SECTION_TYPES.includes(raw as SectionType)
-    ? { sectionType: raw as SectionType, sectionTypeLabel: null }
-    : {
-        sectionType: 'other' as SectionType,
-        sectionTypeLabel: resolvedLabel ?? catalogNodeTypeLabel(normalized),
-      };
+  // `section_type = 'other'` exige su etiqueta: la base tiene un check para eso.
+  const legacy =
+    SECTION_TYPES.includes(raw as SectionType) && raw !== NODE_TYPE_OTHER
+      ? { sectionType: raw as SectionType, sectionTypeLabel: null }
+      : {
+          sectionType: 'other' as SectionType,
+          sectionTypeLabel: resolvedLabel ?? catalogNodeTypeLabel(normalized),
+        };
 
   return { ok: true, nodeType: normalized, nodeTypeLabel: resolvedLabel, ...legacy };
 }
@@ -367,6 +384,7 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         parentId?: string | null;
         name?: string;
         code?: string | null;
+        branchLevelCount?: number;
         nodeType?: string;
         nodeTypeLabel?: string | null;
         sectionType?: string;
@@ -401,6 +419,7 @@ export async function locationNodeRoutes(app: FastifyInstance) {
 
       let structureId = body.structureId;
       let levelPosition = 1;
+      let parentBranchLevelCount: number | null = null;
       if (body.parentId) {
         const [parent] = await db
           .select()
@@ -415,6 +434,7 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         }
         structureId = parent.structureId;
         levelPosition = parent.levelPosition + 1;
+        parentBranchLevelCount = parent.branchLevelCount;
       }
 
       if (!structureId) {
@@ -437,6 +457,30 @@ export async function locationNodeRoutes(app: FastifyInstance) {
           statusCode: 400,
           error: 'Bad Request',
           message: `This structure only supports ${structure.levelCount} levels`,
+        });
+      }
+
+      const requestedBranchLevel = resolveBranchLevelCount(
+        body.branchLevelCount,
+        structure.levelCount,
+      );
+      if (requestedBranchLevel < 1) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: `branchLevelCount must be between 1 and ${structure.levelCount}`,
+        });
+      }
+      // Una rama hereda la profundidad de su nivel 1; solo el nivel 1 la define.
+      const branchLevelCount =
+        levelPosition === 1 ? requestedBranchLevel : (parentBranchLevelCount ?? structure.levelCount);
+
+      if (levelPosition > branchLevelCount) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'La rama no usa este nivel. Ajusta la profundidad de la sección.',
+          code: 'branch_level_exceeded',
         });
       }
 
@@ -496,6 +540,7 @@ export async function locationNodeRoutes(app: FastifyInstance) {
               sectionTypeLabel,
               nodeType,
               nodeTypeLabel: resolvedNodeTypeLabel,
+              branchLevelCount,
               metadata: {},
               status: 'active',
             })
@@ -540,6 +585,7 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         code?: string | null;
         parentId?: string | null;
         status?: 'active' | 'inactive';
+        branchLevelCount?: number;
         nodeType?: string;
         nodeTypeLabel?: string | null;
         sectionType?: string;
@@ -689,6 +735,57 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         });
       }
 
+      // Profundidad de la rama: solo el nivel 1 la define. Aumentarla se permite
+      // aunque haya hijos; reducirla por debajo de un nivel ya usado, no.
+      let branchSubtreeIds: string[] = [];
+      let propagateBranch: number | null = null;
+      if (body.branchLevelCount !== undefined) {
+        if (existing.levelPosition !== 1) {
+          return reply.status(400).send({
+            statusCode: 400,
+            error: 'Bad Request',
+            message: 'Solo el nivel 1 define la profundidad de la rama.',
+            code: 'branch_level_not_root',
+          });
+        }
+        const structure = await getStructure(existing.structureId);
+        if (!structure) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: 'Not Found',
+            message: 'Structure not found',
+          });
+        }
+        const nextBranch = resolveBranchLevelCount(body.branchLevelCount, structure.levelCount);
+        if (nextBranch < 1) {
+          return reply.status(400).send({
+            statusCode: 400,
+            error: 'Bad Request',
+            message: `branchLevelCount must be between 1 and ${structure.levelCount}`,
+          });
+        }
+
+        const allNodes = await getStructureNodes(existing.structureId);
+        const descendants = collectDescendants(existing.id, allNodes);
+        const deepest = descendants.reduce(
+          (max, node) => Math.max(max, node.levelPosition),
+          existing.levelPosition,
+        );
+        if (deepest > nextBranch) {
+          return reply.status(409).send({
+            statusCode: 409,
+            error: 'Conflict',
+            message:
+              'La rama tiene elementos en un nivel más profundo. Elimínalos antes de reducir la profundidad.',
+            code: 'branch_has_deeper_children',
+          });
+        }
+
+        patch.branchLevelCount = nextBranch;
+        branchSubtreeIds = descendants.map((node) => node.id);
+        propagateBranch = nextBranch;
+      }
+
       try {
         const updated = await db.transaction(async (tx) => {
           if (subtreeIds.length > 0 && subtreeDelta !== 0) {
@@ -699,6 +796,13 @@ export async function locationNodeRoutes(app: FastifyInstance) {
                 updatedAt: new Date(),
               })
               .where(inArray(locationUnits.id, subtreeIds));
+          }
+
+          if (propagateBranch !== null && branchSubtreeIds.length > 0) {
+            await tx
+              .update(locationUnits)
+              .set({ branchLevelCount: propagateBranch, updatedAt: new Date() })
+              .where(inArray(locationUnits.id, branchSubtreeIds));
           }
 
           const [row] = await tx

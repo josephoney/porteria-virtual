@@ -13,6 +13,7 @@ import {
   invitations,
 } from '@porteria/database/schema';
 import type { CommunityStructureSummary } from '@porteria/shared';
+import { resolveLeafLevel } from '@porteria/shared';
 import { requireRole } from '../middlewares/rbac.js';
 import { auditCommunityEvent } from '../services/audit.service.js';
 import { can } from '../services/admin-permissions.service.js';
@@ -203,6 +204,7 @@ export async function communityRoutes(app: FastifyInstance) {
             structureId: locationUnits.structureId,
             parentId: locationUnits.parentId,
             levelPosition: locationUnits.levelPosition,
+            branchLevelCount: locationUnits.branchLevelCount,
             name: locationUnits.name,
             code: locationUnits.code,
             status: locationUnits.status,
@@ -237,8 +239,11 @@ export async function communityRoutes(app: FastifyInstance) {
         let total = 0;
         while (stack.length > 0) {
           const current = stack.pop()!;
-          if (current.levelPosition === levelCount) total += 1;
-          else stack.push(...(children.get(current.id) ?? []));
+          if (current.levelPosition === resolveLeafLevel(current.branchLevelCount, levelCount)) {
+            total += 1;
+          } else {
+            stack.push(...(children.get(current.id) ?? []));
+          }
         }
         return total;
       };
@@ -247,9 +252,10 @@ export async function communityRoutes(app: FastifyInstance) {
         .filter((node) => node.levelPosition === 1)
         .map((section) => {
           const levelCount = levelByStructure.get(section.structureId) ?? 3;
+          const leafLevel = resolveLeafLevel(section.branchLevelCount, levelCount);
           return {
             ...section,
-            unitCount: levelCount === 1 ? 1 : countLeaves(section.id, levelCount),
+            unitCount: leafLevel === 1 ? 1 : countLeaves(section.id, levelCount),
           };
         });
 
@@ -261,12 +267,13 @@ export async function communityRoutes(app: FastifyInstance) {
         const level2Nodes = nodes.filter((node) => node.levelPosition === 2);
         const perLevel1 = level1Nodes.map((node) => {
           const level2Children = children.get(node.id) ?? [];
+          const leafLevel = resolveLeafLevel(node.branchLevelCount, levelCount);
           return {
             id: node.id,
             name: node.name,
             code: node.code,
             level2Count: level2Children.length,
-            leafCount: levelCount === 1 ? 1 : countLeaves(node.id, levelCount),
+            leafCount: leafLevel === 1 ? 1 : countLeaves(node.id, levelCount),
           };
         });
         const perLevel2 =
@@ -287,10 +294,9 @@ export async function communityRoutes(app: FastifyInstance) {
 
         const level1Count = level1Nodes.length;
         const level2Count = level2Nodes.length;
-        const leafCount =
-          levelCount === 1
-            ? level1Count
-            : nodes.filter((node) => node.levelPosition === levelCount).length;
+        const leafCount = nodes.filter(
+          (node) => node.levelPosition === resolveLeafLevel(node.branchLevelCount, levelCount),
+        ).length;
         const level1Counts = perLevel1.map((item) => item.level2Count);
         const level2Counts = perLevel2.map((item) => item.leafCount);
         const uniform =

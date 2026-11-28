@@ -10,6 +10,7 @@ import { Skeleton } from '../ui/skeleton';
 import { FormDialog } from '../layout/FormDialog';
 import {
   defaultSectionTypeForLevelName,
+  nodeTypeLabel,
   nodeTypeOptionsForLevel,
   normalizeNodeType,
 } from '../../lib/section-types';
@@ -103,6 +104,8 @@ export function StructureTreeWorkspace({
   const [nodeCode, setNodeCode] = useState('');
   const [nodeSectionType, setNodeSectionType] = useState('other');
   const [nodeSectionTypeLabel, setNodeSectionTypeLabel] = useState('');
+  const [nodeUsesLevel2, setNodeUsesLevel2] = useState(true);
+  const [nodeUsesLevel3, setNodeUsesLevel3] = useState(true);
   const [nodeSaving, setNodeSaving] = useState(false);
   const [nodeError, setNodeError] = useState('');
 
@@ -215,6 +218,8 @@ export function StructureTreeWorkspace({
       level === 1 ? defaultSectionTypeForLevelName(structure?.level1Name) : NO_TYPE,
     );
     setNodeSectionTypeLabel('');
+    setNodeUsesLevel2(true);
+    setNodeUsesLevel3(true);
     setNodeError('');
   }
 
@@ -226,6 +231,9 @@ export function StructureTreeWorkspace({
       normalizeNodeType(node.nodeType ?? node.sectionType ?? NO_TYPE),
     );
     setNodeSectionTypeLabel(node.nodeTypeLabel ?? node.sectionTypeLabel ?? '');
+    const branch = node.branchLevelCount ?? structure?.levelCount ?? 3;
+    setNodeUsesLevel2(branch >= 2);
+    setNodeUsesLevel3(branch >= 3);
     setNodeError('');
   }
 
@@ -249,12 +257,21 @@ export function StructureTreeWorkspace({
 
     setNodeSaving(true);
     setNodeError('');
+    // Solo el nivel 1 declara hasta qué nivel llega su rama.
+    const dialogLevelInSave =
+      nodeDialog.mode === 'edit' ? nodeDialog.node.levelPosition : nodeDialog.level;
+    const branchFields =
+      dialogLevelInSave === 1
+        ? { branchLevelCount: 1 + (nodeUsesLevel2 ? 1 : 0) + (nodeUsesLevel3 ? 1 : 0) }
+        : {};
+
     try {
       if (nodeDialog.mode === 'edit') {
         await patch(`/api/location-units/${nodeDialog.node.id}`, {
           name: nodeName,
           code: nodeCode || null,
           ...typeFields,
+          ...branchFields,
         });
       } else if (nodeDialog.parent) {
         await post('/api/location-units', {
@@ -262,6 +279,7 @@ export function StructureTreeWorkspace({
           parentId: nodeDialog.parent.id,
           name: nodeName,
           code: nodeCode || null,
+          ...typeFields,
         });
       } else if (structure) {
         await post('/api/location-units', {
@@ -270,6 +288,7 @@ export function StructureTreeWorkspace({
           name: nodeName,
           code: nodeCode || null,
           ...typeFields,
+          ...branchFields,
         });
       }
       setNodeDialog(null);
@@ -319,7 +338,15 @@ export function StructureTreeWorkspace({
       );
   const dialogLevel =
     nodeDialog?.mode === 'edit' ? nodeDialog.node.levelPosition : (nodeDialog?.level ?? 1);
-  const dialogTypeOptions = nodeTypeOptionsForLevel(dialogLevel);
+  const baseTypeOptions = nodeTypeOptionsForLevel(dialogLevel);
+  // Un nodo viejo puede tener un tipo del enum legado que ya no está en el
+  // catálogo del nivel: se muestra como opción extra para no perderlo al editar.
+  const dialogTypeOptions =
+    nodeSectionType === '' ||
+    nodeSectionType === NO_TYPE ||
+    baseTypeOptions.some((option) => option.id === nodeSectionType)
+      ? baseTypeOptions
+      : [...baseTypeOptions, { id: nodeSectionType, label: nodeTypeLabel(nodeSectionType) }];
 
   return (
     <div className={selectedUnits.length > 0 ? 'space-y-4 pb-24' : 'space-y-4'}>
@@ -529,6 +556,40 @@ export function StructureTreeWorkspace({
                   placeholder="Ej. Hotel, ala norte"
                   required
                 />
+              </div>
+            )}
+            {dialogLevel === 1 && structure && (
+              <div className="space-y-2 rounded-md border border-border p-3">
+                <p className="text-sm font-medium">Niveles de esta sección</p>
+                <p className="text-xs text-muted-foreground">
+                  La rama puede terminar antes que el máximo de la estructura.
+                </p>
+                {structure.levelCount >= 2 && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-foreground"
+                      checked={nodeUsesLevel2}
+                      onChange={(event) => {
+                        setNodeUsesLevel2(event.target.checked);
+                        if (!event.target.checked) setNodeUsesLevel3(false);
+                      }}
+                    />
+                    Usa nivel 2 ({structure.level2Name ?? 'Nivel 2'})
+                  </label>
+                )}
+                {structure.levelCount >= 3 && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-foreground"
+                      checked={nodeUsesLevel3}
+                      disabled={!nodeUsesLevel2}
+                      onChange={(event) => setNodeUsesLevel3(event.target.checked)}
+                    />
+                    Usa nivel 3 ({structure.level3Name ?? 'Nivel 3'})
+                  </label>
+                )}
               </div>
             )}
             {nodeError && (

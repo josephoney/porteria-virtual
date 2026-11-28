@@ -9,6 +9,12 @@ export type { Invitation, PublicInvitationPreview } from './types/invitation.js'
 export type { AccessPoint } from './types/access-point.js';
 export type { NodeTypeOption } from './types/node-types.js';
 export {
+  MAX_BRANCH_LEVELS,
+  resolveLeafLevel,
+  isLeafAt,
+  canHaveChildren,
+} from './types/location-depth.js';
+export {
   LEVEL_1_NODE_TYPES,
   LEVEL_2_NODE_TYPES,
   NODE_TYPE_OTHER,
