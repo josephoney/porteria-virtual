@@ -28,8 +28,13 @@ export interface GenerationLevelSpec {
   sequence?: GenerationSequence;
   /** Número inicial (solo números) o índice inicial (solo letras). */
   start?: number;
-  /** Relleno con ceros del número. */
+  /** Cantidad de ceros a la izquierda. */
   padding?: number;
+  /**
+   * Este nivel usa el nombre compuesto de la plantilla. Permite simplificar
+   * solo algunos niveles y dejar los demás con su prefijo y su número.
+   */
+  simplified?: boolean;
 }
 
 export interface PlannedNode {
@@ -94,11 +99,26 @@ export function defaultSimplifiedTemplate(levelCount: number): string {
   return `{1}-${rest}`;
 }
 
-function applyTemplate(template: string, path: string[]): string {
-  return template.replace(/\{(\d)\}/g, (_match, position: string) => {
-    const index = Number(position) - 1;
-    return path[index] ?? '';
-  });
+/**
+ * Reemplaza los tokens de la plantilla.
+ *
+ * `{1}`..`{3}` son los segmentos de la ruta y `{p1}`..`{p3}` los prefijos de
+ * cada nivel. Los separadores finales se recortan, para que un nivel que todavía
+ * no tiene hijos no quede como `Albatroz 1-`.
+ */
+function applyTemplate(template: string, path: string[], prefixes: string[]): string {
+  const replaced = template.replace(
+    /\{(p?)(\d)\}/g,
+    (_match, prefixToken: string, position: string) => {
+      const index = Number(position) - 1;
+      return prefixToken ? (prefixes[index] ?? '') : (path[index] ?? '');
+    },
+  );
+
+  return replaced
+    .replace(/\s+/g, ' ')
+    .replace(/[^\p{L}\p{N}]+$/u, '')
+    .trim();
 }
 
 /**
@@ -172,9 +192,20 @@ export function planNestedGeneration(input: {
     };
   }
 
-  const template = input.simplified
-    ? input.template?.trim() || defaultSimplifiedTemplate(enabledCount)
-    : null;
+  const template = input.template?.trim() || defaultSimplifiedTemplate(enabledCount);
+
+  // Prefijos por nivel, para los tokens `{p1}`, `{p2}` y `{p3}`.
+  const prefixes = levels.map((spec, index) => {
+    const position = anchorLevel + index;
+    const levelName = input.levelNames[position - 1] ?? `Nivel ${position}`;
+    return (spec.prefix ?? levelName).trim();
+  });
+
+  const anySimplified = levels
+    .slice(0, enabledCount)
+    .some(
+      (spec) => spec.simplified === true || (input.simplified === true && spec.simplified !== false),
+    );
 
   const nodes: PlannedNode[] = [];
   let frontier: { index: number | null; path: string[] }[] = [{ index: null, path: [] }];
@@ -184,14 +215,16 @@ export function planNestedGeneration(input: {
     const levelPosition = anchorLevel + levelIndex;
     const levelName = input.levelNames[levelPosition - 1] ?? `Nivel ${levelPosition}`;
     const nextFrontier: { index: number; path: string[] }[] = [];
+    const simplifyThis =
+      spec.simplified === true || (input.simplified === true && spec.simplified !== false);
 
     for (const parent of frontier) {
       for (let elementIndex = 0; elementIndex < spec.count; elementIndex += 1) {
         const segment = sequenceLabel(spec, elementIndex);
         const path = [...parent.path, segment];
         const prefix = (spec.prefix ?? levelName).trim();
-        const name = template
-          ? applyTemplate(template, path)
+        const name = simplifyThis
+          ? applyTemplate(template, path, prefixes)
           : prefix
             ? `${prefix} ${segment}`
             : segment;
@@ -202,7 +235,7 @@ export function planNestedGeneration(input: {
           name,
           parentIndex: parent.index,
           nodeType: input.nodeType ?? null,
-          code: template ? name : null,
+          code: simplifyThis ? name : null,
         });
         nextFrontier.push({ index: nodeIndex, path });
       }
@@ -211,5 +244,10 @@ export function planNestedGeneration(input: {
     frontier = nextFrontier;
   }
 
-  return { ok: true, nodes, total: nodes.length, template };
+  return {
+    ok: true,
+    nodes,
+    total: nodes.length,
+    template: anySimplified ? template : null,
+  };
 }

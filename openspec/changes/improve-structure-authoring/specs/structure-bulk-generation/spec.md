@@ -85,6 +85,18 @@ The request SHALL be able to replace the composed names with a compact code.
 - **THEN** the segments are replaced with the values of the path
 - **THEN** the remaining text is kept as is
 
+#### Scenario: Prefix token
+
+- **WHEN** the template uses `{p1}`, `{p2}` or `{p3}`
+- **THEN** the prefix of that level replaces the token
+- **THEN** `{p1} {1}-{2}` produces `Albatroz 1-02`
+
+#### Scenario: Partial simplification
+
+- **WHEN** only some levels are marked as simplified
+- **THEN** those levels take the composite name and the rest keep their prefix and number
+- **THEN** a level that has no children yet does not keep the trailing separator: `1-` becomes `1`
+
 #### Scenario: Letters in the composite
 
 - **WHEN** a level uses letters and the plan is simplified

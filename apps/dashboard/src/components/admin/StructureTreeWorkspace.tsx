@@ -115,9 +115,9 @@ export function StructureTreeWorkspace({
       prefix: string;
       sequence: 'numbers' | 'letters';
       padding: string;
+      simplified: boolean;
     }[]
   >([]);
-  const [bulkSimplified, setBulkSimplified] = useState(false);
   const [bulkTemplate, setBulkTemplate] = useState('');
   const [preview, setPreview] = useState<{
     total: number;
@@ -241,7 +241,6 @@ export function StructureTreeWorkspace({
     setNodeUsesLevel2(true);
     setNodeUsesLevel3(true);
     setBulkEnabled(false);
-    setBulkSimplified(false);
     setBulkTemplate('');
     setPreview(null);
     const total = Math.max(1, (structure?.levelCount ?? 1) - level + 1);
@@ -252,6 +251,7 @@ export function StructureTreeWorkspace({
         prefix: structure ? structureLevelName(structure, level + index) : '',
         sequence: 'numbers' as const,
         padding: index === total - 1 && total > 1 ? '1' : '',
+        simplified: false,
       })),
     );
     setNodeError('');
@@ -352,8 +352,8 @@ export function StructureTreeWorkspace({
         prefix: index === 0 ? nodeName.trim() || row.prefix : row.prefix || undefined,
         sequence: row.sequence,
         padding: Number(row.padding) || 0,
+        simplified: row.simplified,
       })),
-      simplified: bulkSimplified,
       ...(bulkTemplate.trim() ? { template: bulkTemplate.trim() } : {}),
       dryRun,
     };
@@ -743,27 +743,48 @@ export function StructureTreeWorkspace({
                     const enabled = index === 0 || row.enabled;
                     return (
                       <div key={levelPosition} className="space-y-2 rounded-md border border-border/60 p-2">
-                        <label className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            className="size-4 accent-foreground"
-                            checked={enabled}
-                            disabled={index === 0}
-                            onChange={(event) => {
-                              setBulkRows((current) =>
-                                current.map((item, position) =>
-                                  position === index
-                                    ? { ...item, enabled: event.target.checked }
-                                    : position > index
-                                      ? { ...item, enabled: false }
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              className="size-4 accent-foreground"
+                              checked={enabled}
+                              disabled={index === 0}
+                              onChange={(event) => {
+                                setBulkRows((current) =>
+                                  current.map((item, position) =>
+                                    position === index
+                                      ? { ...item, enabled: event.target.checked }
+                                      : position > index
+                                        ? { ...item, enabled: false }
+                                        : item,
+                                  ),
+                                );
+                                setPreview(null);
+                              }}
+                            />
+                            {levelLabel}
+                          </label>
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              className="size-3.5 accent-foreground"
+                              checked={row.simplified}
+                              disabled={!enabled}
+                              onChange={(event) => {
+                                setBulkRows((current) =>
+                                  current.map((item, position) =>
+                                    position === index
+                                      ? { ...item, simplified: event.target.checked }
                                       : item,
-                                ),
-                              );
-                              setPreview(null);
-                            }}
-                          />
-                          {levelLabel}
-                        </label>
+                                  ),
+                                );
+                                setPreview(null);
+                              }}
+                            />
+                            Nombre simplificado
+                          </label>
+                        </div>
                         {enabled && (
                           <div className="grid grid-cols-[5rem_minmax(0,1fr)_minmax(0,1fr)_5rem] gap-2">
                             <div className="space-y-1">
@@ -848,22 +869,9 @@ export function StructureTreeWorkspace({
                     );
                   })}
 
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-foreground"
-                      checked={bulkSimplified}
-                      onChange={(event) => {
-                        setBulkSimplified(event.target.checked);
-                        setPreview(null);
-                      }}
-                    />
-                    Simplificar nombres (por ejemplo 1-105)
-                  </label>
-
-                  {bulkSimplified && (
+                  {visibleBulkRows.some((row) => row.enabled && row.simplified) && (
                     <div className="space-y-1">
-                      <Label htmlFor="bulk-template">Plantilla</Label>
+                      <Label htmlFor="bulk-template">Plantilla de nombres simplificados</Label>
                       <Input
                         id="bulk-template"
                         value={bulkTemplate}
@@ -874,8 +882,10 @@ export function StructureTreeWorkspace({
                         }}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Usa {'{1}'}, {'{2}'} y {'{3}'} para los segmentos de cada nivel. Si la dejas
-                        vacía se usa la sugerida.
+                        {'{1}'}, {'{2}'} y {'{3}'} son los números o letras de cada nivel;{' '}
+                        {'{p1}'}, {'{p2}'} y {'{p3}'} son sus prefijos. Ejemplo:{' '}
+                        <span className="font-mono">{'{p1} {1}-{2}'}</span> produce
+                        &quot;Albatroz 1-02&quot;. Los separadores del final se recortan solos.
                       </p>
                     </div>
                   )}

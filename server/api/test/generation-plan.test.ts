@@ -220,4 +220,55 @@ describe('planNestedGeneration simplified names', () => {
     assert.equal(defaultSimplifiedTemplate(2), '{1}-{2}');
     assert.equal(defaultSimplifiedTemplate(3), '{1}-{2}{3}');
   });
+
+  it('trims the trailing separator when a level has no children yet', () => {
+    const plan = planNestedGeneration({
+      anchorLevel: 1,
+      leafLevel: 3,
+      levels: [{ count: 1, prefix: 'Albatroz', simplified: true }],
+      levelNames,
+      template: '{1}-{2}{3}',
+    });
+    assert.equal(plan.ok, true);
+    if (!plan.ok) return;
+    assert.equal(plan.nodes[0].name, '1');
+  });
+
+  it('mixes simplified and normal levels and supports the prefix token', () => {
+    const plan = planNestedGeneration({
+      anchorLevel: 1,
+      leafLevel: 2,
+      levels: [
+        { count: 1, prefix: 'Albatroz' },
+        { count: 2, prefix: 'Casa', padding: 1, simplified: true },
+      ],
+      levelNames,
+      template: '{p1} {1}-{2}',
+    });
+    assert.equal(plan.ok, true);
+    if (!plan.ok) return;
+
+    assert.equal(plan.nodes[0].name, 'Albatroz 1');
+    assert.equal(plan.nodes[0].code, null);
+    assert.equal(plan.nodes[1].name, 'Albatroz 1-01');
+    assert.equal(plan.nodes[1].code, 'Albatroz 1-01');
+    assert.equal(plan.nodes[2].name, 'Albatroz 1-02');
+  });
+
+  it('simplifies every level when the request says so', () => {
+    const plan = planNestedGeneration({
+      anchorLevel: 1,
+      leafLevel: 2,
+      levels: [
+        { count: 1, prefix: 'Albatroz' },
+        { count: 1, prefix: 'Casa', padding: 1 },
+      ],
+      levelNames,
+      simplified: true,
+    });
+    assert.equal(plan.ok, true);
+    if (!plan.ok) return;
+    assert.equal(plan.nodes[0].name, '1');
+    assert.equal(plan.nodes[1].name, '1-01');
+  });
 });
