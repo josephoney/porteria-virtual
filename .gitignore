@@ -20,6 +20,10 @@ docker/nginx/certs/
 
 # Local artifacts
 .expo/
+# Carpetas nativas generadas por `expo prebuild`. Si se suben al build de EAS,
+# llevan rutas absolutas del equipo de desarrollo y rompen la compilación.
+apps/zima-qr-access/android/
+apps/zima-qr-access/ios/
 .engram/
 backups/
 __pycache__/
