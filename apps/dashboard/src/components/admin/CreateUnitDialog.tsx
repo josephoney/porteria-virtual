@@ -179,7 +179,7 @@ export function CreateUnitDialog({
           <DialogTitle>Nueva unidad</DialogTitle>
           <DialogDescription>
             Se crea en el último nivel de la estructura de la comunidad. Para crear secciones
-            o niveles intermedios, usa Estructura → Árbol.
+            o niveles intermedios, usa Estructura → Esquema.
           </DialogDescription>
         </DialogHeader>
 

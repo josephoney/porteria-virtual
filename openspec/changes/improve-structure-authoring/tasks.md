@@ -1,10 +1,11 @@
 ## 1. Base de datos
 
 - [ ] 1.1 Agregar `branch_level_count` (smallint, nullable) a `location_units` con su índice por rama.
-- [ ] 1.2 Agregar `node_type` y `node_type_label` (text, nullable) a `location_units`.
-- [ ] 1.3 Migración con backfill: `branch_level_count = level_count` de la estructura y `node_type = section_type`, `node_type_label = section_type_label` para nivel 1.
-- [ ] 1.4 Verificar idempotencia y que el comportamiento de hoja no cambie con los datos existentes.
+- [x] 1.2 Agregar `node_type` y `node_type_label` (text, nullable) a `location_units`.
+- [x] 1.3 Migración `0042_node_types.sql` con backfill de `node_type`/`node_type_label` desde `section_type` (nivel 1).
+- [x] 1.4 Verificar que las columnas son aditivas y que el comportamiento de hoja no cambia con los datos existentes.
 - [ ] 1.5 Extender `schema-migration.integration.test.ts` con las columnas y el backfill.
+- [ ] 1.6 Backfill de `branch_level_count = level_count` en la migración de la fase 2.
 
 ## 2. Regla de hoja y profundidad
 
@@ -18,12 +19,12 @@
 
 ## 3. Tipos por nivel
 
-- [ ] 3.1 Exportar `LEVEL_1_NODE_TYPES` y `LEVEL_2_NODE_TYPES` desde `@porteria/shared`, alfabéticos y con `other`.
-- [ ] 3.2 Aceptar `nodeType` y `nodeTypeLabel` en el alta y la edición de nodos, validando contra el catálogo del nivel.
-- [ ] 3.3 Devolver `nodeType` y `nodeTypeLabel` en el listado de nodos y de unidades.
-- [ ] 3.4 Cambiar la etiqueta del formulario a "Tipo de {nombre del nivel}".
-- [ ] 3.5 Reemplazar la lista fija de `lib/section-types.ts` por los catálogos compartidos, manteniendo la lectura del valor legado.
-- [ ] 3.6 Dejar el tipo opcional en niveles 2 y 3, con el selector vacío y sugerido.
+- [x] 3.1 Exportar `LEVEL_1_NODE_TYPES` y `LEVEL_2_NODE_TYPES` desde `@porteria/shared`, alfabéticos y con `other`.
+- [x] 3.2 Aceptar `nodeType` y `nodeTypeLabel` en el alta y la edición de nodos, validando contra el catálogo del nivel.
+- [x] 3.3 Devolver `nodeType` y `nodeTypeLabel` en el listado de nodos y de unidades.
+- [x] 3.4 Cambiar la etiqueta del formulario a "Tipo de {nombre del nivel}".
+- [x] 3.5 Reemplazar la lista fija de `lib/section-types.ts` por los catálogos compartidos, manteniendo la lectura del valor legado.
+- [x] 3.6 Dejar el tipo opcional en niveles 2 y 3, con el selector vacío y sugerido.
 
 ## 4. Generación semiautomática
 
@@ -35,7 +36,7 @@
 
 ## 5. Dashboard
 
-- [ ] 5.1 Renombrar la pestaña "Árbol" a "Esquema" y actualizar los textos que la mencionan.
+- [x] 5.1 Renombrar la pestaña "Árbol" a "Esquema" y actualizar los textos que la mencionan.
 - [ ] 5.2 Agregar al formulario de nivel 1 las casillas "Usa nivel 2" y "Usa nivel 3" según el máximo de la estructura.
 - [ ] 5.3 Agregar el paso "Una sola / Varias" con los parámetros del modo y la tabla de vista previa.
 - [ ] 5.4 Mostrar los conflictos de la vista previa y bloquear el guardado.

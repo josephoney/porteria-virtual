@@ -9,6 +9,12 @@ import {
   locationUnits,
 } from '@porteria/database/schema';
 import { requireRole } from '../middlewares/rbac.js';
+import {
+  isValidNodeType,
+  NODE_TYPE_OTHER,
+  nodeTypeLabel as catalogNodeTypeLabel,
+  normalizeNodeType,
+} from '@porteria/shared';
 import { auditCommunityEvent } from '../services/audit.service.js';
 import { can } from '../services/admin-permissions.service.js';
 import {
@@ -46,8 +52,73 @@ function getUser(request: FastifyRequest) {
   };
 }
 
-function parseSectionType(value: unknown): SectionType | null {
-  return SECTION_TYPES.includes(value as SectionType) ? (value as SectionType) : null;
+type NodeTypeResolution =
+  | {
+      ok: true;
+      nodeType: string | null;
+      nodeTypeLabel: string | null;
+      sectionType: SectionType | null;
+      sectionTypeLabel: string | null;
+    }
+  | { ok: false; message: string };
+
+/**
+ * Resuelve el tipo del nodo con las columnas nuevas o con el campo legado.
+ *
+ * El enum `section_type` se sigue escribiendo para los lectores viejos: si el
+ * tipo no existe en el enum, se guarda como `other` con la etiqueta del catálogo.
+ */
+function resolveNodeType(input: {
+  levelPosition: number;
+  nodeType?: unknown;
+  nodeTypeLabel?: unknown;
+  legacySectionType?: unknown;
+  legacySectionTypeLabel?: unknown;
+}): NodeTypeResolution {
+  const raw = input.nodeType ?? input.legacySectionType;
+  const rawLabel = input.nodeTypeLabel ?? input.legacySectionTypeLabel;
+
+  if (raw === undefined || raw === null || raw === '') {
+    return {
+      ok: true,
+      nodeType: null,
+      nodeTypeLabel: null,
+      sectionType: null,
+      sectionTypeLabel: null,
+    };
+  }
+
+  if (typeof raw !== 'string' || !isValidNodeType(raw, input.levelPosition)) {
+    return { ok: false, message: 'Tipo inválido para este nivel.' };
+  }
+
+  // El enum legado se normaliza al identificador del catálogo (tower → torre).
+  const normalized = normalizeNodeType(raw);
+  const label = typeof rawLabel === 'string' ? rawLabel.trim() : '';
+  if (normalized === NODE_TYPE_OTHER && !label) {
+    return { ok: false, message: 'Escribe el nombre del tipo.' };
+  }
+
+  const resolvedLabel = normalized === NODE_TYPE_OTHER ? label : null;
+
+  if (input.levelPosition !== 1) {
+    return {
+      ok: true,
+      nodeType: normalized,
+      nodeTypeLabel: resolvedLabel,
+      sectionType: null,
+      sectionTypeLabel: null,
+    };
+  }
+
+  const legacy = SECTION_TYPES.includes(raw as SectionType)
+    ? { sectionType: raw as SectionType, sectionTypeLabel: null }
+    : {
+        sectionType: 'other' as SectionType,
+        sectionTypeLabel: resolvedLabel ?? catalogNodeTypeLabel(normalized),
+      };
+
+  return { ok: true, nodeType: normalized, nodeTypeLabel: resolvedLabel, ...legacy };
 }
 
 async function communityInScope(
@@ -203,6 +274,8 @@ export async function locationNodeRoutes(app: FastifyInstance) {
           code: locationUnits.code,
           sectionType: locationUnits.sectionType,
           sectionTypeLabel: locationUnits.sectionTypeLabel,
+          nodeType: locationUnits.nodeType,
+          nodeTypeLabel: locationUnits.nodeTypeLabel,
           metadata: locationUnits.metadata,
           status: locationUnits.status,
         })
@@ -294,6 +367,8 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         parentId?: string | null;
         name?: string;
         code?: string | null;
+        nodeType?: string;
+        nodeTypeLabel?: string | null;
         sectionType?: string;
         sectionTypeLabel?: string | null;
       };
@@ -365,15 +440,22 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         });
       }
 
-      let sectionType: SectionType | null = null;
-      let sectionTypeLabel: string | null = null;
-      if (levelPosition === 1) {
-        sectionType = parseSectionType(body.sectionType) ?? 'other';
-        sectionTypeLabel =
-          sectionType === 'other'
-            ? body.sectionTypeLabel?.trim() || 'Otra'
-            : null;
+      const typeResolution = resolveNodeType({
+        levelPosition,
+        nodeType: body.nodeType,
+        nodeTypeLabel: body.nodeTypeLabel,
+        legacySectionType: body.sectionType,
+        legacySectionTypeLabel: body.sectionTypeLabel,
+      });
+      if (!typeResolution.ok) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: typeResolution.message,
+        });
       }
+      const { nodeType, sectionType, sectionTypeLabel } = typeResolution;
+      const resolvedNodeTypeLabel = typeResolution.nodeTypeLabel;
 
       const communityId = body.communityId;
       const nodeName = body.name.trim();
@@ -412,6 +494,8 @@ export async function locationNodeRoutes(app: FastifyInstance) {
               code: body.code?.trim() || null,
               sectionType,
               sectionTypeLabel,
+              nodeType,
+              nodeTypeLabel: resolvedNodeTypeLabel,
               metadata: {},
               status: 'active',
             })
@@ -456,6 +540,8 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         code?: string | null;
         parentId?: string | null;
         status?: 'active' | 'inactive';
+        nodeType?: string;
+        nodeTypeLabel?: string | null;
         sectionType?: string;
         sectionTypeLabel?: string | null;
       };
@@ -488,18 +574,25 @@ export async function locationNodeRoutes(app: FastifyInstance) {
       if (body.code !== undefined) patch.code = body.code?.trim() || null;
       if (body.status !== undefined) patch.status = body.status;
 
-      if (body.sectionType !== undefined) {
-        const sectionType = parseSectionType(body.sectionType);
-        if (!sectionType) {
+      if (body.nodeType !== undefined || body.sectionType !== undefined) {
+        const typeResolution = resolveNodeType({
+          levelPosition: existing.levelPosition,
+          nodeType: body.nodeType,
+          nodeTypeLabel: body.nodeTypeLabel,
+          legacySectionType: body.sectionType,
+          legacySectionTypeLabel: body.sectionTypeLabel,
+        });
+        if (!typeResolution.ok) {
           return reply.status(400).send({
             statusCode: 400,
             error: 'Bad Request',
-            message: 'Invalid sectionType',
+            message: typeResolution.message,
           });
         }
-        patch.sectionType = sectionType;
-        patch.sectionTypeLabel =
-          sectionType === 'other' ? body.sectionTypeLabel?.trim() || 'Otra' : null;
+        patch.nodeType = typeResolution.nodeType;
+        patch.nodeTypeLabel = typeResolution.nodeTypeLabel;
+        patch.sectionType = typeResolution.sectionType;
+        patch.sectionTypeLabel = typeResolution.sectionTypeLabel;
       }
 
       if (body.parentId !== undefined) {

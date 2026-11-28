@@ -257,7 +257,7 @@ export function SectionsPage() {
       >
         <TabsList variant="line" className="self-start">
           <TabsTrigger value="list">Secciones</TabsTrigger>
-          <TabsTrigger value="tree">Árbol</TabsTrigger>
+          <TabsTrigger value="tree">Esquema</TabsTrigger>
         </TabsList>
 
         <TabsContent value="list" className="space-y-6">

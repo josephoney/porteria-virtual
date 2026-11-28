@@ -7,6 +7,16 @@ export type { AuthContext } from './types/auth-context.js';
 export type { PublicOrganization, PublicCommunity } from './types/tenant.js';
 export type { Invitation, PublicInvitationPreview } from './types/invitation.js';
 export type { AccessPoint } from './types/access-point.js';
+export type { NodeTypeOption } from './types/node-types.js';
+export {
+  LEVEL_1_NODE_TYPES,
+  LEVEL_2_NODE_TYPES,
+  NODE_TYPE_OTHER,
+  nodeTypeLabel,
+  nodeTypeOptionsForLevel,
+  normalizeNodeType,
+  isValidNodeType,
+} from './types/node-types.js';
 export type {
   WorkstationAssignment,
   WorkstationAssignmentResult,

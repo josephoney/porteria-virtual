@@ -8,7 +8,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Skeleton } from '../ui/skeleton';
 import { FormDialog } from '../layout/FormDialog';
-import { SECTION_TYPE_LABELS, defaultSectionTypeForLevelName } from '../../lib/section-types';
+import {
+  defaultSectionTypeForLevelName,
+  nodeTypeOptionsForLevel,
+  normalizeNodeType,
+} from '../../lib/section-types';
 import { StructureForm } from '../layout/StructureForm';
 import {
   LocationTreeTable,
@@ -46,21 +50,8 @@ type ConfirmState = { kind: 'archive' | 'restore' | 'delete'; node: LocationNode
 
 const STORAGE_KEY = 'porteria.units.community';
 
-/** Ordered for the level-1 form: the common cases first. */
-const SECTION_TYPE_OPTIONS = [
-  'tower',
-  'common_area',
-  'block',
-  'building',
-  'sector',
-  'zone',
-  'interior',
-  'commercial',
-  'lot',
-  'house',
-  'floor',
-  'other',
-];
+/** Valor del selector cuando el nodo no lleva tipo (opcional en niveles 2 y 3). */
+const NO_TYPE = 'none';
 
 function countDescendants(nodeId: string, nodes: LocationNode[]): number {
   const childrenByParent = new Map<string, LocationNode[]>();
@@ -220,7 +211,9 @@ export function StructureTreeWorkspace({
     setNodeDialog({ mode: 'create', parent, level });
     setNodeName('');
     setNodeCode('');
-    setNodeSectionType(parent ? 'other' : defaultSectionTypeForLevelName(structure?.level1Name));
+    setNodeSectionType(
+      level === 1 ? defaultSectionTypeForLevelName(structure?.level1Name) : NO_TYPE,
+    );
     setNodeSectionTypeLabel('');
     setNodeError('');
   }
@@ -229,8 +222,10 @@ export function StructureTreeWorkspace({
     setNodeDialog({ mode: 'edit', node });
     setNodeName(node.name);
     setNodeCode(node.code ?? '');
-    setNodeSectionType(node.sectionType ?? 'other');
-    setNodeSectionTypeLabel(node.sectionTypeLabel ?? '');
+    setNodeSectionType(
+      normalizeNodeType(node.nodeType ?? node.sectionType ?? NO_TYPE),
+    );
+    setNodeSectionTypeLabel(node.nodeTypeLabel ?? node.sectionTypeLabel ?? '');
     setNodeError('');
   }
 
@@ -238,18 +233,17 @@ export function StructureTreeWorkspace({
     event.preventDefault();
     if (!nodeDialog) return;
 
-    const isSection =
-      nodeDialog.mode === 'edit' ? nodeDialog.node.levelPosition === 1 : nodeDialog.level === 1;
+    const hasType = nodeSectionType !== '' && nodeSectionType !== NO_TYPE;
 
-    if (isSection && nodeSectionType === 'other' && !nodeSectionTypeLabel.trim()) {
-      setNodeError('Escribe el nombre del tipo de sección.');
+    if (hasType && nodeSectionType === 'other' && !nodeSectionTypeLabel.trim()) {
+      setNodeError('Escribe el nombre del tipo.');
       return;
     }
 
-    const typeFields = isSection
+    const typeFields = hasType
       ? {
-          sectionType: nodeSectionType,
-          ...(nodeSectionType === 'other' ? { sectionTypeLabel: nodeSectionTypeLabel.trim() } : {}),
+          nodeType: nodeSectionType,
+          ...(nodeSectionType === 'other' ? { nodeTypeLabel: nodeSectionTypeLabel.trim() } : {}),
         }
       : {};
 
@@ -323,10 +317,9 @@ export function StructureTreeWorkspace({
         structure,
         nodeDialog?.mode === 'edit' ? nodeDialog.node.levelPosition : (nodeDialog?.level ?? 1),
       );
-  const isSectionDialog =
-    nodeDialog?.mode === 'edit'
-      ? nodeDialog.node.levelPosition === 1
-      : nodeDialog?.mode === 'create' && nodeDialog.level === 1;
+  const dialogLevel =
+    nodeDialog?.mode === 'edit' ? nodeDialog.node.levelPosition : (nodeDialog?.level ?? 1);
+  const dialogTypeOptions = nodeTypeOptionsForLevel(dialogLevel);
 
   return (
     <div className={selectedUnits.length > 0 ? 'space-y-4 pb-24' : 'space-y-4'}>
@@ -498,40 +491,42 @@ export function StructureTreeWorkspace({
                 placeholder="Opcional"
               />
             </div>
-            {isSectionDialog && (
-              <div className="space-y-1">
-                <Label htmlFor="unit-node-section-type">Tipo de sección</Label>
-                <Select
-                  value={nodeSectionType}
-                  onValueChange={(value) => {
-                    setNodeSectionType(value);
-                    if (value !== 'other') setNodeSectionTypeLabel('');
-                  }}
+            <div className="space-y-1">
+              <Label htmlFor="unit-node-section-type">Tipo de {dialogLevelName}</Label>
+              <Select
+                value={nodeSectionType}
+                onValueChange={(value) => {
+                  setNodeSectionType(value);
+                  if (value !== 'other') setNodeSectionTypeLabel('');
+                }}
+              >
+                <SelectTrigger
+                  id="unit-node-section-type"
+                  aria-label={`Tipo de ${dialogLevelName}`}
                 >
-                  <SelectTrigger id="unit-node-section-type" aria-label="Tipo de sección">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SECTION_TYPE_OPTIONS.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {SECTION_TYPE_LABELS[type]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Las zonas comunes agrupan lugares como piscina o club social.
-                </p>
-              </div>
-            )}
-            {isSectionDialog && nodeSectionType === 'other' && (
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_TYPE}>Sin tipo</SelectItem>
+                  {dialogTypeOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Opcional. El nivel 1 describe contenedores; los niveles 2 y 3, espacios.
+              </p>
+            </div>
+            {nodeSectionType === 'other' && (
               <div className="space-y-1">
                 <Label htmlFor="unit-node-section-type-label">Nombre del tipo</Label>
                 <Input
                   id="unit-node-section-type-label"
                   value={nodeSectionTypeLabel}
                   onChange={(event) => setNodeSectionTypeLabel(event.target.value)}
-                  placeholder="Ej. Torre, manzana, zona común"
+                  placeholder="Ej. Hotel, ala norte"
                   required
                 />
               </div>

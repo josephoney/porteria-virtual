@@ -48,6 +48,9 @@ export const locationUnits = pgTable(
     code: varchar('code', { length: 100 }),
     sectionType: sectionTypeEnum('section_type'),
     sectionTypeLabel: varchar('section_type_label', { length: 100 }),
+    /** Tipo del nodo según el catálogo de su nivel; reemplaza a `sectionType`. */
+    nodeType: varchar('node_type', { length: 60 }),
+    nodeTypeLabel: varchar('node_type_label', { length: 100 }),
     metadata: jsonb('metadata').notNull().default({}),
     status: locationUnitStatusEnum('status').notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

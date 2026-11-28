@@ -295,6 +295,13 @@
       "when": 1795750000000,
       "tag": "0041_account_activation",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1795830000000,
+      "tag": "0042_node_types",
+      "breakpoints": true
     }
   ]
 }

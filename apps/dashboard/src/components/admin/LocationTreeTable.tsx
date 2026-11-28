@@ -27,6 +27,8 @@ export interface LocationNode {
   code: string | null;
   sectionType: string | null;
   sectionTypeLabel: string | null;
+  nodeType?: string | null;
+  nodeTypeLabel?: string | null;
   metadata?: { legacyType?: string | null } | null;
   status: string;
 }
@@ -179,9 +181,12 @@ export function LocationTreeTable({
         <TableCell>
           <div className="flex items-center gap-1">
             <Badge variant="outline">{node.status}</Badge>
-            {node.levelPosition === 1 && node.sectionType && (
+            {(node.nodeType ?? node.sectionType) && (
               <Badge variant="secondary">
-                {sectionTypeLabel(node.sectionType, node.sectionTypeLabel)}
+                {sectionTypeLabel(
+                  node.nodeType ?? node.sectionType,
+                  node.nodeTypeLabel ?? node.sectionTypeLabel,
+                )}
               </Badge>
             )}
           </div>
