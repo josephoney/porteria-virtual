@@ -253,6 +253,48 @@ describe('structure generation integration', () => {
     assert.equal(after.length, before.length, 'no node must be created on conflict');
   });
 
+  it('creates the section and its content in one call', async () => {
+    const preview = await request('POST', '/api/location-units/generate', {
+      communityId,
+      structureId,
+      name: 'Torre Generada',
+      branchLevelCount: 3,
+      mode: 'floors',
+      floors: 2,
+      perFloor: 2,
+      dryRun: true,
+    });
+    assert.equal(preview.statusCode, 200, preview.body);
+    const plan = parse(preview);
+    assert.equal(plan.total, 1 + 2 + 4);
+
+    const created = await request('POST', '/api/location-units/generate', {
+      communityId,
+      structureId,
+      name: 'Torre Generada',
+      branchLevelCount: 3,
+      mode: 'floors',
+      floors: 2,
+      perFloor: 2,
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    assert.equal(parse(created).created, 7);
+
+    const [root] = await db
+      .select()
+      .from(locationUnits)
+      .where(and(eq(locationUnits.communityId, communityId), eq(locationUnits.name, 'Torre Generada')));
+    assert.equal(root.levelPosition, 1);
+    assert.equal(root.branchLevelCount, 3);
+
+    const children = await db
+      .select({ name: locationUnits.name, levelPosition: locationUnits.levelPosition })
+      .from(locationUnits)
+      .where(eq(locationUnits.parentId, root.id));
+    assert.equal(children.length, 2);
+    assert.equal(children.every((row) => row.levelPosition === 2), true);
+  });
+
   it('requires two free levels for the floors mode', async () => {
     const [floor] = await db
       .select()

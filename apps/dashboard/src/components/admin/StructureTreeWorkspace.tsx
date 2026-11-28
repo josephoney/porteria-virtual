@@ -107,7 +107,6 @@ export function StructureTreeWorkspace({
   const [nodeUsesLevel2, setNodeUsesLevel2] = useState(true);
   const [nodeUsesLevel3, setNodeUsesLevel3] = useState(true);
   const [createMode, setCreateMode] = useState<'single' | 'bulk'>('single');
-  const [bulkMode, setBulkMode] = useState<'sequential' | 'floors'>('sequential');
   const [bulkCount, setBulkCount] = useState('10');
   const [bulkPrefix, setBulkPrefix] = useState('');
   const [bulkFloors, setBulkFloors] = useState('5');
@@ -323,13 +322,16 @@ export function StructureTreeWorkspace({
 
     return {
       communityId,
-      ...(isRoot ? { structureId: structure?.id } : { parentId: nodeDialog.parent?.id }),
       ...(isRoot
-        ? { branchLevelCount: 1 + (nodeUsesLevel2 ? 1 : 0) + (nodeUsesLevel3 ? 1 : 0) }
-        : {}),
+        ? {
+            structureId: structure?.id,
+            branchLevelCount: plannedBranch,
+            ...(bulkNeedsName ? { name: nodeName } : {}),
+          }
+        : { parentId: nodeDialog.parent?.id }),
       ...(hasType ? { nodeType: nodeSectionType } : {}),
-      mode: bulkMode,
-      ...(bulkMode === 'sequential'
+      mode: effectiveBulkMode,
+      ...(effectiveBulkMode === 'sequential'
         ? { count: Number(bulkCount), prefix: bulkPrefix || undefined }
         : { floors: Number(bulkFloors), perFloor: Number(bulkPerFloor) }),
       dryRun,
@@ -428,6 +430,23 @@ export function StructureTreeWorkspace({
     baseTypeOptions.some((option) => option.id === nodeSectionType)
       ? baseTypeOptions
       : [...baseTypeOptions, { id: nodeSectionType, label: nodeTypeLabel(nodeSectionType) }];
+
+  // Modos de generación aplicables según la rama que se va a crear.
+  const isRootCreate = nodeDialog?.mode === 'create' && !nodeDialog.parent;
+  const plannedBranch = 1 + (nodeUsesLevel2 ? 1 : 0) + (nodeUsesLevel3 ? 1 : 0);
+  const bulkLeafLevel = isRootCreate
+    ? plannedBranch
+    : (nodeDialog?.mode === 'create'
+        ? (nodeDialog.parent?.branchLevelCount ?? structure?.levelCount ?? 3)
+        : 1);
+  // Si la sección es nueva, el plan cuelga de ella (nivel 2); si ya existe, del padre.
+  const bulkAnchorLevel = isRootCreate ? (plannedBranch >= 2 ? 2 : 1) : dialogLevel;
+  const canGenerateSequential = bulkAnchorLevel === bulkLeafLevel;
+  const canGenerateFloors = bulkLeafLevel - bulkAnchorLevel === 1;
+  const effectiveBulkMode: 'sequential' | 'floors' =
+    canGenerateFloors && !canGenerateSequential ? 'floors' : 'sequential';
+  const canGenerate = canGenerateSequential || canGenerateFloors;
+  const bulkNeedsName = isRootCreate && plannedBranch >= 2;
 
   return (
     <div className={selectedUnits.length > 0 ? 'space-y-4 pb-24' : 'space-y-4'}>
@@ -631,89 +650,99 @@ export function StructureTreeWorkspace({
               </>
             ) : (
               <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label htmlFor="bulk-mode">Modo de generación</Label>
-                  <Select
-                    value={bulkMode}
-                    onValueChange={(value) => {
-                      setBulkMode(value as 'sequential' | 'floors');
-                      setPreview(null);
-                    }}
-                  >
-                    <SelectTrigger id="bulk-mode" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sequential">Secuencial (Casa 1, Casa 2…)</SelectItem>
-                      <SelectItem value="floors">Por pisos (101…106, 201…206…)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {bulkMode === 'sequential' ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="bulk-count">Cantidad</Label>
-                      <Input
-                        id="bulk-count"
-                        type="number"
-                        min={1}
-                        value={bulkCount}
-                        onChange={(event) => {
-                          setBulkCount(event.target.value);
-                          setPreview(null);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="bulk-prefix">Prefijo</Label>
-                      <Input
-                        id="bulk-prefix"
-                        value={bulkPrefix}
-                        placeholder="Casa"
-                        onChange={(event) => {
-                          setBulkPrefix(event.target.value);
-                          setPreview(null);
-                        }}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="bulk-floors">Pisos</Label>
-                      <Input
-                        id="bulk-floors"
-                        type="number"
-                        min={1}
-                        value={bulkFloors}
-                        onChange={(event) => {
-                          setBulkFloors(event.target.value);
-                          setPreview(null);
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="bulk-per-floor">Unidades por piso</Label>
-                      <Input
-                        id="bulk-per-floor"
-                        type="number"
-                        min={1}
-                        value={bulkPerFloor}
-                        onChange={(event) => {
-                          setBulkPerFloor(event.target.value);
-                          setPreview(null);
-                        }}
-                      />
-                    </div>
+                {bulkNeedsName && (
+                  <div className="space-y-1">
+                    <Label htmlFor="bulk-root-name">Nombre de {dialogLevelName}</Label>
+                    <Input
+                      id="bulk-root-name"
+                      value={nodeName}
+                      placeholder="Torre 5"
+                      onChange={(event) => {
+                        setNodeName(event.target.value);
+                        setPreview(null);
+                      }}
+                    />
                   </div>
                 )}
+
+                {canGenerate ? (
+                  <p className="text-xs text-muted-foreground">
+                    {effectiveBulkMode === 'floors'
+                      ? 'Se crearán los pisos y sus unidades dentro de la sección.'
+                      : 'Se crearán las unidades del último nivel de la rama.'}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Esta rama no admite generación en este nivel. Crea primero el nivel
+                    anterior y genera desde su fila.
+                  </p>
+                )}
+
+                {canGenerate &&
+                  (effectiveBulkMode === 'floors' ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="bulk-floors">Pisos</Label>
+                        <Input
+                          id="bulk-floors"
+                          type="number"
+                          min={1}
+                          value={bulkFloors}
+                          onChange={(event) => {
+                            setBulkFloors(event.target.value);
+                            setPreview(null);
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="bulk-per-floor">Unidades por piso</Label>
+                        <Input
+                          id="bulk-per-floor"
+                          type="number"
+                          min={1}
+                          value={bulkPerFloor}
+                          onChange={(event) => {
+                            setBulkPerFloor(event.target.value);
+                            setPreview(null);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="bulk-count">Cantidad</Label>
+                        <Input
+                          id="bulk-count"
+                          type="number"
+                          min={1}
+                          value={bulkCount}
+                          onChange={(event) => {
+                            setBulkCount(event.target.value);
+                            setPreview(null);
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="bulk-prefix">Prefijo</Label>
+                        <Input
+                          id="bulk-prefix"
+                          value={bulkPrefix}
+                          placeholder="Casa"
+                          onChange={(event) => {
+                            setBulkPrefix(event.target.value);
+                            setPreview(null);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
 
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => void previewGeneration()}
-                  disabled={previewing}
+                  disabled={previewing || !canGenerate}
                 >
                   {previewing ? 'Calculando…' : 'Previsualizar'}
                 </Button>
@@ -830,6 +859,8 @@ export function StructureTreeWorkspace({
                 type="button"
                 disabled={
                   nodeSaving ||
+                  !canGenerate ||
+                  (bulkNeedsName && !nodeName.trim()) ||
                   !preview ||
                   Boolean(preview.error) ||
                   preview.conflicts.length > 0 ||

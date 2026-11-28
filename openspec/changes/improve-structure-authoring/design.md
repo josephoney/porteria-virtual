@@ -125,11 +125,13 @@ previsualizar y corrige.
 ### 6. Dónde se ofrece la generación
 
 **Decisión:** el diálogo de creación de un nodo gana un paso "Crear unidades": "una sola" o
-"varias". Con "varias" y modo `floors`, crear un nivel 1 de 3 niveles genera también los
-niveles 2 y 3 en la misma llamada.
+"varias". El diálogo ofrece **solo el modo que aplica** a esa rama (secuencial en la hoja,
+por pisos cuando hay un nivel libre debajo) y, si la sección es nueva, pide su nombre y crea
+la sección junto con su contenido en la misma llamada.
 
 **Por qué:** es el caso del ejemplo (club → hotel → oficinas/habitaciones) y evita crear
-piso por piso.
+piso por piso. Ofrecer modos inaplicables generaba un error después de previsualizar, que es
+peor que no ofrecerlos.
 
 ### 7. Aumentar la profundidad de una rama sí; reducirla con hijos no
 

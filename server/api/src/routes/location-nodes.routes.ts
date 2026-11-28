@@ -593,6 +593,7 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         communityId?: string;
         parentId?: string | null;
         structureId?: string;
+        name?: string;
         branchLevelCount?: number;
         nodeType?: string | null;
         nodeTypeLabel?: string | null;
@@ -660,7 +661,6 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         anchorLevel = parent.levelPosition + 1;
         parentBranch = parent.branchLevelCount;
       }
-
       if (!structureId) {
         return reply.status(400).send({
           statusCode: 400,
@@ -685,8 +685,28 @@ export async function locationNodeRoutes(app: FastifyInstance) {
           message: `branchLevelCount must be between 1 and ${structure.levelCount}`,
         });
       }
-      const leafLevel =
-        anchorLevel === 1 ? requestedBranch : resolveLeafLevel(parentBranch, structure.levelCount);
+
+      // Sin padre y con nombre: se crea la sección y su contenido en un paso.
+      const rootName = body.parentId ? null : (body.name?.trim() || null);
+      const createRoot = Boolean(rootName);
+      if (createRoot) {
+        if (requestedBranch < 2) {
+          return reply.status(400).send({
+            statusCode: 400,
+            error: 'Bad Request',
+            message:
+              'Una sección de un solo nivel no admite elementos dentro. Crea varias secciones o usa "Una sola".',
+            code: 'mode_not_applicable',
+          });
+        }
+        anchorLevel = 2;
+      }
+
+      const leafLevel = createRoot
+        ? requestedBranch
+        : anchorLevel === 1
+          ? requestedBranch
+          : resolveLeafLevel(parentBranch, structure.levelCount);
 
       const plan = planNodeGeneration({
         params: {
@@ -706,7 +726,7 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         },
         anchorLevel,
         leafLevel,
-        nodeType: body.nodeType ?? null,
+        nodeType: createRoot ? null : (body.nodeType ?? null),
         unitType: body.unitType ?? null,
       });
 
@@ -719,36 +739,62 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         });
       }
 
-      // Solo los nodos que cuelgan del padre existente pueden chocar con nombres
-      // ya guardados; los hijos de pisos nuevos no tienen hermanos todavía.
-      const siblingRows = await db
-        .select({ name: locationUnits.name })
-        .from(locationUnits)
-        .where(
-          and(
-            eq(locationUnits.structureId, structureId),
-            body.parentId
-              ? eq(locationUnits.parentId, body.parentId)
-              : isNull(locationUnits.parentId),
-          ),
-        );
-      const existingNames = new Set(siblingRows.map((row) => row.name.trim().toLowerCase()));
-      const plannedNames = new Set<string>();
       const conflicts: string[] = [];
-      for (const node of plan.nodes) {
-        if (node.parentIndex !== null) continue;
-        const key = node.name.trim().toLowerCase();
-        if (existingNames.has(key) || plannedNames.has(key)) conflicts.push(node.name);
-        plannedNames.add(key);
+      if (createRoot) {
+        // La sección nueva compite con las raíces existentes; su contenido no
+        // tiene hermanos todavía.
+        const [clash] = await db
+          .select({ id: locationUnits.id })
+          .from(locationUnits)
+          .where(
+            and(
+              eq(locationUnits.structureId, structureId),
+              isNull(locationUnits.parentId),
+              sql`lower(${locationUnits.name}) = ${rootName!.toLowerCase()}`,
+            ),
+          )
+          .limit(1);
+        if (clash) conflicts.push(rootName!);
+      } else {
+        const siblingRows = await db
+          .select({ name: locationUnits.name })
+          .from(locationUnits)
+          .where(
+            and(
+              eq(locationUnits.structureId, structureId),
+              body.parentId
+                ? eq(locationUnits.parentId, body.parentId)
+                : isNull(locationUnits.parentId),
+            ),
+          );
+        const existingNames = new Set(siblingRows.map((row) => row.name.trim().toLowerCase()));
+        const plannedNames = new Set<string>();
+        for (const node of plan.nodes) {
+          if (node.parentIndex !== null) continue;
+          const key = node.name.trim().toLowerCase();
+          if (existingNames.has(key) || plannedNames.has(key)) conflicts.push(node.name);
+          plannedNames.add(key);
+        }
       }
       const uniqueConflicts = [...new Set(conflicts)];
 
       if (body.dryRun) {
+        const previewNodes = createRoot
+          ? [
+              {
+                levelPosition: 1,
+                name: rootName!,
+                parentIndex: null,
+                nodeType: body.nodeType ?? null,
+              },
+              ...plan.nodes,
+            ]
+          : plan.nodes;
         return reply.send({
           dryRun: true,
-          total: plan.total,
+          total: previewNodes.length,
           mode: plan.mode,
-          nodes: plan.nodes,
+          nodes: previewNodes,
           conflicts: uniqueConflicts.slice(0, 5),
         });
       }
@@ -768,11 +814,39 @@ export async function locationNodeRoutes(app: FastifyInstance) {
           const ids: string[] = [];
           const result: { id: string; name: string; levelPosition: number }[] = [];
 
+          // Al generar desde cero, la sección nace primero y el plan cuelga de ella.
+          let rootId: string | null = null;
+          if (createRoot) {
+            const [root] = await tx
+              .insert(locationUnits)
+              .values({
+                communityId,
+                structureId,
+                parentId: null,
+                levelPosition: 1,
+                name: rootName!,
+                code: null,
+                nodeType: body.nodeType ?? null,
+                nodeTypeLabel: body.nodeTypeLabel ?? null,
+                branchLevelCount: requestedBranch,
+                metadata: {},
+                status: 'active',
+              })
+              .returning();
+            rootId = root.id;
+            result.push({ id: root.id, name: root.name, levelPosition: root.levelPosition });
+          }
+
           for (const [index, node] of plan.nodes.entries()) {
             const parentId =
-              node.parentIndex === null ? (body.parentId ?? null) : ids[node.parentIndex];
-            const branchLevelCount =
-              anchorLevel === 1 && node.parentIndex === null
+              node.parentIndex === null
+                ? createRoot
+                  ? rootId
+                  : (body.parentId ?? null)
+                : ids[node.parentIndex];
+            const branchLevelCount = createRoot
+              ? requestedBranch
+              : anchorLevel === 1 && node.parentIndex === null
                 ? requestedBranch
                 : (parentBranch ?? structure.levelCount);
 

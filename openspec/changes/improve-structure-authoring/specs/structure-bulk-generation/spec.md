@@ -10,6 +10,14 @@ under an existing parent.
 - **WHEN** a generation request names a level-1 parent in a three-level branch
 - **THEN** the plan contains level-2 and level-3 nodes according to the mode
 
+#### Scenario: Creating the section and its content in one step
+
+- **WHEN** the request has no parent, a name and a branch depth of two or more
+- **THEN** the section is created first
+- **THEN** the planned nodes hang from it
+- **THEN** the preview counts the section as the first node
+- **THEN** the section name is checked against the existing sections
+
 #### Scenario: Under a level-2 node
 
 - **WHEN** a generation request names a level-2 parent
