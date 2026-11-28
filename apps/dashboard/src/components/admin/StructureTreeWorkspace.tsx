@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { defaultSimplifiedTemplate } from '@porteria/shared';
 import { RiFileUploadLine } from '@remixicon/react';
 import { get, del, patch, post } from '../../lib/apiClient';
 import { Button } from '../ui/button';
@@ -106,12 +107,18 @@ export function StructureTreeWorkspace({
   const [nodeSectionTypeLabel, setNodeSectionTypeLabel] = useState('');
   const [nodeUsesLevel2, setNodeUsesLevel2] = useState(true);
   const [nodeUsesLevel3, setNodeUsesLevel3] = useState(true);
-  const [createMode, setCreateMode] = useState<'single' | 'bulk'>('single');
-  const [bulkMode, setBulkMode] = useState<'sequential' | 'floors'>('sequential');
-  const [bulkCount, setBulkCount] = useState('10');
-  const [bulkPrefix, setBulkPrefix] = useState('');
-  const [bulkFloors, setBulkFloors] = useState('5');
-  const [bulkPerFloor, setBulkPerFloor] = useState('4');
+  const [bulkEnabled, setBulkEnabled] = useState(false);
+  const [bulkRows, setBulkRows] = useState<
+    {
+      enabled: boolean;
+      count: string;
+      prefix: string;
+      sequence: 'numbers' | 'letters';
+      padding: string;
+    }[]
+  >([]);
+  const [bulkSimplified, setBulkSimplified] = useState(false);
+  const [bulkTemplate, setBulkTemplate] = useState('');
   const [preview, setPreview] = useState<{
     total: number;
     names: string[];
@@ -233,9 +240,20 @@ export function StructureTreeWorkspace({
     setNodeSectionTypeLabel('');
     setNodeUsesLevel2(true);
     setNodeUsesLevel3(true);
-    setCreateMode('single');
+    setBulkEnabled(false);
+    setBulkSimplified(false);
+    setBulkTemplate('');
     setPreview(null);
-    setBulkPrefix(structure ? structureLevelName(structure, level) : '');
+    const total = Math.max(1, (structure?.levelCount ?? 1) - level + 1);
+    setBulkRows(
+      Array.from({ length: total }, (_, index) => ({
+        enabled: index === 0,
+        count: '1',
+        prefix: structure ? structureLevelName(structure, level + index) : '',
+        sequence: 'numbers' as const,
+        padding: index === total - 1 && total > 1 ? '2' : '',
+      })),
+    );
     setNodeError('');
   }
 
@@ -324,17 +342,19 @@ export function StructureTreeWorkspace({
     return {
       communityId,
       ...(isRoot
-        ? {
-            structureId: structure?.id,
-            branchLevelCount: plannedBranch,
-            ...(bulkNeedsName ? { name: nodeName } : {}),
-          }
+        ? { structureId: structure?.id, branchLevelCount: plannedBranch }
         : { parentId: nodeDialog.parent?.id }),
       ...(hasType ? { nodeType: nodeSectionType } : {}),
-      mode: effectiveBulkMode,
-      ...(effectiveBulkMode === 'sequential'
-        ? { count: Number(bulkCount), prefix: bulkPrefix || undefined }
-        : { floors: Number(bulkFloors), perFloor: Number(bulkPerFloor) }),
+      levels: bulkContiguous.map((row, index) => ({
+        enabled: true,
+        count: Number(row.count) || 0,
+        // El primer nivel usa el Nombre del formulario como prefijo.
+        prefix: index === 0 ? nodeName.trim() || row.prefix : row.prefix || undefined,
+        sequence: row.sequence,
+        padding: Number(row.padding) || 0,
+      })),
+      simplified: bulkSimplified,
+      ...(bulkTemplate.trim() ? { template: bulkTemplate.trim() } : {}),
       dryRun,
     };
   }
@@ -435,25 +455,22 @@ export function StructureTreeWorkspace({
   // Modos de generación aplicables según la rama que se va a crear.
   const isRootCreate = nodeDialog?.mode === 'create' && !nodeDialog.parent;
   const plannedBranch = 1 + (nodeUsesLevel2 ? 1 : 0) + (nodeUsesLevel3 ? 1 : 0);
-  const bulkLeafLevel = isRootCreate
+  const helperLeafLevel = isRootCreate
     ? plannedBranch
-    : (nodeDialog?.mode === 'create'
-        ? (nodeDialog.parent?.branchLevelCount ?? structure?.levelCount ?? 3)
-        : 1);
-  // Si la sección es nueva, el plan cuelga de ella (nivel 2); si ya existe, del padre.
-  const bulkAnchorLevel = isRootCreate ? (plannedBranch >= 2 ? 2 : 1) : dialogLevel;
-  // La secuencial sirve en cualquier nivel de la rama; pisos exige un nivel más abajo.
-  const canGenerateSequential = bulkAnchorLevel <= bulkLeafLevel;
-  const canGenerateFloors = bulkLeafLevel - bulkAnchorLevel === 1;
-  const modeChoices: ('sequential' | 'floors')[] = [
-    ...(canGenerateSequential ? (['sequential'] as const) : []),
-    ...(canGenerateFloors ? (['floors'] as const) : []),
-  ];
-  const effectiveBulkMode: 'sequential' | 'floors' = modeChoices.includes(bulkMode)
-    ? bulkMode
-    : (modeChoices[0] ?? 'sequential');
-  const canGenerate = modeChoices.length > 0;
-  const bulkNeedsName = isRootCreate && plannedBranch >= 2;
+    : nodeDialog?.mode === 'create'
+      ? (nodeDialog.parent?.branchLevelCount ?? structure?.levelCount ?? 3)
+      : 1;
+  const helperRowCount = Math.max(1, helperLeafLevel - dialogLevel + 1);
+  const visibleBulkRows = bulkRows.slice(0, helperRowCount);
+  const bulkContiguous = (() => {
+    const rows: typeof bulkRows = [];
+    for (const row of visibleBulkRows) {
+      if (!row.enabled && rows.length > 0) break;
+      rows.push(row);
+    }
+    return rows;
+  })();
+  const canGenerate = bulkContiguous.length > 0;
 
   return (
     <div className={selectedUnits.length > 0 ? 'space-y-4 pb-24' : 'space-y-4'}>
@@ -607,196 +624,25 @@ export function StructureTreeWorkspace({
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={saveNode} className="space-y-4">
-            {nodeDialog?.mode === 'create' && (
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={createMode === 'single' ? 'default' : 'outline'}
-                  onClick={() => {
-                    setCreateMode('single');
-                    setPreview(null);
-                  }}
-                >
-                  Una sola
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={createMode === 'bulk' ? 'default' : 'outline'}
-                  onClick={() => {
-                    setCreateMode('bulk');
-                    setPreview(null);
-                  }}
-                >
-                  Varias
-                </Button>
-              </div>
-            )}
-
-            {createMode === 'single' ? (
-              <>
-                <div className="space-y-1">
-                  <Label htmlFor="unit-node-name">Nombre</Label>
-                  <Input
-                    id="unit-node-name"
-                    value={nodeName}
-                    onChange={(event) => setNodeName(event.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="unit-node-code">Código</Label>
-                  <Input
-                    id="unit-node-code"
-                    value={nodeCode}
-                    onChange={(event) => setNodeCode(event.target.value)}
-                    placeholder="Opcional"
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="space-y-3">
-                {bulkNeedsName && (
-                  <div className="space-y-1">
-                    <Label htmlFor="bulk-root-name">Nombre de {dialogLevelName}</Label>
-                    <Input
-                      id="bulk-root-name"
-                      value={nodeName}
-                      placeholder="Torre 5"
-                      onChange={(event) => {
-                        setNodeName(event.target.value);
-                        setPreview(null);
-                      }}
-                    />
-                  </div>
-                )}
-
-                {modeChoices.length > 1 && (
-                  <div className="space-y-1">
-                    <Label htmlFor="bulk-mode">Modo de generación</Label>
-                    <Select
-                      value={effectiveBulkMode}
-                      onValueChange={(value) => {
-                        setBulkMode(value as 'sequential' | 'floors');
-                        setPreview(null);
-                      }}
-                    >
-                      <SelectTrigger id="bulk-mode" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sequential">Secuencial (1, 2, 3…)</SelectItem>
-                        <SelectItem value="floors">Por pisos y unidades (101…106, 201…206…)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {canGenerate ? (
-                  <p className="text-xs text-muted-foreground">
-                    {effectiveBulkMode === 'floors'
-                      ? 'Se crearán los pisos y sus unidades dentro de la sección.'
-                      : 'Se crearán varios elementos de este nivel con numeración consecutiva. Los códigos quedan vacíos y se pueden completar después.'}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Esta rama no admite generación en este nivel. Crea primero el nivel
-                    anterior y genera desde su fila.
-                  </p>
-                )}
-
-                {canGenerate &&
-                  (effectiveBulkMode === 'floors' ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="bulk-floors">Pisos</Label>
-                        <Input
-                          id="bulk-floors"
-                          type="number"
-                          min={1}
-                          value={bulkFloors}
-                          onChange={(event) => {
-                            setBulkFloors(event.target.value);
-                            setPreview(null);
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="bulk-per-floor">Unidades por piso</Label>
-                        <Input
-                          id="bulk-per-floor"
-                          type="number"
-                          min={1}
-                          value={bulkPerFloor}
-                          onChange={(event) => {
-                            setBulkPerFloor(event.target.value);
-                            setPreview(null);
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="bulk-count">Cantidad</Label>
-                        <Input
-                          id="bulk-count"
-                          type="number"
-                          min={1}
-                          value={bulkCount}
-                          onChange={(event) => {
-                            setBulkCount(event.target.value);
-                            setPreview(null);
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="bulk-prefix">Prefijo</Label>
-                        <Input
-                          id="bulk-prefix"
-                          value={bulkPrefix}
-                          placeholder="Casa"
-                          onChange={(event) => {
-                            setBulkPrefix(event.target.value);
-                            setPreview(null);
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void previewGeneration()}
-                  disabled={previewing || !canGenerate}
-                >
-                  {previewing ? 'Calculando…' : 'Previsualizar'}
-                </Button>
-
-                {preview?.error && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {preview.error}
-                  </p>
-                )}
-
-                {preview && !preview.error && (
-                  <div className="space-y-1 rounded-md border border-border p-3 text-sm">
-                    <p className="font-medium">{preview.total} elementos</p>
-                    <p className="text-xs text-muted-foreground">
-                      {preview.names.slice(0, 12).join(', ')}
-                      {preview.names.length > 12
-                        ? ` … y ${preview.names.length - 12} más`
-                        : ''}
-                    </p>
-                    {preview.conflicts.length > 0 && (
-                      <p className="text-xs text-destructive">
-                        Ya existen: {preview.conflicts.join(', ')}
-                      </p>
-                    )}
-                  </div>
-                )}
+            <div className="space-y-1">
+              <Label htmlFor="unit-node-name">Nombre</Label>
+              <Input
+                id="unit-node-name"
+                value={nodeName}
+                onChange={(event) => setNodeName(event.target.value)}
+                placeholder={isRootCreate ? 'Sector' : 'Nombre del elemento'}
+                required
+              />
+            </div>
+            {!bulkEnabled && (
+              <div className="space-y-1">
+                <Label htmlFor="unit-node-code">Código</Label>
+                <Input
+                  id="unit-node-code"
+                  value={nodeCode}
+                  onChange={(event) => setNodeCode(event.target.value)}
+                  placeholder="Opcional"
+                />
               </div>
             )}
             <div className="space-y-1">
@@ -873,12 +719,207 @@ export function StructureTreeWorkspace({
                 )}
               </div>
             )}
+            <div className="space-y-3 rounded-md border border-border p-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-foreground"
+                  checked={bulkEnabled}
+                  onChange={(event) => {
+                    setBulkEnabled(event.target.checked);
+                    setPreview(null);
+                  }}
+                />
+                Crear varios a la vez
+              </label>
+
+              {bulkEnabled && (
+                <>
+                  {visibleBulkRows.map((row, index) => {
+                    const levelPosition = dialogLevel + index;
+                    const levelLabel = structure
+                      ? structureLevelName(structure, levelPosition)
+                      : `Nivel ${levelPosition}`;
+                    const enabled = index === 0 || row.enabled;
+                    return (
+                      <div key={levelPosition} className="space-y-2 rounded-md border border-border/60 p-2">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="size-4 accent-foreground"
+                            checked={enabled}
+                            disabled={index === 0}
+                            onChange={(event) => {
+                              setBulkRows((current) =>
+                                current.map((item, position) =>
+                                  position === index
+                                    ? { ...item, enabled: event.target.checked }
+                                    : position > index
+                                      ? { ...item, enabled: false }
+                                      : item,
+                                ),
+                              );
+                              setPreview(null);
+                            }}
+                          />
+                          {levelLabel}
+                        </label>
+                        {enabled && (
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <div className="space-y-1">
+                              <Label htmlFor={`bulk-count-${index}`}>Cantidad</Label>
+                              <Input
+                                id={`bulk-count-${index}`}
+                                type="number"
+                                min={1}
+                                value={row.count}
+                                onChange={(event) => {
+                                  setBulkRows((current) =>
+                                    current.map((item, position) =>
+                                      position === index ? { ...item, count: event.target.value } : item,
+                                    ),
+                                  );
+                                  setPreview(null);
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor={`bulk-seq-${index}`}>Numeración</Label>
+                              <Select
+                                value={row.sequence}
+                                onValueChange={(value) => {
+                                  setBulkRows((current) =>
+                                    current.map((item, position) =>
+                                      position === index
+                                        ? { ...item, sequence: value as 'numbers' | 'letters' }
+                                        : item,
+                                    ),
+                                  );
+                                  setPreview(null);
+                                }}
+                              >
+                                <SelectTrigger id={`bulk-seq-${index}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="numbers">Números (1, 2…)</SelectItem>
+                                  <SelectItem value="letters">Letras (A, B…)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor={`bulk-prefix-${index}`}>Prefijo</Label>
+                              <Input
+                                id={`bulk-prefix-${index}`}
+                                value={index === 0 ? nodeName : row.prefix}
+                                disabled={index === 0}
+                                placeholder={levelLabel}
+                                onChange={(event) => {
+                                  setBulkRows((current) =>
+                                    current.map((item, position) =>
+                                      position === index ? { ...item, prefix: event.target.value } : item,
+                                    ),
+                                  );
+                                  setPreview(null);
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor={`bulk-pad-${index}`}>Relleno</Label>
+                              <Input
+                                id={`bulk-pad-${index}`}
+                                type="number"
+                                min={0}
+                                max={4}
+                                value={row.padding}
+                                onChange={(event) => {
+                                  setBulkRows((current) =>
+                                    current.map((item, position) =>
+                                      position === index ? { ...item, padding: event.target.value } : item,
+                                    ),
+                                  );
+                                  setPreview(null);
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-foreground"
+                      checked={bulkSimplified}
+                      onChange={(event) => {
+                        setBulkSimplified(event.target.checked);
+                        setPreview(null);
+                      }}
+                    />
+                    Simplificar nombres (por ejemplo 1-105)
+                  </label>
+
+                  {bulkSimplified && (
+                    <div className="space-y-1">
+                      <Label htmlFor="bulk-template">Plantilla</Label>
+                      <Input
+                        id="bulk-template"
+                        value={bulkTemplate}
+                        placeholder={defaultSimplifiedTemplate(bulkContiguous.length)}
+                        onChange={(event) => {
+                          setBulkTemplate(event.target.value);
+                          setPreview(null);
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Usa {'{1}'}, {'{2}'} y {'{3}'} para los segmentos de cada nivel. Si la dejas
+                        vacía se usa la sugerida.
+                      </p>
+                    </div>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void previewGeneration()}
+                    disabled={previewing || !canGenerate}
+                  >
+                    {previewing ? 'Calculando…' : 'Previsualizar'}
+                  </Button>
+
+                  {preview?.error && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {preview.error}
+                    </p>
+                  )}
+
+                  {preview && !preview.error && (
+                    <div className="space-y-1 rounded-md border border-border p-3 text-sm">
+                      <p className="font-medium">{preview.total} elementos</p>
+                      <p className="text-xs text-muted-foreground">
+                        {preview.names.slice(0, 12).join(', ')}
+                        {preview.names.length > 12
+                          ? ` … y ${preview.names.length - 12} más`
+                          : ''}
+                      </p>
+                      {preview.conflicts.length > 0 && (
+                        <p className="text-xs text-destructive">
+                          Ya existen: {preview.conflicts.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             {nodeError && (
               <p role="alert" className="text-sm text-destructive">
                 {nodeError}
               </p>
             )}
-            {createMode === 'single' ? (
+            {!bulkEnabled ? (
               <Button type="submit" disabled={nodeSaving}>
                 {nodeSaving ? 'Guardando…' : 'Guardar'}
               </Button>
@@ -888,7 +929,7 @@ export function StructureTreeWorkspace({
                 disabled={
                   nodeSaving ||
                   !canGenerate ||
-                  (bulkNeedsName && !nodeName.trim()) ||
+                  !nodeName.trim() ||
                   !preview ||
                   Boolean(preview.error) ||
                   preview.conflicts.length > 0 ||

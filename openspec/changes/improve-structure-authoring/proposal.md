@@ -26,10 +26,12 @@ fricciones concretas:
 - **Profundidad por rama**: la estructura define hasta 3 niveles; cada objeto de nivel 1
   declara si usa 2 o 3 (casillas para nivel 2 y nivel 3). Una torre con dos niveles no
   admite hijos de nivel 3 y sus hijos de nivel 2 son hojas.
-- **Generación semiautomática**: al crear un nivel 1 o 2, un paso opcional genera las
-  unidades con vista previa:
-  - secuencial con prefijo: `Casa 1 … Casa 50`;
-  - por pisos: 5 pisos × 6 unidades → `101 … 106`, `201 … 206`, … `501 … 506`.
+- **Generación por niveles**: el ayudante es opcional y se abre bajo el formulario. En cada
+  nivel disponible (1, 2 o 3 según la rama) se elige cuántos elementos crear, con qué
+  prefijo y si numera con números o letras; los niveles siguientes son opcionales:
+  - 5 sectores × 6 casas × 5 cuartos → 185 elementos, con vista previa;
+  - nombres compuestos opcionales: `1-105` en vez de "Sector 1 › Casa 1 › Cuarto 5",
+    con plantilla configurable (`{1}`, `{2}`, `{3}`).
 - Nuevo endpoint de generación con `dryRun`, transaccional y auditado.
 
 **Non-goals:**

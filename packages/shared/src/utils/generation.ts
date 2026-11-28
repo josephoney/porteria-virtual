@@ -1,36 +1,35 @@
 /**
- * Planificador de generación de nodos de estructura.
+ * Planificador de generación por niveles.
  *
- * Es una función pura: recibe los parámetros y el nivel donde se ancla la
- * generación, y devuelve los nombres y la jerarquía que se crearían. El cliente
- * la usa para la vista previa y el servidor para ejecutar exactamente el mismo
- * plan. No conoce la base de datos ni detecta duplicados: eso lo valida el API.
+ * El ayudante crea varios elementos de forma secuencial en cada nivel por
+ * debajo del formulario: 5 sectores, y dentro de cada sector 6 casas, y dentro
+ * de cada casa 5 cuartos. Cada nivel decide su cantidad, su prefijo y si numera
+ * con números o con letras.
+ *
+ * Es una función pura: el cliente la usa para la vista previa y el servidor para
+ * ejecutar el mismo plan. No conoce la base de datos; los nombres duplicados los
+ * valida el API.
  */
-
-export type GenerationMode = 'sequential' | 'floors';
 
 export type GenerationErrorCode =
   | 'invalid_params'
-  | 'mode_not_applicable'
   | 'limit_exceeded'
   | 'branch_level_exceeded';
 
-export interface GenerationParams {
-  mode: GenerationMode;
-  /** Modo secuencial. */
-  count?: number;
+export type GenerationSequence = 'numbers' | 'letters';
+
+export interface GenerationLevelSpec {
+  /** El primer nivel siempre se crea; los siguientes son opcionales. */
+  enabled?: boolean;
+  /** Cuántos elementos de este nivel por cada padre. */
+  count: number;
+  /** Prefijo del nombre. Si falta, usa el nombre del nivel. */
   prefix?: string;
-  suffix?: string;
+  sequence?: GenerationSequence;
+  /** Número inicial (solo números) o índice inicial (solo letras). */
   start?: number;
+  /** Relleno con ceros del número. */
   padding?: number;
-  /** Modo por pisos. */
-  floors?: number;
-  perFloor?: number;
-  floorPrefix?: string;
-  unitPrefix?: string;
-  unitPadding?: number;
-  startFloor?: number;
-  unitStart?: number;
 }
 
 export interface PlannedNode {
@@ -39,6 +38,8 @@ export interface PlannedNode {
   /** `null` cuelga del padre de la petición; un número es el índice en `nodes`. */
   parentIndex: number | null;
   nodeType: string | null;
+  /** Código simplificado; solo cuando se pide simplificar. */
+  code: string | null;
 }
 
 export type GenerationPlan =
@@ -46,130 +47,116 @@ export type GenerationPlan =
       ok: true;
       nodes: PlannedNode[];
       total: number;
-      mode: GenerationMode;
+      template: string | null;
     }
   | { ok: false; code: GenerationErrorCode; message: string };
 
 export const GENERATION_LIMITS = {
   maxNodes: 300,
-  maxFloors: 50,
-  maxPerFloor: 50,
-  maxSequential: 300,
+  maxPerLevel: 100,
 } as const;
 
 function isPositiveInt(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
-function pad(value: number, width?: number): string {
-  const size = width && width > 0 ? width : 0;
-  return String(value).padStart(size, '0');
+/** A, B, … Z, AA, AB… */
+function letterAt(index: number): string {
+  let value = index;
+  let result = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result || 'A';
 }
 
-function joinName(prefix: string | undefined, value: string): string {
-  const clean = (prefix ?? '').trim();
-  return clean ? `${clean} ${value}` : value;
+function sequenceLabel(spec: GenerationLevelSpec, index: number): string {
+  const start = Number.isInteger(spec.start) && (spec.start ?? 0) > 0 ? (spec.start as number) : 1;
+  if (spec.sequence === 'letters') return letterAt(start + index);
+  const value = start + index;
+  return String(value).padStart(spec.padding ?? 0, '0');
+}
+
+/** Plantilla por defecto: `{1}-{2}{3}` para tres niveles. */
+export function defaultSimplifiedTemplate(levelCount: number): string {
+  if (levelCount <= 1) return '{1}';
+  if (levelCount === 2) return '{1}-{2}';
+  const rest = Array.from({ length: levelCount - 1 }, (_, index) => `{${index + 2}}`).join('');
+  return `{1}-${rest}`;
+}
+
+function applyTemplate(template: string, path: string[]): string {
+  return template.replace(/\{(\d)\}/g, (_match, position: string) => {
+    const index = Number(position) - 1;
+    return path[index] ?? '';
+  });
 }
 
 /**
- * Planifica la generación.
+ * Planifica la creación.
  *
- * `anchorLevel` es el nivel donde se crean los nodos y `leafLevel` el último de
- * la rama. Secuencial solo aplica en el nivel hoja; por pisos exige exactamente
- * dos niveles libres (pisos y unidades).
+ * `anchorLevel` es el nivel del formulario y `leafLevel` el último de la rama:
+ * no se puede planificar más allá de la hoja. Los niveles deben ser contiguos:
+ * si se habilita el tercero, el segundo también.
  */
-export function planNodeGeneration(input: {
-  params: GenerationParams;
+export function planNestedGeneration(input: {
   anchorLevel: number;
   leafLevel: number;
+  levels: GenerationLevelSpec[];
+  levelNames: string[];
+  simplified?: boolean;
+  template?: string;
   nodeType?: string | null;
-  unitType?: string | null;
 }): GenerationPlan {
-  const { params, anchorLevel, leafLevel } = input;
+  const { anchorLevel, leafLevel, levels } = input;
 
   if (anchorLevel > leafLevel) {
-    return {
-      ok: false,
-      code: 'branch_level_exceeded',
-      message: 'La rama no usa este nivel.',
-    };
+    return { ok: false, code: 'branch_level_exceeded', message: 'La rama no usa este nivel.' };
   }
 
-  if (params.mode === 'sequential') {
-    // Se permiten varios nodos de cualquier nivel de la rama: crear varios
-    // pisos vacíos es válido, se llenan después.
-    const count = params.count ?? 0;
-    if (!isPositiveInt(count)) {
-      return { ok: false, code: 'invalid_params', message: 'Indica cuántas unidades crear.' };
-    }
-    if (count > GENERATION_LIMITS.maxSequential) {
-      return {
-        ok: false,
-        code: 'limit_exceeded',
-        message: `El máximo es ${GENERATION_LIMITS.maxSequential} unidades por vez.`,
-      };
-    }
-
-    const start = params.start ?? 1;
-    if (!Number.isInteger(start) || start < 0) {
-      return { ok: false, code: 'invalid_params', message: 'El número inicial no es válido.' };
-    }
-
-    const padding = params.padding ?? 0;
-    if (!Number.isInteger(padding) || padding < 0 || padding > 6) {
-      return { ok: false, code: 'invalid_params', message: 'El relleno debe estar entre 0 y 6.' };
-    }
-
-    const suffix = params.suffix?.trim() ?? '';
-    const nodes: PlannedNode[] = [];
-    for (let index = 0; index < count; index += 1) {
-      const name = `${joinName(params.prefix, pad(start + index, padding))}${suffix}`;
-      nodes.push({
-        levelPosition: anchorLevel,
-        name,
-        parentIndex: null,
-        nodeType: input.nodeType ?? null,
-      });
-    }
-
-    return { ok: true, nodes, total: nodes.length, mode: 'sequential' };
+  const available = leafLevel - anchorLevel + 1;
+  if (levels.length === 0) {
+    return { ok: false, code: 'invalid_params', message: 'Indica cuántos elementos crear.' };
   }
-
-  // Modo por pisos: los pisos van en el nivel ancla y las unidades un nivel
-  // más abajo, que debe ser la hoja de la rama.
-  if (leafLevel - anchorLevel !== 1) {
-    return {
-      ok: false,
-      code: 'mode_not_applicable',
-      message: 'El modo por pisos necesita un nivel de pisos y otro de unidades.',
-    };
-  }
-
-  const floors = params.floors ?? 0;
-  const perFloor = params.perFloor ?? 0;
-  if (!isPositiveInt(floors) || !isPositiveInt(perFloor)) {
+  if (levels.length > available) {
     return {
       ok: false,
       code: 'invalid_params',
-      message: 'Indica la cantidad de pisos y de unidades por piso.',
-    };
-  }
-  if (floors > GENERATION_LIMITS.maxFloors) {
-    return {
-      ok: false,
-      code: 'limit_exceeded',
-      message: `El máximo es ${GENERATION_LIMITS.maxFloors} pisos por vez.`,
-    };
-  }
-  if (perFloor > GENERATION_LIMITS.maxPerFloor) {
-    return {
-      ok: false,
-      code: 'limit_exceeded',
-      message: `El máximo es ${GENERATION_LIMITS.maxPerFloor} unidades por piso.`,
+      message: `La rama solo admite ${available} nivel${available === 1 ? '' : 'es'} desde aquí.`,
     };
   }
 
-  const total = floors + floors * perFloor;
+  // Los niveles deben ser contiguos desde el ancla.
+  let enabledCount = 0;
+  for (const level of levels) {
+    if (level.enabled === false) break;
+    enabledCount += 1;
+  }
+  if (enabledCount === 0) {
+    return { ok: false, code: 'invalid_params', message: 'Indica cuántos elementos crear.' };
+  }
+  for (const level of levels.slice(0, enabledCount)) {
+    if (!isPositiveInt(level.count)) {
+      return {
+        ok: false,
+        code: 'invalid_params',
+        message: 'Cada nivel habilitado necesita una cantidad mayor que cero.',
+      };
+    }
+    if (level.count > GENERATION_LIMITS.maxPerLevel) {
+      return {
+        ok: false,
+        code: 'limit_exceeded',
+        message: `El máximo por nivel es ${GENERATION_LIMITS.maxPerLevel}.`,
+      };
+    }
+  }
+
+  const total = levels
+    .slice(0, enabledCount)
+    .reduce((accumulator, level) => accumulator * level.count, 1);
   if (total > GENERATION_LIMITS.maxNodes) {
     return {
       ok: false,
@@ -178,42 +165,44 @@ export function planNodeGeneration(input: {
     };
   }
 
-  const startFloor = params.startFloor ?? 1;
-  const unitStart = params.unitStart ?? 1;
-  if (!Number.isInteger(startFloor) || startFloor < 0 || !Number.isInteger(unitStart) || unitStart < 0) {
-    return { ok: false, code: 'invalid_params', message: 'La numeración inicial no es válida.' };
-  }
-
-  const unitPadding = params.unitPadding ?? 2;
-  if (!Number.isInteger(unitPadding) || unitPadding < 1 || unitPadding > 4) {
-    return { ok: false, code: 'invalid_params', message: 'El relleno de unidad debe estar entre 1 y 4.' };
-  }
+  const template = input.simplified
+    ? input.template?.trim() || defaultSimplifiedTemplate(enabledCount)
+    : null;
 
   const nodes: PlannedNode[] = [];
-  const floorPrefix = params.floorPrefix ?? 'Piso';
-  const unitPrefix = params.unitPrefix ?? '';
+  let frontier: { index: number | null; path: string[] }[] = [{ index: null, path: [] }];
 
-  for (let floorIndex = 0; floorIndex < floors; floorIndex += 1) {
-    const floorNumber = startFloor + floorIndex;
-    const floorNode: PlannedNode = {
-      levelPosition: anchorLevel,
-      name: joinName(floorPrefix, pad(floorNumber, 0)),
-      parentIndex: null,
-      nodeType: input.nodeType ?? null,
-    };
-    const floorNodeIndex = nodes.length;
-    nodes.push(floorNode);
+  for (let levelIndex = 0; levelIndex < enabledCount; levelIndex += 1) {
+    const spec = levels[levelIndex];
+    const levelPosition = anchorLevel + levelIndex;
+    const levelName = input.levelNames[levelPosition - 1] ?? `Nivel ${levelPosition}`;
+    const nextFrontier: { index: number; path: string[] }[] = [];
 
-    for (let unitIndex = 0; unitIndex < perFloor; unitIndex += 1) {
-      const unitNumber = `${floorNumber}${pad(unitStart + unitIndex, unitPadding)}`;
-      nodes.push({
-        levelPosition: anchorLevel + 1,
-        name: `${unitPrefix}${unitNumber}`,
-        parentIndex: floorNodeIndex,
-        nodeType: input.unitType ?? null,
-      });
+    for (const parent of frontier) {
+      for (let elementIndex = 0; elementIndex < spec.count; elementIndex += 1) {
+        const segment = sequenceLabel(spec, elementIndex);
+        const path = [...parent.path, segment];
+        const prefix = (spec.prefix ?? levelName).trim();
+        const name = template
+          ? applyTemplate(template, path)
+          : prefix
+            ? `${prefix} ${segment}`
+            : segment;
+
+        const nodeIndex = nodes.length;
+        nodes.push({
+          levelPosition,
+          name,
+          parentIndex: parent.index,
+          nodeType: input.nodeType ?? null,
+          code: template ? name : null,
+        });
+        nextFrontier.push({ index: nodeIndex, path });
+      }
     }
+
+    frontier = nextFrontier;
   }
 
-  return { ok: true, nodes, total: nodes.length, mode: 'floors' };
+  return { ok: true, nodes, total: nodes.length, template };
 }

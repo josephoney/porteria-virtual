@@ -74,9 +74,9 @@ describe('structure generation integration', () => {
         communityId,
         name: 'Estructura',
         levelCount: 3,
-        level1Name: 'Torre',
-        level2Name: 'Piso',
-        level3Name: 'Apartamento',
+        level1Name: 'Sector',
+        level2Name: 'Casa',
+        level3Name: 'Cuarto',
       })
       .returning();
     structureId = structure.id;
@@ -141,85 +141,114 @@ describe('structure generation integration', () => {
     return parse(response) as { id: string };
   }
 
-  it('generates floors and units from a level-1 section', async () => {
-    const root = await createNode({
-      communityId,
-      structureId,
-      name: 'Hotel',
-      branchLevelCount: 3,
-    });
-
+  it('creates the section and its levels in one call', async () => {
     const preview = await request('POST', '/api/location-units/generate', {
       communityId,
-      parentId: root.id,
-      mode: 'floors',
-      floors: 2,
-      perFloor: 3,
-      unitType: 'habitacion',
+      structureId,
+      branchLevelCount: 3,
+      levels: [
+        { count: 1, prefix: 'Sector Uno' },
+        { count: 2, prefix: 'Casa' },
+        { count: 2, prefix: 'Cuarto' },
+      ],
       dryRun: true,
     });
     assert.equal(preview.statusCode, 200, preview.body);
-    const plan = parse(preview);
-    assert.equal(plan.total, 2 + 2 * 3);
-    assert.deepEqual(plan.conflicts, []);
+    assert.equal(parse(preview).total, 1 + 2 + 4);
 
     const created = await request('POST', '/api/location-units/generate', {
       communityId,
-      parentId: root.id,
-      mode: 'floors',
-      floors: 2,
-      perFloor: 3,
-      unitType: 'habitacion',
+      structureId,
+      branchLevelCount: 3,
+      levels: [
+        { count: 1, prefix: 'Sector Uno' },
+        { count: 2, prefix: 'Casa' },
+        { count: 2, prefix: 'Cuarto' },
+      ],
     });
     assert.equal(created.statusCode, 201, created.body);
-    assert.equal(parse(created).created, 8);
+    assert.equal(parse(created).created, 7);
 
     const rows = await db
       .select({ name: locationUnits.name, levelPosition: locationUnits.levelPosition })
       .from(locationUnits)
       .where(eq(locationUnits.communityId, communityId));
-    const floors = rows.filter((row) => row.levelPosition === 2).map((row) => row.name);
-    const units = rows.filter((row) => row.levelPosition === 3).map((row) => row.name);
-    assert.deepEqual(floors.sort(), ['Piso 1', 'Piso 2']);
-    assert.deepEqual(units.sort(), ['101', '102', '103', '201', '202', '203']);
+    assert.equal(rows.filter((row) => row.levelPosition === 1).length, 1);
+    assert.equal(rows.filter((row) => row.levelPosition === 2).length, 2);
+    assert.equal(rows.filter((row) => row.levelPosition === 3).length, 4);
   });
 
   it('generates sequential units under a leaf parent', async () => {
-    const [floor] = await db
+    const [sector] = await db
       .select()
       .from(locationUnits)
-      .where(and(eq(locationUnits.communityId, communityId), eq(locationUnits.levelPosition, 2)))
+      .where(and(eq(locationUnits.communityId, communityId), eq(locationUnits.levelPosition, 1)))
+      .limit(1);
+    const [house] = await db
+      .select()
+      .from(locationUnits)
+      .where(eq(locationUnits.parentId, sector.id))
       .limit(1);
 
     const preview = await request('POST', '/api/location-units/generate', {
       communityId,
-      parentId: floor.id,
-      mode: 'sequential',
-      count: 5,
-      prefix: 'Casa',
+      parentId: house.id,
+      levels: [{ count: 3, prefix: 'Cuarto' }],
       dryRun: true,
     });
     assert.equal(preview.statusCode, 200, preview.body);
-    const names = (parse(preview).nodes as Json[]).map((node) => node.name);
-    assert.deepEqual(names, ['Casa 1', 'Casa 2', 'Casa 3', 'Casa 4', 'Casa 5']);
+    assert.deepEqual(
+      (parse(preview).nodes as Json[]).map((node) => node.name),
+      ['Cuarto 1', 'Cuarto 2', 'Cuarto 3'],
+    );
+  });
+
+  it('generates several intermediate nodes sequentially', async () => {
+    const sector = await createNode({
+      communityId,
+      structureId,
+      name: 'Sector Secuencial',
+      branchLevelCount: 3,
+    });
 
     const created = await request('POST', '/api/location-units/generate', {
       communityId,
-      parentId: floor.id,
-      mode: 'sequential',
-      count: 5,
-      prefix: 'Casa',
+      parentId: sector.id,
+      levels: [{ count: 3, prefix: 'Casa' }],
     });
     assert.equal(created.statusCode, 201, created.body);
+
+    const houses = await db
+      .select({ name: locationUnits.name })
+      .from(locationUnits)
+      .where(eq(locationUnits.parentId, sector.id));
+    assert.equal(houses.length, 3);
+  });
+
+  it('simplifies the names when asked', async () => {
+    const created = await request('POST', '/api/location-units/generate', {
+      communityId,
+      structureId,
+      branchLevelCount: 3,
+      levels: [
+        { count: 1, prefix: 'Bloque' },
+        { count: 1, prefix: 'Casa' },
+        { count: 2, prefix: 'Cuarto', padding: 2 },
+      ],
+      simplified: true,
+    });
+    assert.equal(created.statusCode, 201, created.body);
+
+    const [room] = await db
+      .select({ name: locationUnits.name, code: locationUnits.code })
+      .from(locationUnits)
+      .where(and(eq(locationUnits.communityId, communityId), eq(locationUnits.name, '1-101')))
+      .limit(1);
+    assert.equal(room.name, '1-101');
+    assert.equal(room.code, '1-101');
   });
 
   it('reports conflicts without writing and rejects the creation', async () => {
-    const [floor] = await db
-      .select()
-      .from(locationUnits)
-      .where(and(eq(locationUnits.communityId, communityId), eq(locationUnits.levelPosition, 2)))
-      .limit(1);
-
     const before = await db
       .select({ id: locationUnits.id })
       .from(locationUnits)
@@ -227,10 +256,9 @@ describe('structure generation integration', () => {
 
     const preview = await request('POST', '/api/location-units/generate', {
       communityId,
-      parentId: floor.id,
-      mode: 'sequential',
-      count: 2,
-      prefix: 'Casa',
+      structureId,
+      branchLevelCount: 3,
+      levels: [{ count: 2, prefix: 'Sector Uno' }],
       dryRun: true,
     });
     assert.equal(preview.statusCode, 200, preview.body);
@@ -238,10 +266,9 @@ describe('structure generation integration', () => {
 
     const blocked = await request('POST', '/api/location-units/generate', {
       communityId,
-      parentId: floor.id,
-      mode: 'sequential',
-      count: 2,
-      prefix: 'Casa',
+      structureId,
+      branchLevelCount: 3,
+      levels: [{ count: 2, prefix: 'Sector Uno' }],
     });
     assert.equal(blocked.statusCode, 409, blocked.body);
     assert.equal(parse(blocked).code, 'duplicate_name');
@@ -253,79 +280,8 @@ describe('structure generation integration', () => {
     assert.equal(after.length, before.length, 'no node must be created on conflict');
   });
 
-  it('creates the section and its content in one call', async () => {
-    const preview = await request('POST', '/api/location-units/generate', {
-      communityId,
-      structureId,
-      name: 'Torre Generada',
-      branchLevelCount: 3,
-      mode: 'floors',
-      floors: 2,
-      perFloor: 2,
-      dryRun: true,
-    });
-    assert.equal(preview.statusCode, 200, preview.body);
-    const plan = parse(preview);
-    assert.equal(plan.total, 1 + 2 + 4);
-
-    const created = await request('POST', '/api/location-units/generate', {
-      communityId,
-      structureId,
-      name: 'Torre Generada',
-      branchLevelCount: 3,
-      mode: 'floors',
-      floors: 2,
-      perFloor: 2,
-    });
-    assert.equal(created.statusCode, 201, created.body);
-    assert.equal(parse(created).created, 7);
-
-    const [root] = await db
-      .select()
-      .from(locationUnits)
-      .where(and(eq(locationUnits.communityId, communityId), eq(locationUnits.name, 'Torre Generada')));
-    assert.equal(root.levelPosition, 1);
-    assert.equal(root.branchLevelCount, 3);
-
-    const children = await db
-      .select({ name: locationUnits.name, levelPosition: locationUnits.levelPosition })
-      .from(locationUnits)
-      .where(eq(locationUnits.parentId, root.id));
-    assert.equal(children.length, 2);
-    assert.equal(children.every((row) => row.levelPosition === 2), true);
-  });
-
-  it('generates several intermediate nodes sequentially', async () => {
-    const root = await createNode({
-      communityId,
-      structureId,
-      name: 'Torre Pisos',
-      branchLevelCount: 3,
-    });
-
-    const created = await request('POST', '/api/location-units/generate', {
-      communityId,
-      parentId: root.id,
-      mode: 'sequential',
-      count: 3,
-      prefix: 'Piso',
-    });
-    assert.equal(created.statusCode, 201, created.body);
-    assert.equal(parse(created).created, 3);
-
-    const floors = await db
-      .select({ name: locationUnits.name, levelPosition: locationUnits.levelPosition })
-      .from(locationUnits)
-      .where(eq(locationUnits.parentId, root.id));
-    assert.deepEqual(floors.map((row) => row.name).sort(), ['Piso 1', 'Piso 2', 'Piso 3']);
-    assert.equal(
-      floors.every((row) => row.levelPosition === 2),
-      true,
-    );
-  });
-
-  it('requires two free levels for the floors mode', async () => {
-    const [floor] = await db
+  it('rejects more levels than the branch allows', async () => {
+    const [house] = await db
       .select()
       .from(locationUnits)
       .where(and(eq(locationUnits.communityId, communityId), eq(locationUnits.levelPosition, 2)))
@@ -333,13 +289,14 @@ describe('structure generation integration', () => {
 
     const response = await request('POST', '/api/location-units/generate', {
       communityId,
-      parentId: floor.id,
-      mode: 'floors',
-      floors: 2,
-      perFloor: 2,
+      parentId: house.id,
+      levels: [
+        { count: 1, prefix: 'Cuarto' },
+        { count: 1, prefix: 'Extra' },
+      ],
       dryRun: true,
     });
     assert.equal(response.statusCode, 400, response.body);
-    assert.equal(parse(response).code, 'mode_not_applicable');
+    assert.equal(parse(response).code, 'invalid_params');
   });
 });

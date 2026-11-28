@@ -98,29 +98,34 @@ comunidades y rompería la unicidad de nombres.
 
 ### 5. Generación: un plan puro, un endpoint atómico
 
-**Decisión:** `planNodeGeneration(input)` en `@porteria/shared` (función pura, sin I/O)
-devuelve los nodos a crear y los conflictos detectados. El endpoint
-`POST /api/location-units/generate` acepta `dryRun`:
+**Decisión:** `planNestedGeneration(input)` en `@porteria/shared` recibe un arreglo de
+niveles —cantidad, prefijo, numeración y relleno— y devuelve el árbol de nombres. El
+endpoint `POST /api/location-units/generate` acepta `dryRun`:
 
 - `dryRun: true` → devuelve el plan y los conflictos, sin escribir.
 - `dryRun: false` → revalida, inserta todo en **una transacción** y emite un único evento
   `location_node.bulk_created` con el conteo.
 
-**Por qué un plan puro:** permite previsualizar en el cliente con exactamente la misma
-lógica que ejecuta el servidor, y testear la numeración sin base de datos.
+**Por qué un plan puro:** el cliente previsualiza con la misma función que ejecuta el
+servidor, y la numeración se prueba sin base de datos.
 
-**Modos:**
+**Modelo por niveles (reemplaza el modo "pisos + unidades"):**
 
-| Modo | Entrada | Resultado |
+| Nivel del plan | Qué crea | Cantidad |
 |---|---|---|
-| `sequential` | `count`, `prefix`, `start`, `padding`, `suffix` | `Casa 1 … Casa 50` |
-| `floors` | `floors`, `perFloor`, `floorPrefix`, `unitPrefix`, `unitPadding` | `Piso 1…5` y `101…106, 201…206, …` |
+| 1 | Nodos del nivel del formulario | N |
+| 2 | Hijos de cada nodo del nivel 1 | M por padre |
+| 3 | Nietos de cada nodo del nivel 2 | K por padre |
 
-**Límites:** 300 nodos por llamada, 50 pisos, 50 unidades por piso. Todo o nada: si un
-nombre choca con un hermano existente, no se crea ninguno y se devuelven hasta 5 conflictos.
+Cada nivel numera con números o letras y aplica su propio prefijo y relleno. La lista de
+niveles es contigua: si se habilita el tercero, el segundo también.
 
-**Por qué atómico:** dejar media torre creada es peor que fallar; el administrador vuelve a
-previsualizar y corrige.
+**Nomenclatura simplificada:** opcional. Con `simplified` los nodos toman un nombre
+compuesto por los segmentos de su ruta (`{1}`, `{2}`, `{3}`), con plantilla por defecto
+`{1}-{2}{3}`. El código del nodo se llena con el mismo valor para poder buscarlo.
+
+**Límites:** 300 nodos por llamada y 100 por nivel. Todo o nada: si un nombre choca con un
+hermano existente, no se crea ninguno y se devuelven hasta 5 conflictos.
 
 ### 6. Dónde se ofrece la generación
 

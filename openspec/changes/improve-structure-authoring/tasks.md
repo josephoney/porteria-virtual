@@ -28,8 +28,8 @@
 
 ## 4. Generación semiautomática
 
-- [x] 4.1 Implementar `planNodeGeneration` en `@porteria/shared` con modos `sequential` y `floors`, límites y conflictos.
-- [x] 4.2 Tests unitarios del planificador: prefijo, padding, pisos, límites y conflictos.
+- [x] 4.1 Implementar `planNestedGeneration` en `@porteria/shared`: niveles contiguos, numeración por números o letras, prefijo y relleno por nivel, límites y nombres simplificados con plantilla.
+- [x] 4.2 Tests unitarios del planificador: niveles, letras, relleno, límites, plantilla y nombres simplificados.
 - [x] 4.3 Implementar `POST /api/location-units/generate` con `dryRun`, validación de alcance y transacción única.
 - [x] 4.4 Emitir `location_node.bulk_created` con el conteo y el padre.
 - [x] 4.5 Integración: plan, previsualización, creación atómica y rollback por conflicto.
