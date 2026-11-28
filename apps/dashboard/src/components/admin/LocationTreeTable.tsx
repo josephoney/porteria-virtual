@@ -85,6 +85,8 @@ export function LocationTreeTable({
 }: LocationTreeTableProps) {
   /** Un color de la paleta por nivel, para leer la jerarquía de un vistazo. */
 const LEVEL_COLORS = ['var(--chart-1)', 'var(--chart-5)', 'var(--chart-2)'];
+/** Acento tipografico por nivel: el peso baja a medida que se profundiza. */
+const LEVEL_TEXT = ['font-semibold tracking-tight', 'font-normal', 'italic'];
 
   const manage = mode === 'manage';
   const showSelection = manage && canInvite;
@@ -221,7 +223,12 @@ const LEVEL_COLORS = ['var(--chart-1)', 'var(--chart-5)', 'var(--chart-2)'];
             ) : (
               <span aria-hidden className="inline-block size-6" />
             )}
-            <span className={isArchived ? 'text-muted-foreground line-through' : undefined}>
+            <span
+              className={
+                LEVEL_TEXT[(node.levelPosition - 1) % LEVEL_TEXT.length] +
+                (isArchived ? ' text-muted-foreground line-through' : '')
+              }
+            >
               {node.name}
             </span>
             <span

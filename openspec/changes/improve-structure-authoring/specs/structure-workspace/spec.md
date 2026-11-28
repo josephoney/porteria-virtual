@@ -133,6 +133,11 @@ is readable at a glance.
 - **THEN** the row shows a dot and a level pill tinted with that color
 - **THEN** the add button is a rounded pill tinted with the color of the level it creates
 
+#### Scenario: Typographic accent
+
+- **WHEN** the tree shows nodes of different levels
+- **THEN** level 1 is bold, level 2 is normal and level 3 is italic
+
 #### Scenario: Dark mode
 
 - **WHEN** the dashboard uses the dark theme
