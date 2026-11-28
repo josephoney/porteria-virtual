@@ -196,6 +196,14 @@ export {
   withSlugSuffix,
 } from './utils/slug.js';
 export { createEventEnvelope } from './utils/event-envelope.js';
+export type {
+  GenerationMode,
+  GenerationErrorCode,
+  GenerationParams,
+  PlannedNode,
+  GenerationPlan,
+} from './utils/generation.js';
+export { GENERATION_LIMITS, planNodeGeneration } from './utils/generation.js';
 export type { CreateEventEnvelopeInput } from './utils/event-envelope.js';
 export { PERMANENT_PASS_UNTIL, isPermanentPass } from './utils/pass-validity.js';
 export type {

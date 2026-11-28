@@ -28,19 +28,19 @@
 
 ## 4. Generación semiautomática
 
-- [ ] 4.1 Implementar `planNodeGeneration` en `@porteria/shared` con modos `sequential` y `floors`, límites y conflictos.
-- [ ] 4.2 Tests unitarios del planificador: prefijo, padding, pisos, límites y conflictos.
-- [ ] 4.3 Implementar `POST /api/location-units/generate` con `dryRun`, validación de alcance y transacción única.
-- [ ] 4.4 Emitir `location_node.bulk_created` con el conteo y el padre.
-- [ ] 4.5 Integración: plan, previsualización, creación atómica y rollback por conflicto.
+- [x] 4.1 Implementar `planNodeGeneration` en `@porteria/shared` con modos `sequential` y `floors`, límites y conflictos.
+- [x] 4.2 Tests unitarios del planificador: prefijo, padding, pisos, límites y conflictos.
+- [x] 4.3 Implementar `POST /api/location-units/generate` con `dryRun`, validación de alcance y transacción única.
+- [x] 4.4 Emitir `location_node.bulk_created` con el conteo y el padre.
+- [x] 4.5 Integración: plan, previsualización, creación atómica y rollback por conflicto.
 
 ## 5. Dashboard
 
 - [x] 5.1 Renombrar la pestaña "Árbol" a "Esquema" y actualizar los textos que la mencionan.
 - [x] 5.2 Agregar al formulario de nivel 1 las casillas "Usa nivel 2" y "Usa nivel 3" según el máximo de la estructura.
-- [ ] 5.3 Agregar el paso "Una sola / Varias" con los parámetros del modo y la tabla de vista previa.
-- [ ] 5.4 Mostrar los conflictos de la vista previa y bloquear el guardado.
-- [ ] 5.5 Refrescar el esquema y el listado de unidades después de generar.
+- [x] 5.3 Agregar el paso "Una sola / Varias" con los parámetros del modo y la tabla de vista previa.
+- [x] 5.4 Mostrar los conflictos de la vista previa y bloquear el guardado.
+- [x] 5.5 Refrescar el esquema y el listado de unidades después de generar.
 
 ## 6. Cierre
 

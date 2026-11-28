@@ -14,6 +14,9 @@ import {
   NODE_TYPE_OTHER,
   nodeTypeLabel as catalogNodeTypeLabel,
   normalizeNodeType,
+  planNodeGeneration,
+  resolveLeafLevel,
+  type GenerationMode,
 } from '@porteria/shared';
 import { auditCommunityEvent } from '../services/audit.service.js';
 import { can } from '../services/admin-permissions.service.js';
@@ -564,6 +567,253 @@ export async function locationNodeRoutes(app: FastifyInstance) {
         });
 
         return reply.status(201).send(created);
+      } catch (err) {
+        if ((err as { code?: string }).code === '23505') {
+          return reply.status(409).send({
+            statusCode: 409,
+            error: 'Conflict',
+            message: 'A node with that code already exists at this level',
+          });
+        }
+        throw err;
+      }
+    },
+  );
+
+  /**
+   * Generación semiautomática: planifica y crea varios nodos en una transacción.
+   * Con `dryRun` devuelve el plan y los conflictos sin escribir nada.
+   */
+  app.post(
+    '/generate',
+    { preHandler: [requireRole('org_admin', 'community_admin')] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = getUser(request);
+      const body = request.body as {
+        communityId?: string;
+        parentId?: string | null;
+        structureId?: string;
+        branchLevelCount?: number;
+        nodeType?: string | null;
+        nodeTypeLabel?: string | null;
+        unitType?: string | null;
+        dryRun?: boolean;
+        mode?: string;
+        count?: number;
+        prefix?: string;
+        suffix?: string;
+        start?: number;
+        padding?: number;
+        floors?: number;
+        perFloor?: number;
+        floorPrefix?: string;
+        unitPrefix?: string;
+        unitPadding?: number;
+        startFloor?: number;
+        unitStart?: number;
+      };
+
+      if (!body.communityId) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'communityId is required',
+        });
+      }
+      const communityId = body.communityId;
+      if (
+        !can(user, 'location.write', {
+          organizationId: user.orgId,
+          communityId: body.communityId,
+        })
+      ) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: 'Forbidden',
+          message: 'Insufficient permissions',
+        });
+      }
+      if (!(await communityInScope(body.communityId, user))) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Community not found',
+        });
+      }
+
+      let structureId = body.structureId;
+      let anchorLevel = 1;
+      let parentBranch: number | null = null;
+      if (body.parentId) {
+        const [parent] = await db
+          .select()
+          .from(locationUnits)
+          .where(eq(locationUnits.id, body.parentId));
+        if (!parent || parent.communityId !== body.communityId) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: 'Not Found',
+            message: 'Parent node not found',
+          });
+        }
+        structureId = parent.structureId;
+        anchorLevel = parent.levelPosition + 1;
+        parentBranch = parent.branchLevelCount;
+      }
+
+      if (!structureId) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'structureId is required for a root generation',
+        });
+      }
+      const structure = await getStructure(structureId);
+      if (!structure || structure.communityId !== body.communityId) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: 'Structure not found',
+        });
+      }
+
+      const requestedBranch = resolveBranchLevelCount(body.branchLevelCount, structure.levelCount);
+      if (requestedBranch < 1) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: `branchLevelCount must be between 1 and ${structure.levelCount}`,
+        });
+      }
+      const leafLevel =
+        anchorLevel === 1 ? requestedBranch : resolveLeafLevel(parentBranch, structure.levelCount);
+
+      const plan = planNodeGeneration({
+        params: {
+          mode: (body.mode as GenerationMode) ?? 'sequential',
+          count: body.count,
+          prefix: body.prefix,
+          suffix: body.suffix,
+          start: body.start,
+          padding: body.padding,
+          floors: body.floors,
+          perFloor: body.perFloor,
+          floorPrefix: body.floorPrefix,
+          unitPrefix: body.unitPrefix,
+          unitPadding: body.unitPadding,
+          startFloor: body.startFloor,
+          unitStart: body.unitStart,
+        },
+        anchorLevel,
+        leafLevel,
+        nodeType: body.nodeType ?? null,
+        unitType: body.unitType ?? null,
+      });
+
+      if (!plan.ok) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: plan.message,
+          code: plan.code,
+        });
+      }
+
+      // Solo los nodos que cuelgan del padre existente pueden chocar con nombres
+      // ya guardados; los hijos de pisos nuevos no tienen hermanos todavía.
+      const siblingRows = await db
+        .select({ name: locationUnits.name })
+        .from(locationUnits)
+        .where(
+          and(
+            eq(locationUnits.structureId, structureId),
+            body.parentId
+              ? eq(locationUnits.parentId, body.parentId)
+              : isNull(locationUnits.parentId),
+          ),
+        );
+      const existingNames = new Set(siblingRows.map((row) => row.name.trim().toLowerCase()));
+      const plannedNames = new Set<string>();
+      const conflicts: string[] = [];
+      for (const node of plan.nodes) {
+        if (node.parentIndex !== null) continue;
+        const key = node.name.trim().toLowerCase();
+        if (existingNames.has(key) || plannedNames.has(key)) conflicts.push(node.name);
+        plannedNames.add(key);
+      }
+      const uniqueConflicts = [...new Set(conflicts)];
+
+      if (body.dryRun) {
+        return reply.send({
+          dryRun: true,
+          total: plan.total,
+          mode: plan.mode,
+          nodes: plan.nodes,
+          conflicts: uniqueConflicts.slice(0, 5),
+        });
+      }
+
+      if (uniqueConflicts.length > 0) {
+        return reply.status(409).send({
+          statusCode: 409,
+          error: 'Conflict',
+          message: `Ya existen: ${uniqueConflicts.slice(0, 5).join(', ')}`,
+          code: 'duplicate_name',
+          conflicts: uniqueConflicts.slice(0, 5),
+        });
+      }
+
+      try {
+        const created = await db.transaction(async (tx) => {
+          const ids: string[] = [];
+          const result: { id: string; name: string; levelPosition: number }[] = [];
+
+          for (const [index, node] of plan.nodes.entries()) {
+            const parentId =
+              node.parentIndex === null ? (body.parentId ?? null) : ids[node.parentIndex];
+            const branchLevelCount =
+              anchorLevel === 1 && node.parentIndex === null
+                ? requestedBranch
+                : (parentBranch ?? structure.levelCount);
+
+            const [row] = await tx
+              .insert(locationUnits)
+              .values({
+                communityId,
+                structureId,
+                parentId,
+                levelPosition: node.levelPosition,
+                name: node.name,
+                code: null,
+                nodeType: node.nodeType ?? null,
+                nodeTypeLabel: body.nodeTypeLabel ?? null,
+                branchLevelCount,
+                metadata: {},
+                status: 'active',
+              })
+              .returning();
+
+            ids[index] = row.id;
+            result.push({ id: row.id, name: row.name, levelPosition: row.levelPosition });
+          }
+
+          await auditCommunityEvent({
+            request,
+            communityId,
+            eventType: 'location_node.bulk_created',
+            metadata: {
+              structureId,
+              parentId: body.parentId ?? null,
+              count: result.length,
+              mode: plan.mode,
+            },
+            executor: tx,
+          });
+
+          return result;
+        });
+
+        return reply.status(201).send({ created: created.length, nodes: created });
       } catch (err) {
         if ((err as { code?: string }).code === '23505') {
           return reply.status(409).send({
