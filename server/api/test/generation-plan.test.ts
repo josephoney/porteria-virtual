@@ -37,19 +37,46 @@ describe('planNestedGeneration sequential', () => {
     );
   });
 
-  it('applies zero padding', () => {
-    const plan = planNestedGeneration({
+  it('applies leading zeros', () => {
+    const oneZero = planNestedGeneration({
+      anchorLevel: 3,
+      leafLevel: 3,
+      levels: [{ count: 2, prefix: 'Cuarto', padding: 1 }],
+      levelNames,
+    });
+    assert.equal(oneZero.ok, true);
+    if (!oneZero.ok) return;
+    assert.deepEqual(
+      oneZero.nodes.map((node) => node.name),
+      ['Cuarto 01', 'Cuarto 02'],
+    );
+
+    const twoZeros = planNestedGeneration({
       anchorLevel: 3,
       leafLevel: 3,
       levels: [{ count: 2, prefix: 'Cuarto', padding: 2 }],
       levelNames,
     });
-    assert.equal(plan.ok, true);
-    if (!plan.ok) return;
+    assert.equal(twoZeros.ok, true);
+    if (!twoZeros.ok) return;
     assert.deepEqual(
-      plan.nodes.map((node) => node.name),
-      ['Cuarto 01', 'Cuarto 02'],
+      twoZeros.nodes.map((node) => node.name),
+      ['Cuarto 001', 'Cuarto 002'],
     );
+
+    const noZeros = planNestedGeneration({
+      anchorLevel: 3,
+      leafLevel: 3,
+      levels: [{ count: 11, prefix: 'Cuarto' }],
+      levelNames,
+    });
+    assert.equal(noZeros.ok, true);
+    if (!noZeros.ok) return;
+    assert.deepEqual(
+      noZeros.nodes.map((node) => node.name).slice(0, 2),
+      ['Cuarto 1', 'Cuarto 2'],
+    );
+    assert.equal(noZeros.nodes[10].name, 'Cuarto 11');
   });
 });
 
@@ -138,7 +165,7 @@ describe('planNestedGeneration simplified names', () => {
       levels: [
         { count: 1, prefix: 'Sector' },
         { count: 1, prefix: 'Casa' },
-        { count: 5, prefix: 'Cuarto', padding: 2 },
+        { count: 5, prefix: 'Cuarto', padding: 1 },
       ],
       levelNames,
       simplified: true,
@@ -159,7 +186,7 @@ describe('planNestedGeneration simplified names', () => {
       levels: [
         { count: 1, prefix: 'Sector' },
         { count: 2, prefix: 'Casa', sequence: 'letters' },
-        { count: 3, prefix: 'Cuarto', padding: 2 },
+        { count: 3, prefix: 'Cuarto', padding: 1 },
       ],
       levelNames,
       simplified: true,
@@ -177,7 +204,7 @@ describe('planNestedGeneration simplified names', () => {
       leafLevel: 2,
       levels: [
         { count: 1, prefix: 'Sector' },
-        { count: 2, prefix: 'Casa', padding: 2 },
+        { count: 2, prefix: 'Casa', padding: 1 },
       ],
       levelNames,
       simplified: true,

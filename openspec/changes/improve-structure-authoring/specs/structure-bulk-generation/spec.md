@@ -54,8 +54,9 @@ Each level SHALL number its nodes with numbers or letters.
 
 #### Scenario: Numbers
 
-- **WHEN** a level uses numbers with a padding of two
-- **THEN** the names are `Cuarto 01`, `Cuarto 02`, …
+- **WHEN** a level uses numbers
+- **THEN** the padding is the count of leading zeros: `0` produces `1, 2, … 10, 11`,
+  `1` produces `01, 02, …` and `2` produces `001, 002, …`
 
 #### Scenario: Letters
 

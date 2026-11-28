@@ -251,7 +251,7 @@ export function StructureTreeWorkspace({
         count: '1',
         prefix: structure ? structureLevelName(structure, level + index) : '',
         sequence: 'numbers' as const,
-        padding: index === total - 1 && total > 1 ? '2' : '',
+        padding: index === total - 1 && total > 1 ? '1' : '',
       })),
     );
     setNodeError('');
@@ -610,7 +610,7 @@ export function StructureTreeWorkspace({
           if (!open) setNodeDialog(null);
         }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {nodeDialog?.mode === 'edit'
@@ -765,7 +765,7 @@ export function StructureTreeWorkspace({
                           {levelLabel}
                         </label>
                         {enabled && (
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <div className="grid grid-cols-[5rem_minmax(0,1fr)_minmax(0,1fr)_5rem] gap-2">
                             <div className="space-y-1">
                               <Label htmlFor={`bulk-count-${index}`}>Cantidad</Label>
                               <Input

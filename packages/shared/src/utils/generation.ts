@@ -72,11 +72,18 @@ function letterAt(index: number): string {
   return result || 'A';
 }
 
+/**
+ * Formatea el valor de la secuencia.
+ *
+ * `padding` es la **cantidad de ceros a la izquierda**: 0 deja `1, 2, … 10, 11`;
+ * 1 produce `01, 02, …`; 2 produce `001, 002, …`.
+ */
 function sequenceLabel(spec: GenerationLevelSpec, index: number): string {
   const start = Number.isInteger(spec.start) && (spec.start ?? 0) > 0 ? (spec.start as number) : 1;
   if (spec.sequence === 'letters') return letterAt(start + index);
   const value = start + index;
-  return String(value).padStart(spec.padding ?? 0, '0');
+  const padding = Number.isInteger(spec.padding) && (spec.padding ?? 0) > 0 ? (spec.padding as number) : 0;
+  return String(value).padStart(padding + 1, '0');
 }
 
 /** Plantilla por defecto: `{1}-{2}{3}` para tres niveles. */

@@ -233,7 +233,7 @@ describe('structure generation integration', () => {
       levels: [
         { count: 1, prefix: 'Bloque' },
         { count: 1, prefix: 'Casa' },
-        { count: 2, prefix: 'Cuarto', padding: 2 },
+        { count: 2, prefix: 'Cuarto', padding: 1 },
       ],
       simplified: true,
     });
