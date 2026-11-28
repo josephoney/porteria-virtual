@@ -113,8 +113,9 @@ add button, the one for the level the administrator is standing on.
 #### Scenario: Colapsar
 
 - **WHEN** se vuelve a hacer click en el nodo expandido
-- **THEN** la rama se cierra
-- **THEN** el botón de agregar nivel 1 vuelve a mostrarse
+- **THEN** se cierra solo esa rama y queda abierto el padre
+- **THEN** el botón de agregar pasa a ser el del padre
+- **THEN** al cerrar el nodo de nivel 1 vuelve a mostrarse el botón de agregar nivel 1
 ### Requirement: Level distinction
 
 The tree SHALL indent each level and SHALL tint it with a palette color so the hierarchy

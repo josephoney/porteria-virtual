@@ -125,6 +125,28 @@ const LEVEL_COLORS = ['var(--chart-1)', 'var(--chart-3)', 'var(--chart-2)'];
   const roots = childrenByParent.get(null) ?? [];
   const columnCount = (manage ? 4 : 3) + (showSelection ? 1 : 0);
 
+  function isAncestor(ancestorId: string, nodeId: string): boolean {
+    let current = parentById.get(nodeId) ?? null;
+    while (current) {
+      if (current === ancestorId) return true;
+      current = parentById.get(current) ?? null;
+    }
+    return false;
+  }
+
+  /**
+   * Al contraer un nodo se vuelve al padre, no al inicio: así se puede abrir y
+   * cerrar por partes sin perder el contexto. Abrir otra rama sigue siendo
+   * excluyente.
+   */
+  function toggleFocused(id: string) {
+    setFocusedId((current) => {
+      if (current === id) return parentById.get(id) ?? null;
+      if (current && isAncestor(id, current)) return parentById.get(id) ?? null;
+      return id;
+    });
+  }
+
   function renderNode(node: LocationNode, depth: number): ReactNode[] {
     const children = childrenByParent.get(node.id) ?? [];
     const hasChildren = children.length > 0;
@@ -159,7 +181,7 @@ const LEVEL_COLORS = ['var(--chart-1)', 'var(--chart-3)', 'var(--chart-2)'];
         }
         style={{ boxShadow: `inset 3px 0 0 ${levelColor}` }}
         onClick={() => {
-          if (canExpand) setFocusedId((current) => (current === node.id ? null : node.id));
+          if (canExpand) toggleFocused(node.id);
         }}
       >
         {showSelection && (          <TableCell>
@@ -191,7 +213,7 @@ const LEVEL_COLORS = ['var(--chart-1)', 'var(--chart-3)', 'var(--chart-2)'];
                 aria-label={`${isExpanded ? 'Contraer' : 'Expandir'} ${node.name}`}
                 onClick={(event) => {
                   event.stopPropagation();
-                  setFocusedId((current) => (current === node.id ? null : node.id));
+                  toggleFocused(node.id);
                 }}
               >
                 {isExpanded ? <RiArrowDownSLine /> : <RiArrowRightSLine />}
