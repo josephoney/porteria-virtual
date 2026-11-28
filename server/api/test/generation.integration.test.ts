@@ -295,6 +295,35 @@ describe('structure generation integration', () => {
     assert.equal(children.every((row) => row.levelPosition === 2), true);
   });
 
+  it('generates several intermediate nodes sequentially', async () => {
+    const root = await createNode({
+      communityId,
+      structureId,
+      name: 'Torre Pisos',
+      branchLevelCount: 3,
+    });
+
+    const created = await request('POST', '/api/location-units/generate', {
+      communityId,
+      parentId: root.id,
+      mode: 'sequential',
+      count: 3,
+      prefix: 'Piso',
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    assert.equal(parse(created).created, 3);
+
+    const floors = await db
+      .select({ name: locationUnits.name, levelPosition: locationUnits.levelPosition })
+      .from(locationUnits)
+      .where(eq(locationUnits.parentId, root.id));
+    assert.deepEqual(floors.map((row) => row.name).sort(), ['Piso 1', 'Piso 2', 'Piso 3']);
+    assert.equal(
+      floors.every((row) => row.levelPosition === 2),
+      true,
+    );
+  });
+
   it('requires two free levels for the floors mode', async () => {
     const [floor] = await db
       .select()

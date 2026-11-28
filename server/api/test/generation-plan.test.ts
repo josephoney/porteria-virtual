@@ -26,15 +26,17 @@ describe('planNodeGeneration sequential', () => {
     assert.equal(plan.nodes[0].name, 'Casa 001A');
   });
 
-  it('only applies at the leaf of the branch', () => {
+  it('also applies at an intermediate level', () => {
     const plan = planNodeGeneration({
-      params: { mode: 'sequential', count: 3, prefix: 'Torre' },
-      anchorLevel: 1,
+      params: { mode: 'sequential', count: 3, prefix: 'Piso' },
+      anchorLevel: 2,
       leafLevel: 3,
     });
-    assert.equal(plan.ok, false);
-    if (plan.ok) return;
-    assert.equal(plan.code, 'mode_not_applicable');
+    assert.equal(plan.ok, true);
+    if (!plan.ok) return;
+    assert.equal(plan.total, 3);
+    assert.equal(plan.nodes[0].levelPosition, 2);
+    assert.equal(plan.nodes[0].name, 'Piso 1');
   });
 
   it('rejects a count above the limit', () => {

@@ -107,6 +107,7 @@ export function StructureTreeWorkspace({
   const [nodeUsesLevel2, setNodeUsesLevel2] = useState(true);
   const [nodeUsesLevel3, setNodeUsesLevel3] = useState(true);
   const [createMode, setCreateMode] = useState<'single' | 'bulk'>('single');
+  const [bulkMode, setBulkMode] = useState<'sequential' | 'floors'>('sequential');
   const [bulkCount, setBulkCount] = useState('10');
   const [bulkPrefix, setBulkPrefix] = useState('');
   const [bulkFloors, setBulkFloors] = useState('5');
@@ -234,7 +235,7 @@ export function StructureTreeWorkspace({
     setNodeUsesLevel3(true);
     setCreateMode('single');
     setPreview(null);
-    setBulkPrefix(structure?.level3Name ?? '');
+    setBulkPrefix(structure ? structureLevelName(structure, level) : '');
     setNodeError('');
   }
 
@@ -441,11 +442,17 @@ export function StructureTreeWorkspace({
         : 1);
   // Si la sección es nueva, el plan cuelga de ella (nivel 2); si ya existe, del padre.
   const bulkAnchorLevel = isRootCreate ? (plannedBranch >= 2 ? 2 : 1) : dialogLevel;
-  const canGenerateSequential = bulkAnchorLevel === bulkLeafLevel;
+  // La secuencial sirve en cualquier nivel de la rama; pisos exige un nivel más abajo.
+  const canGenerateSequential = bulkAnchorLevel <= bulkLeafLevel;
   const canGenerateFloors = bulkLeafLevel - bulkAnchorLevel === 1;
-  const effectiveBulkMode: 'sequential' | 'floors' =
-    canGenerateFloors && !canGenerateSequential ? 'floors' : 'sequential';
-  const canGenerate = canGenerateSequential || canGenerateFloors;
+  const modeChoices: ('sequential' | 'floors')[] = [
+    ...(canGenerateSequential ? (['sequential'] as const) : []),
+    ...(canGenerateFloors ? (['floors'] as const) : []),
+  ];
+  const effectiveBulkMode: 'sequential' | 'floors' = modeChoices.includes(bulkMode)
+    ? bulkMode
+    : (modeChoices[0] ?? 'sequential');
+  const canGenerate = modeChoices.length > 0;
   const bulkNeedsName = isRootCreate && plannedBranch >= 2;
 
   return (
@@ -665,11 +672,32 @@ export function StructureTreeWorkspace({
                   </div>
                 )}
 
+                {modeChoices.length > 1 && (
+                  <div className="space-y-1">
+                    <Label htmlFor="bulk-mode">Modo de generación</Label>
+                    <Select
+                      value={effectiveBulkMode}
+                      onValueChange={(value) => {
+                        setBulkMode(value as 'sequential' | 'floors');
+                        setPreview(null);
+                      }}
+                    >
+                      <SelectTrigger id="bulk-mode" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sequential">Secuencial (1, 2, 3…)</SelectItem>
+                        <SelectItem value="floors">Por pisos y unidades (101…106, 201…206…)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 {canGenerate ? (
                   <p className="text-xs text-muted-foreground">
                     {effectiveBulkMode === 'floors'
                       ? 'Se crearán los pisos y sus unidades dentro de la sección.'
-                      : 'Se crearán las unidades del último nivel de la rama.'}
+                      : 'Se crearán varios elementos de este nivel con numeración consecutiva. Los códigos quedan vacíos y se pueden completar después.'}
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">

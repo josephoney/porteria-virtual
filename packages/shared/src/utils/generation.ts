@@ -96,14 +96,8 @@ export function planNodeGeneration(input: {
   }
 
   if (params.mode === 'sequential') {
-    if (anchorLevel !== leafLevel) {
-      return {
-        ok: false,
-        code: 'mode_not_applicable',
-        message: 'La generación secuencial solo aplica al nivel hoja de la rama.',
-      };
-    }
-
+    // Se permiten varios nodos de cualquier nivel de la rama: crear varios
+    // pisos vacíos es válido, se llenan después.
     const count = params.count ?? 0;
     if (!isPositiveInt(count)) {
       return { ok: false, code: 'invalid_params', message: 'Indica cuántas unidades crear.' };

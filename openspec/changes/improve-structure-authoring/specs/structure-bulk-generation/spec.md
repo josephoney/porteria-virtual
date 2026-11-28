@@ -43,6 +43,7 @@ The API SHALL support sequential and floor-based numbering.
 - **WHEN** the request uses the sequential mode with a count, a prefix and a start number
 - **THEN** the names are the prefix followed by consecutive numbers
 - **THEN** a padding formats the number with leading zeros
+- **THEN** it works at any level of the branch, not only at the leaf
 
 #### Scenario: Floors
 
