@@ -13,7 +13,8 @@
 - [ ] 2.3 Al crear un nodo, heredar `branch_level_count` del padre y rechazar niveles fuera de la rama.
 - [ ] 2.4 Validar `branchLevelCount` en la creación de nivel 1: entre 1 y el máximo de la estructura.
 - [ ] 2.5 Rechazar la reducción de profundidad con hijos más profundos (`409 branch_has_deeper_children`).
-- [ ] 2.6 Pruebas de regresión: pases, invitaciones, residentes y membresías siguen aceptando las mismas hojas que antes.
+- [ ] 2.6 Permitir el aumento de 2 a 3 con hijos de nivel 2 existentes, sin tocar las referencias ya guardadas.
+- [ ] 2.7 Pruebas de regresión: pases, invitaciones, residentes y membresías siguen aceptando las mismas hojas que antes.
 
 ## 3. Tipos por nivel
 
@@ -22,6 +23,7 @@
 - [ ] 3.3 Devolver `nodeType` y `nodeTypeLabel` en el listado de nodos y de unidades.
 - [ ] 3.4 Cambiar la etiqueta del formulario a "Tipo de {nombre del nivel}".
 - [ ] 3.5 Reemplazar la lista fija de `lib/section-types.ts` por los catálogos compartidos, manteniendo la lectura del valor legado.
+- [ ] 3.6 Dejar el tipo opcional en niveles 2 y 3, con el selector vacío y sugerido.
 
 ## 4. Generación semiautomática
 

@@ -29,6 +29,14 @@ structure maximum.
 - **THEN** the response is `409 branch_has_deeper_children`
 - **THEN** the branch keeps its depth
 
+#### Scenario: Depth can be increased with existing children
+
+- **WHEN** a two-level branch with level-2 children is changed to three levels
+- **THEN** the change is accepted
+- **THEN** its level-2 children stop being leaves and can accept level-3 children
+- **THEN** the references that already pointed to those children are preserved
+- **THEN** new passes, invitations and resident assignments require the new leaves
+
 ### Requirement: Leaf resolution
 
 A node SHALL be a leaf when its level equals the branch level count.
@@ -71,6 +79,12 @@ Every node SHALL be able to store a type from the catalog of its level.
 - **WHEN** the type is omitted
 - **THEN** the node is created without type
 - **THEN** the catalog is not enforced retroactively on existing nodes
+
+#### Scenario: Optional on levels 2 and 3
+
+- **WHEN** a level-2 or level-3 node is created without a type
+- **THEN** the node is saved without type
+- **THEN** the form shows the selector empty, suggesting the catalog without requiring it
 
 #### Scenario: Custom type
 

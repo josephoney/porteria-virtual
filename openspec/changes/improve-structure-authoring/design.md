@@ -131,6 +131,30 @@ niveles 2 y 3 en la misma llamada.
 **Por qué:** es el caso del ejemplo (club → hotel → oficinas/habitaciones) y evita crear
 piso por piso.
 
+### 7. Aumentar la profundidad de una rama sí; reducirla con hijos no
+
+**Decisión:** una rama de 2 niveles puede pasar a 3 aunque ya tenga hijos de nivel 2. Sus
+hijos dejan de ser hojas y pasan a admitir descendientes. La operación inversa (3 → 2) se
+rechaza mientras existan nodos en el nivel 3 (`409 branch_has_deeper_children`).
+
+**Por qué:** el caso real es una torre que arranca con apartamentos y después se subdivide
+en habitaciones; obligar a borrar la rama para crecer sería peor.
+
+**Consecuencia sobre datos existentes:** la regla no es retroactiva. Un apartamento que ya
+tenía residentes o pases conserva esas referencias; lo que cambia es que **ya no admiten
+referencias nuevas**, porque pases, invitaciones y residentes exigen hoja. Se documenta y se
+prueba en la fase 2.
+
+### 8. El tipo es opcional en niveles 2 y 3
+
+**Decisión:** `nodeType` es opcional en todos los niveles, pero la interfaz lo sugiere: en
+nivel 1 se mantiene el valor por defecto y en los niveles 2 y 3 el selector arranca vacío con
+la etiqueta "Tipo de {nivel}". Solo "Otro" exige texto libre.
+
+**Por qué:** en una estructura de tres niveles el tipo del piso suele ser obvio y exigirlo
+agrega fricción a la creación masiva; el tipo del nivel 1 sí identifica la sección y se usa
+en los listados.
+
 ## Risks / Trade-offs
 
 - **[Riesgo] La hoja es transversal** (membresías, invitaciones, pases, residentes) →
@@ -157,8 +181,6 @@ piso por piso.
 
 ## Open Questions
 
-- ¿Debe poder **aumentarse** la profundidad de una rama con hijos? Propuesta: sí, de 2 a 3
-  (los hijos de nivel 2 dejan de ser hojas y pasan a admitir hijos).
-- ¿El tipo de nivel 2 y 3 es obligatorio? Propuesta: opcional en la API, sugerido en la UI.
 - ¿"Unidad" debe seguir en el catálogo de nivel 1? Se incluye porque el negocio lo pidió,
-  aunque en la mayoría de los casos corresponde al nivel hoja.
+  aunque en la mayoría de los casos corresponde al nivel hoja. Se puede quitar sin
+  migración si molesta.
