@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { resolveLeafLevel } from '@porteria/shared';
 import {
   RiAddLine,
@@ -16,7 +16,6 @@ import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { sectionTypeLabel } from '../../lib/section-types';
 import { unitInviteIssue } from '../../lib/unit-invite';
-import { useExpandedTree } from '../../lib/use-expanded-tree';
 
 export interface LocationNode {
   id: string;
@@ -86,7 +85,27 @@ export function LocationTreeTable({
 }: LocationTreeTableProps) {
   const manage = mode === 'manage';
   const showSelection = manage && canInvite;
-  const tree = useExpandedTree();
+
+  /**
+   * Acordeón de una sola rama: el nodo enfocado y sus ancestros quedan
+   * abiertos y el resto se colapsa. Solo el nodo enfocado muestra su botón
+   * de agregar, para no ofrecer por error el nivel equivocado.
+   */
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const parentById = useMemo(() => {
+    const map = new Map<string, string | null>();
+    nodes.forEach((node) => map.set(node.id, node.parentId));
+    return map;
+  }, [nodes]);
+  const expandedIds = useMemo(() => {
+    const set = new Set<string>();
+    let current = focusedId;
+    while (current) {
+      set.add(current);
+      current = parentById.get(current) ?? null;
+    }
+    return set;
+  }, [focusedId, parentById]);
 
   const childrenByParent = useMemo(() => {
     const map = new Map<string | null, LocationNode[]>();
@@ -109,7 +128,7 @@ export function LocationTreeTable({
     // La rama puede terminar antes que el máximo de la estructura.
     const leafLevel = resolveLeafLevel(node.branchLevelCount, structure.levelCount);
     const canExpand = hasChildren || (manage && node.levelPosition < leafLevel);
-    const isExpanded = tree.isExpanded(node.id);
+    const isExpanded = expandedIds.has(node.id);
     const isLeaf = node.levelPosition >= leafLevel;
     const isArchived = node.status !== 'active';
     const inviteIssue = unitInviteIssue({
@@ -135,7 +154,7 @@ export function LocationTreeTable({
           (canExpand ? 'cursor-pointer hover:bg-muted/50' : hasChildren ? '' : 'hover:bg-muted/50')
         }
         onClick={() => {
-          if (canExpand) tree.toggle(node.id);
+          if (canExpand) setFocusedId((current) => (current === node.id ? null : node.id));
         }}
       >
         {showSelection && (
@@ -163,7 +182,7 @@ export function LocationTreeTable({
                 aria-label={`${isExpanded ? 'Contraer' : 'Expandir'} ${node.name}`}
                 onClick={(event) => {
                   event.stopPropagation();
-                  tree.toggle(node.id);
+                  setFocusedId((current) => (current === node.id ? null : node.id));
                 }}
               >
                 {isExpanded ? <RiArrowDownSLine /> : <RiArrowRightSLine />}
@@ -281,29 +300,30 @@ export function LocationTreeTable({
 
     if (isExpanded) {
       children.forEach((child) => rows.push(...renderNode(child, depth + 1)));
+    }
 
-      if (manage && childLevelName) {
-        rows.push(
-          <TableRow key={`add-${node.id}`} className="hover:bg-transparent">
-            <TableCell colSpan={columnCount} className="py-1">
-              <div style={{ paddingLeft: (depth + 1) * 16 }}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onAdd?.(node, node.levelPosition + 1);
-                  }}
-                >
-                  <RiAddLine /> Agregar {childLevelName.toLowerCase()}
-                </Button>
-              </div>
-            </TableCell>
-          </TableRow>,
-        );
-      }
+    // Solo el nodo enfocado ofrece agregar, y siempre el nivel siguiente.
+    if (manage && childLevelName && node.id === focusedId) {
+      rows.push(
+        <TableRow key={`add-${node.id}`} className="hover:bg-transparent">
+          <TableCell colSpan={columnCount} className="py-1">
+            <div style={{ paddingLeft: (depth + 1) * 16 }}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAdd?.(node, node.levelPosition + 1);
+                }}
+              >
+                <RiAddLine /> Agregar {childLevelName.toLowerCase()}
+              </Button>
+            </div>
+          </TableCell>
+        </TableRow>,
+      );
     }
 
     return rows;
@@ -336,7 +356,7 @@ export function LocationTreeTable({
 
           {roots.flatMap((node) => renderNode(node, 0))}
 
-          {manage && (
+          {manage && focusedId === null && (
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={columnCount} className="py-1">
                 <Button

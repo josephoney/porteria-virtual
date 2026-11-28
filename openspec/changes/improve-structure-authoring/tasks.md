@@ -46,5 +46,6 @@
 
 - [ ] 6.1 E2E: crear un nivel 1 de dos niveles, generar 5 pisos × 6 unidades y verificar el listado.
 - [ ] 6.2 E2E: renombrar la pestaña y comprobar "Tipo de {nivel}".
+- [x] 5.6 Esquema en acordeón: una sola rama abierta, un solo botón de agregar (el del nivel activo) y el botón de nivel 1 solo cuando no hay nada abierto.
 - [x] 6.3 `eslint`, `tsc`, `pnpm --filter @porteria/api test` e `test:integration`.
 - [ ] 6.4 `openspec validate improve-structure-authoring --strict` y actualizar `docs/` del flujo de estructura.

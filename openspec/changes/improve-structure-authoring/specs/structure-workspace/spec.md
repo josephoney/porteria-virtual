@@ -85,3 +85,33 @@ The create dialog SHALL offer to create one node or several.
 
 - **WHEN** the admin chooses "Una sola"
 - **THEN** the dialog behaves as today
+### Requirement: One-branch accordion
+
+The structure tree SHALL keep a single branch open at a time and SHALL show a single
+add button, the one for the level the administrator is standing on.
+
+#### Scenario: Al entrar al esquema
+
+- **WHEN** se abre la pestaña Esquema
+- **THEN** solo se ven los nodos de nivel 1, colapsados
+- **THEN** el botón de agregar nivel 1 queda al final de la lista
+
+#### Scenario: Expandir un nodo
+
+- **WHEN** se hace click en un nodo
+- **THEN** se muestran sus hijos directos
+- **THEN** las demás ramas quedan colapsadas
+- **THEN** debajo de los hijos aparece el botón de agregar del nivel siguiente
+
+#### Scenario: Un solo botón de agregar
+
+- **WHEN** hay un nodo expandido
+- **THEN** el botón de agregar nivel 1 no se muestra
+- **THEN** solo el nodo expandido muestra su botón de agregar
+- **THEN** el botón de agregar de un ancestro expandido tampoco se muestra
+
+#### Scenario: Colapsar
+
+- **WHEN** se vuelve a hacer click en el nodo expandido
+- **THEN** la rama se cierra
+- **THEN** el botón de agregar nivel 1 vuelve a mostrarse
