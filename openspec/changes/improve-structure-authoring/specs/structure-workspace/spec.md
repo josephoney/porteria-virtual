@@ -138,6 +138,12 @@ is readable at a glance.
 - **WHEN** the tree shows nodes of different levels
 - **THEN** level 1 is bold, level 2 is normal and level 3 is italic
 
+#### Scenario: Optional badges
+
+- **WHEN** the administrator unchecks "Mostrar nivel" or "Mostrar conteo"
+- **THEN** the level pill or the child count disappears from every row
+- **THEN** the preference applies to the whole tree in that view
+
 #### Scenario: Dark mode
 
 - **WHEN** the dashboard uses the dark theme

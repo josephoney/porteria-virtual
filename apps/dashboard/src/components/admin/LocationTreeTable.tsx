@@ -97,6 +97,9 @@ const LEVEL_TEXT = ['font-semibold tracking-tight', 'font-normal', 'italic'];
    * de agregar, para no ofrecer por error el nivel equivocado.
    */
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  // El badge de nivel y el conteo se pueden ocultar por preferencia.
+  const [showLevelBadge, setShowLevelBadge] = useState(false);
+  const [showChildCount, setShowChildCount] = useState(true);
   const parentById = useMemo(() => {
     const map = new Map<string, string | null>();
     nodes.forEach((node) => map.set(node.id, node.parentId));
@@ -231,13 +234,15 @@ const LEVEL_TEXT = ['font-semibold tracking-tight', 'font-normal', 'italic'];
             >
               {node.name}
             </span>
-            <span
-              className="rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
-              style={{ backgroundColor: `color-mix(in oklab, ${levelColor} 18%, transparent)` }}
-            >
-              {structureLevelName(structure, node.levelPosition)}
-            </span>
-            {hasChildren && (
+            {showLevelBadge && (
+              <span
+                className="rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                style={{ backgroundColor: `color-mix(in oklab, ${levelColor} 18%, transparent)` }}
+              >
+                {structureLevelName(structure, node.levelPosition)}
+              </span>
+            )}
+            {showChildCount && hasChildren && (
               <span className="text-xs text-muted-foreground">
                 {pluralizeLabel(childLevelName ?? 'nivel', children.length)}
               </span>
@@ -380,7 +385,30 @@ const LEVEL_TEXT = ['font-semibold tracking-tight', 'font-normal', 'italic'];
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="space-y-2">
+      {manage && (
+        <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+          <label className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              className="size-3.5 accent-foreground"
+              checked={showLevelBadge}
+              onChange={(event) => setShowLevelBadge(event.target.checked)}
+            />
+            Mostrar nivel
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              className="size-3.5 accent-foreground"
+              checked={showChildCount}
+              onChange={(event) => setShowChildCount(event.target.checked)}
+            />
+            Mostrar conteo
+          </label>
+        </div>
+      )}
+      <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
@@ -428,6 +456,7 @@ const LEVEL_TEXT = ['font-semibold tracking-tight', 'font-normal', 'italic'];
           )}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
